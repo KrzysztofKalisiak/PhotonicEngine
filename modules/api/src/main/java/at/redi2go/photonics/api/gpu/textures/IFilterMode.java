@@ -2,10 +2,15 @@ package at.redi2go.photonics.api.gpu.textures;
 
 public interface IFilterMode {
     static IFilterMode nearest() {
-        throw new AssertionError(); // TO BE IMPLEMENTED BY MIXIN
+        return Values.NEAREST;
     }
 
     static IFilterMode linear() {
-        throw new AssertionError(); // TO BE IMPLEMENTED BY MIXIN
+        return Values.LINEAR;
+    }
+
+    enum Values implements IFilterMode {
+        NEAREST,
+        LINEAR
     }
 }

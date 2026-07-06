@@ -2,10 +2,15 @@ package at.redi2go.photonics.api.gpu.textures;
 
 public interface IAddressMode {
     static IAddressMode repeat() {
-        throw new AssertionError(); // TO BE IMPLEMENTED BY MIXIN
+        return Values.REPEAT;
     }
 
     static IAddressMode clampToEdge() {
-        throw new AssertionError(); // TO BE IMPLEMENTED BY MIXIN
+        return Values.CLAMP_TO_EDGE;
+    }
+
+    enum Values implements IAddressMode {
+        REPEAT,
+        CLAMP_TO_EDGE
     }
 }

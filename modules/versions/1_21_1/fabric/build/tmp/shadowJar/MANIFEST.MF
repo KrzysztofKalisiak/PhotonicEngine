@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Class-Path: common-0.4.0-dev.jar photonics-mc-api-0.4.0.jar photonics-co
+ re-0.4.0.jar semver4j-3.1.0.jar fastutil-concurrent-wrapper-0.2.3.jar
+

@@ -13,7 +13,7 @@ loom {
 }
 
 dependencies {
-    add("minecraft", "com.mojang:minecraft:1.21.11")
+    add("minecraft", "com.mojang:minecraft:${phConfig.minecraft.get()}")
     phConfig._dependencyBlock.orNull?.execute(PhotonicsCommonDependenciesScope(this))
 
     val fabricLoader = _fabricLoader

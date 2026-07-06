@@ -35,7 +35,7 @@ include(":modules:api")
 include(":modules:core")
 include(":modules:versions")
 
-includeMcVersion("1.21.11")
+includeMcVersion("1.21.1")
 
 
 
