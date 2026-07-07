@@ -8,6 +8,7 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     private static final int MAX_RESTIR_INITIAL_SAMPLES = 16;
     private static final int MAX_RESTIR_SPATIAL_REUSE_SAMPLES = 2;
     private static final int MAX_RESTIR_DENOISER_PASSES = 2;
+    private static final boolean FORCE_RESTIR_TO_BASIC = true;
 
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
     public float renderScale = PhotonicsProperties.DEFAULT_RENDER_SCALE;
@@ -88,7 +89,7 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public LightingMode getLightingMode() {
-        return lightingMode;
+        return FORCE_RESTIR_TO_BASIC && lightingMode == LightingMode.RESTIR ? LightingMode.BASIC : lightingMode;
     }
 
     @Override

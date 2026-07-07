@@ -15,6 +15,7 @@ public class UniformPatcher {
 
     public static void prepare() {
         uniforms.clear();
+        parsingState = 0;
     }
 
     public static void nextToken(Token token) {
