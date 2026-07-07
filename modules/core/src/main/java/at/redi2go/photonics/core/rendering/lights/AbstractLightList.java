@@ -23,6 +23,7 @@ import com.google.common.collect.MultimapBuilder;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import org.joml.Vector3d;
+import org.joml.Vector3dc;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 import org.joml.Vector4f;
@@ -280,7 +281,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                 storeLight(
                         i,
                         light.lightInfo().toVector4Array(
-                                new Vector3f(worldOrigin.applyOffset(light.pos())),
+                                toVector3f(worldOrigin.applyOffset(light.pos())),
                                 light.blockId()
                         )
                 );
@@ -327,7 +328,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
             if (listOrigin == null || realOrigin == null)
                 return new Vector3f(0f);
 
-            return new Vector3f(realOrigin.sub(listOrigin, new Vector3d()));
+            return toVector3f(realOrigin.sub(listOrigin, new Vector3d()));
         });
     }
 
@@ -354,4 +355,8 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
             new Vector3i(0, 0, 1),
             new Vector3i(0, 0, -1),
     };
+
+    private static Vector3f toVector3f(Vector3dc vector) {
+        return new Vector3f((float) vector.x(), (float) vector.y(), (float) vector.z());
+    }
 }

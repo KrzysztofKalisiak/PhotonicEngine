@@ -24,6 +24,7 @@ import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import org.joml.RoundingMode;
 import org.joml.Vector3d;
+import org.joml.Vector3dc;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 
@@ -300,7 +301,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     var offset = mostRecentOrigin;
                     if (offset == null) return new Vector3f(0f);
 
-                    return new Vector3f(offset);
+                    return toVector3f(offset);
                 },
                 uniformUpdater.newNotifier()
         );
@@ -334,7 +335,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     if (offset == null) return new Vector3f(0f);
 
                     var pos = Minecraft.getCameraPos();
-                    return new Vector3f(offset.applyOffset(new Vector3d(pos.x, pos.y, pos.z)));
+                    return toVector3f(offset.applyOffset(new Vector3d(pos.x, pos.y, pos.z)));
                 }
         );
     }
@@ -342,6 +343,10 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     @Override
     public void close() {
         compilerThread.interrupt();
+    }
+
+    private static Vector3f toVector3f(Vector3dc vector) {
+        return new Vector3f((float) vector.x(), (float) vector.y(), (float) vector.z());
     }
 
     private static class MultiThreadTask extends CompletableFuture<Void> implements CompilerTask {
