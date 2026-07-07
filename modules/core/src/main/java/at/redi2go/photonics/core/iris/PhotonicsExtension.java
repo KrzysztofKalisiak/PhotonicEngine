@@ -3,6 +3,7 @@ package at.redi2go.photonics.core.iris;
 import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.iris.extensions.BasicPipeline;
+import at.redi2go.photonics.core.iris.extensions.OffPipeline;
 import at.redi2go.photonics.core.iris.extensions.RestirPipeline;
 import at.redi2go.photonics.core.iris.pipeline.buffer.IBufferHolder;
 import at.redi2go.photonics.core.iris.pipeline.texture.ISamplerHolder;
@@ -31,8 +32,8 @@ public interface PhotonicsExtension extends RenderingComponent {
 
         return switch (properties.getLightingMode()) {
             case OFF -> {
-                Photonics.LOGGER.info("Photonics diagnostic: lighting mode is OFF, using inert extension");
-                yield new Disabled();
+                Photonics.LOGGER.info("Photonics diagnostic: lighting mode is OFF, using resource-only OffPipeline");
+                yield new OffPipeline(properties, atlasDownloader.get(), handheldItemSupplierSupplier.get());
             }
             case BASIC -> new BasicPipeline(properties, atlasDownloader.get(), handheldItemSupplierSupplier.get(), passFactory);
             case RESTIR -> new RestirPipeline(properties, atlasDownloader.get(), handheldItemSupplierSupplier.get(), passFactory);
