@@ -158,6 +158,15 @@ bool direct_reservoir_load(out DirectReservoir reservoir, ivec2 tex_coord) {
     return !direct_reservoir_is_nan(reservoir);
 }
 
+bool direct_reservoir_load_flipped(out DirectReservoir reservoir, ivec2 tex_coord) {
+    direct_reservoir_decode(
+        reservoir,
+        texelFetch(prev_restir_direct_reservoirs0, tex_coord, 0).rgb
+    );
+
+    return !direct_reservoir_is_nan(reservoir);
+}
+
 bool direct_reservoir_load_previous(out DirectReservoir reservoir, ivec2 tex_coord) {
     direct_reservoir_decode(
         reservoir,
