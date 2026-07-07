@@ -8,7 +8,7 @@
 #define PH_RAY_STATE_HAS_MISS 2
 #define PH_RAY_STATE_OUT_OF_BOUNDS 3
 
-#define PH_RAY_DEFAULT_ITERATIONS 100
+#define PH_RAY_DEFAULT_ITERATIONS 48
 const float ph_16_rcp = 1.0f / 16.0f;
 
 struct RayIterator {
