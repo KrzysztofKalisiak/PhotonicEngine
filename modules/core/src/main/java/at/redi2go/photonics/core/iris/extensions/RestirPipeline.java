@@ -55,12 +55,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .withFramebuffer(restirFramebuffer)
                 .thenFlip(restirFramebuffer)
                 .deferredPass("initial direct", "/photonics/rendering/restir/passes/r1_initial_direct.fsh", null, this::isBlockLightEnabled)
-                .deferredPass("validate initial direct", "/photonics/rendering/restir/passes/r2_validate_initial_direct.fsh", null, this::isBlockLightEnabled)
+                .deferredPass("validate initial direct", "/photonics/rendering/restir/passes/r2_validate_initial_direct.fsh", null, this::isReservoirValidationEnabled)
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
-                .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isRestirEnabled)
+                .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isTemporalReuseEnabled)
                 .deferredPass("spatial reuse", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isSpatialReuseEnabled)
                 .deferredPass("diffuse", "/photonics/rendering/restir/passes/r6_diffuse.fsh", null, this::isRestirEnabled)
-                .deferredPass("accumulation", "/photonics/rendering/restir/passes/r7_accumulation.fsh", null, this::isRestirEnabled)
+                .deferredPass("accumulation", "/photonics/rendering/restir/passes/r7_accumulation.fsh", null, this::isAccumulationEnabled)
                 .when(this::isDenoisingEnabled, b0 -> {
                     b0.withFramebuffer(denoiseFramebuffer);
                     b0.debugGroup("svgf");
@@ -100,6 +100,18 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
     public boolean isRestirEnabled() {
         return isBlockLightEnabled() || isRestirGiEnabled();
+    }
+
+    public boolean isReservoirValidationEnabled() {
+        return false;
+    }
+
+    public boolean isTemporalReuseEnabled() {
+        return false;
+    }
+
+    public boolean isAccumulationEnabled() {
+        return false;
     }
 
     public boolean isSpatialReuseEnabled() {

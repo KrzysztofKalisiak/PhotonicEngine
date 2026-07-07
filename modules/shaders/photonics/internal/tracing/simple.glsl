@@ -6,6 +6,12 @@ bool trace_light_vis(
     out vec3 tint_color,
     out float light_transmittance
 ) {
+#ifdef PH_DISABLE_RESTIR_VISIBILITY
+    tint_color = vec3(1.0f);
+    light_transmittance = 1.0f;
+    return true;
+#endif
+
     RayIterator ray;
     ray_iter_begin(ray, rt_pos, direction);
     RayResult result = missed_ray_result();
