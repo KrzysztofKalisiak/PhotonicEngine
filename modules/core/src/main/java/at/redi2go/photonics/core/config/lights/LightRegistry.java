@@ -27,6 +27,14 @@ public class LightRegistry {
         lights.put(light.block(), light);
     }
 
+    public int blockCount() {
+        return lights.keySet().size();
+    }
+
+    public int lightCount() {
+        return lights.size();
+    }
+
     public void sort() {
         for (final var key : lights.keySet())
             lights.get(key)

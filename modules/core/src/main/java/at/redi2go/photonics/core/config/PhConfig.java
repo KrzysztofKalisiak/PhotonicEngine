@@ -164,6 +164,11 @@ public class PhConfig {
             }
 
         lightRegistry.sort();
+        Photonics.LOGGER.info(
+                "Photonics light registry contains {} light definitions for {} blocks",
+                lightRegistry.lightCount(),
+                lightRegistry.blockCount()
+        );
 
         for (var PhConfigWatcher : WATCHERS)
             PhConfigWatcher.reload(config);

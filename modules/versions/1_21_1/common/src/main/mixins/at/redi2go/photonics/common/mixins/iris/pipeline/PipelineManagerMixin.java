@@ -65,6 +65,24 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
             PhConfig.registerLightProvider(lightsProvider);
 
         var properties = shaderPack.properties();
+        Photonics.LOGGER.info(
+                "Photonics pipeline for '{}': enabled={}, mode={}, blockLight={}, gi={}, blockLightGi={}, handheld={}, renderScale={}, maxLights={}, maxSamples={}, restirInitial={}, restirSpatial={}, restirDenoiser={}, restirSoftShadows={}, restirCombinedGi={}",
+                shaderPack.name(),
+                properties.isPhotonicsEnabled(),
+                properties.getLightingMode(),
+                properties.isBlockLightEnabled(),
+                properties.isGiEnabled(),
+                properties.isBlockLightGiEnabled(),
+                properties.isHandheldLightEnabled(),
+                properties.getRenderScale(),
+                properties.getMaxLights(),
+                properties.getMaxSamples(),
+                properties.getRestirInitialSamples(),
+                properties.getRestirSpatialReuseSamples(),
+                properties.getRestirDenoiserPasses(),
+                properties.useRestirSoftShadows(),
+                properties.useRestirCombinedGi()
+        );
         photonics = PhotonicsExtension.create(
                 properties,
                 AtlasDownloaderImpl::new,
@@ -78,13 +96,19 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
         var contents = ((ShaderPackAccessor) pack).getSourceProvider()
                 .apply(AbsolutePackPath.fromAbsolutePath("/ph_lights.json"));
 
-        if (contents == null)
+        if (contents == null) {
+            Photonics.LOGGER.info(
+                    "No ph_lights.json found for shader pack '{}'; using default Photonics light config",
+                    pack.name()
+            );
             return null;
+        }
 
         try {
             var lights = AbstractIrisPackLights.parse(contents, IrisPackLightsImpl.class);
             lights.setShaderPack((ShaderPack) pack);
 
+            Photonics.LOGGER.info("Loaded ph_lights.json for shader pack '{}'", pack.name());
             return lights;
         } catch (Exception e) {
             Photonics.LOGGER.error("Error while parsing ph_lights.json for {}", pack.name(), e);

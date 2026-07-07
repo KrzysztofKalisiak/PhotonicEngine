@@ -86,7 +86,11 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public LightingMode getLightingMode() {
-        return lightingMode;
+        if (lightingMode == LightingMode.OFF) return LightingMode.OFF;
+
+        // BASIC has no active direct-light pipeline in this port. Force RESTIR so
+        // stale Iris shader options cannot select the dead path.
+        return LightingMode.RESTIR;
     }
 
     @Override
