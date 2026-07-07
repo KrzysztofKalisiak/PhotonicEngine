@@ -76,6 +76,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     private Vector3f mostRecentMaxBlock = new Vector3f();
 
     private int mostRecentBlockContainerScale = 0;
+    private boolean mostRecentWorldReady = false;
 
     private final Thread compilerThread;
 
@@ -278,7 +279,12 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             mostRecentMinBlock = new Vector3f(minBlock);
             mostRecentMaxBlock = new Vector3f(maxBlock);
 
-            mostRecentBlockContainerScale = 21 - (treeManager.depth() - (VoxelTreeEntry.BLOCK_CONTAINER_DEPTH) << 1);
+            int depth = treeManager.depth();
+            mostRecentBlockContainerScale = depth == 0 ? 0 : 21 - (depth - (VoxelTreeEntry.BLOCK_CONTAINER_DEPTH) << 1);
+            mostRecentWorldReady = depth > 0
+                    && mostRecentMaxBounds.x > mostRecentMinBounds.x
+                    && mostRecentMaxBounds.y > mostRecentMinBounds.y
+                    && mostRecentMaxBounds.z > mostRecentMinBounds.z;
 
             uploadDone.signalAll();
         } finally {
@@ -324,6 +330,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         dynamicUniforms.uniform3f("world_min_block", () -> new Vector3f(mostRecentMinBlock), uniformUpdater.newNotifier());
         dynamicUniforms.uniform3f("world_max_block", () -> new Vector3f(mostRecentMaxBlock), uniformUpdater.newNotifier());
 
+        dynamicUniforms.uniform1i("ph_world_ready", () -> mostRecentWorldReady ? 1 : 0, uniformUpdater.newNotifier());
         dynamicUniforms.uniform3f("world_tree_size", () -> new Vector3f(mostRecentMaxBounds).sub(mostRecentMinBounds), uniformUpdater.newNotifier());
         dynamicUniforms.uniform1i("world_block_scale_exp", () -> mostRecentBlockContainerScale, uniformUpdater.newNotifier());
 
