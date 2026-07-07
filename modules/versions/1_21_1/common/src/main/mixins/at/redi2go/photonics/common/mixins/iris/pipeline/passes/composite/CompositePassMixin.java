@@ -3,6 +3,7 @@ package at.redi2go.photonics.common.mixins.iris.pipeline.passes.composite;
 import at.redi2go.photonics.common.iris.pipeline.CompositeRendererPassExt;
 import at.redi2go.photonics.common.iris.pipeline.framebuffer.InternalIrisFramebuffer;
 import at.redi2go.photonics.core.iris.pipeline.texture.IrisFramebuffer;
+import net.irisshaders.iris.gl.framebuffer.GlFramebuffer;
 import net.irisshaders.iris.gl.framebuffer.ViewportData;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,6 +21,8 @@ public abstract class CompositePassMixin implements CompositeRendererPassExt {
     @Shadow int viewHeight;
 
     @Shadow ViewportData viewportScale;
+
+    @Shadow GlFramebuffer framebuffer;
 
     @Unique private int index = 0;
     @Unique private InternalIrisFramebuffer phFramebuffer = null;
@@ -42,6 +45,11 @@ public abstract class CompositePassMixin implements CompositeRendererPassExt {
     @Override
     public void setFramebuffer(@Nullable IrisFramebuffer framebuffer) {
         this.phFramebuffer = (InternalIrisFramebuffer) framebuffer;
+    }
+
+    @Override
+    public boolean usesIrisFramebuffer(GlFramebuffer framebuffer) {
+        return this.framebuffer == framebuffer;
     }
 
     @Override

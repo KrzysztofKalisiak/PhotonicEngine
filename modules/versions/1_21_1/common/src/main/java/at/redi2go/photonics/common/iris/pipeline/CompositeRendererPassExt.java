@@ -1,6 +1,7 @@
 package at.redi2go.photonics.common.iris.pipeline;
 
 import at.redi2go.photonics.core.iris.pipeline.texture.IrisFramebuffer;
+import net.irisshaders.iris.gl.framebuffer.GlFramebuffer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
@@ -13,6 +14,8 @@ public interface CompositeRendererPassExt {
     Optional<IrisFramebuffer> getFramebuffer();
 
     void setFramebuffer(@Nullable IrisFramebuffer framebuffer);
+
+    boolean usesIrisFramebuffer(GlFramebuffer framebuffer);
 
     void updateSize();
 }

@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.function.Consumer;
 
@@ -201,7 +202,11 @@ public abstract class ShaderPropertiesMixin {
             return false;
         } else {
             try {
-                LightingMode result = LightingMode.valueOf(value.toUpperCase());
+                String normalizedValue = value.toUpperCase(Locale.ROOT);
+                if ("SIMPLE".equals(normalizedValue))
+                    normalizedValue = "BASIC";
+
+                LightingMode result = LightingMode.valueOf(normalizedValue);
 
                 handler.accept(result);
             } catch (IllegalArgumentException var5) {

@@ -25,6 +25,10 @@ public abstract class CompositeRendererMixin {
     @Final
     private WorldRenderingPipeline pipeline;
 
+    @Shadow
+    @Final
+    private ImmutableList<CompositeRendererPassExt> passes;
+
     @WrapOperation(
             method = "<init>",
             at = @At(
@@ -88,12 +92,13 @@ public abstract class CompositeRendererMixin {
     )
     private void bindFramebuffer(
             GlFramebuffer instance,
-            Operation<Void> original,
-            @Local(name = "renderPass") Object renderPass
+            Operation<Void> original
     ) {
-        if (renderPass instanceof CompositeRendererPassExt passExt && passExt.getFramebuffer().isPresent()) {
-            ((InternalIrisFramebuffer) passExt.getFramebuffer().orElseThrow()).bind();
-            return;
+        for (CompositeRendererPassExt passExt : passes) {
+            if (passExt.usesIrisFramebuffer(instance) && passExt.getFramebuffer().isPresent()) {
+                ((InternalIrisFramebuffer) passExt.getFramebuffer().orElseThrow()).bind();
+                return;
+            }
         }
 
         original.call(instance);
