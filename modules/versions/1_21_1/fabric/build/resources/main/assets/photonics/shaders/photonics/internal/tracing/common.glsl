@@ -147,11 +147,15 @@ vec3 ph_signed_nudge(vec3 value) {
 }
 
 bool ph_is_inside(vec3 position) {
+    if (ph_world_ready == 0) return false;
+
     vec3 s = step(world_min_block, position) - step(world_max_block, position);
     return bool(s.x * s.y * s.z);
 }
 
 float ph_intersects_world(vec3 direction_inv, vec3 origin) {
+    if (ph_world_ready == 0) return -1.0f;
+
     if (ph_is_inside(origin)) {
         return 0.0f;
     }

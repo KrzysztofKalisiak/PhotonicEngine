@@ -1,112 +1,111 @@
-[21:02:59] [main/INFO]: ModLauncher running: args [--username, Eutio, --version, 1.21.1, --gameDir, /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1), --assetsDir, /home/krzysztofkalisiak/.local/share/ModrinthApp/meta/assets, --assetIndex, 17, --uuid, daa1735b3ea84b2a94748a7aa356e30b, --accessToken, ❄❄❄❄❄❄❄❄, --clientId, c4502edb-87c6-40cb-b595-64a280cf8906, --xuid, 0, --userType, msa, --versionType, release, --width, 854, --height, 480, --fml.neoForgeVersion, 21.1.235, --fml.fmlVersion, 4.0.42, --fml.mcVersion, 1.21.1, --fml.neoFormVersion, 20240808.144430, --launchTarget, forgeclient]
-[21:02:59] [main/INFO]: JVM identified as Azul Systems, Inc. OpenJDK 64-Bit Server VM 21.0.9+10-LTS
-[21:02:59] [main/INFO]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.9 by Azul Systems, Inc.; OS Linux arch amd64 version 7.0.0-27-generic
-[21:02:59] [main/INFO]: Searching for graphics cards...
-[21:02:59] [main/INFO]: Found graphics adapter: LinuxPciAdapterInfo[vendor=AMD, name=Navi 31 [Radeon RX 7900 XT/7900 XTX/7900 GRE/7900M], pciVendorId=0x1002, pciDeviceId=0x744c]
-[21:02:59] [main/WARN]: Sodium has applied one or more workarounds to prevent crashes or other issues on your system: [NO_ERROR_CONTEXT_UNSUPPORTED]
-[21:02:59] [main/WARN]: This is not necessarily an issue, but it may result in certain features or optimizations being disabled. You can sometimes fix these issues by upgrading your graphics driver.
-[21:02:59] [main/INFO]: Loading ImmediateWindowProvider fmlearlywindow
-[21:03:00] [main/INFO]: Trying GL version 4.6
-[21:03:00] [main/INFO]: Requested GL version 4.6 got version 4.6
-[21:03:00] [pool-2-thread-1/INFO]: GL info: AMD Radeon RX 7900 GRE (radeonsi, navi31, ACO, DRM 3.64, 7.0.0-27-generic) GL version 4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA, AMD
-[21:03:00] [main/INFO]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/krzysztofkalisiak/.local/share/ModrinthApp/meta/libraries/net/fabricmc/sponge-mixin/0.15.2+mixin.0.8.7/sponge-mixin-0.15.2+mixin.0.8.7.jar%23170!/ Service=ModLauncher Env=CLIENT
-[21:03:00] [main/INFO]: Found mod file "client-1.21.1-20240808.144430-srg.jar" [locator: production client provider +net.neoforged:neoforge:21.1.235:client]
-[21:03:00] [main/INFO]: Found mod file "neoforge-21.1.235-universal.jar" [locator: PathBasedLocator[name=neoforge, paths=[/home/krzysztofkalisiak/.local/share/ModrinthApp/meta/libraries/net/neoforged/neoforge/21.1.235/neoforge-21.1.235-universal.jar]], reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "net.caffeinemc.sodium-neoforge-0.8.12-beta.2+mc1.21.1-mod.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-rendering-data-attachment-v1-0.3.48+73761d2e19.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-renderer-api-v1-3.4.1+9125b6dc19.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-block-view-api-v2-1.0.10+9afaaf8c19.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-api-base-0.4.42+d1308ded19.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
-[21:03:00] [main/INFO]: Found library file "~nonexistent" [locator: org.sinytra.connector.locator.ConnectorEarlyLocatorBootstrap@1b70203f]
-[21:03:00] [main/INFO]: Found mod file "contraption-lights-neoforge-1.21.1-1.1.0-beta.2.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "create-1.21.1-6.0.10.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "create-aeronautics-bundled-1.21.1-1.3.0.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "DistantHorizons-3.1.2-b-1.21.1-fabric-neoforge.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "entityculling-neoforge-1.10.5-mc1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "ferritecore-7.0.3-neoforge.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "ImmediatelyFast-NeoForge-1.6.11+1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "irisveil-0.3.0.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "lithium-neoforge-0.15.4+mc1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/WARN]: Skipping jar. File mods/photonics-0.4.0-fabric+MC-1.21.1.jar is a Fabric mod and cannot be loaded
-[21:03:00] [main/INFO]: Found mod file "sable-neoforge-1.21.1-2.0.3.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "searchlights-1.2.2.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "simurail-1.21.1-0.0.0-a+b18d457.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "xaerominimap-neoforge-1.21.1-26.1.0.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
-[21:03:00] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: fabric_renderer_api_v1. Using Mod File: 
-[21:03:00] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: fabric_block_view_api_v2. Using Mod File: 
-[21:03:00] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: library:net.fabricmc.loader. Using Mod File: /~nonexistent
-[21:03:00] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: fabric_api_base. Using Mod File: 
-[21:03:00] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: fabric_rendering_data_attachment_v1. Using Mod File: 
-[21:03:00] [main/INFO]: Found 61 dependencies adding them to mods collection
-[21:03:00] [main/INFO]: Found mod file "fabric-transfer-api-v1-5.4.3+a25cb45619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found library file "glsl-processor-0.2.3.jar" [parent: veil-neoforge-1.21.1-4.2.0.jar, locator: jarinjar]
-[21:03:00] [main/INFO]: Found mod file "ponder-neoforge-1.0.82+mc1.21.1.jar" [parent: create-1.21.1-6.0.10.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-item-api-v1-11.2.0+0c57911319.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-model-loading-api-v1-2.1.0+6e8f52c719.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found library file "net.neoforged.neoforge-coremods-21.1.235.jar" [parent: neoforge-21.1.235-universal.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-rendering-fluids-v1-3.1.6+a51883b219.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "dev.eriksonn.aeronautics.aeronautics-neoforge-1.21.1-1.3.0.jar" [parent: create-aeronautics-bundled-1.21.1-1.3.0.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "xaerolib-neoforge-1.21.1-1.1.15.jar" [parent: xaerominimap-neoforge-1.21.1-26.1.0.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-screen-handler-api-v1-1.3.90+8dbc56dd19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-resource-loader-v0-1.3.1+4ea8954419.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "TRender-1.0.15-1.21.1-neoforge-SNAPSHOT.jar" [parent: entityculling-neoforge-1.10.5-mc1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found gamelibrary file "yumi-commons-collections-1.0.0.jar" [parent: lambdynamiclights-api-4.8.8+1.21.1-mojmap.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-rendering-v1-5.1.0+1a09bd5a19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-renderer-indigo-1.7.1+9125b6dc19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-convention-tags-v1-2.1.5+7f945d5b19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-command-api-v2-2.2.28+36d727be19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-convention-tags-v2-2.11.1+87e5848019.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-data-attachment-api-v1-1.4.5+26d408aa19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "veil-neoforge-1.21.1-4.2.0.jar" [parent: searchlights-1.2.2.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "dev.simulated_team.simulated.simulated-neoforge-1.21.1-1.3.0.jar" [parent: create-aeronautics-bundled-1.21.1-1.3.0.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found gamelibrary file "yumi-commons-event-1.0.0.jar" [parent: lambdynamiclights-api-4.8.8+1.21.1-mojmap.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-screen-api-v1-2.0.25+0ae1214819.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found library file "molang-compiler-3.1.1.19.jar" [parent: veil-neoforge-1.21.1-4.2.0.jar, locator: jarinjar]
-[21:03:00] [main/INFO]: Found library file "Reflect-1.6.2.jar" [parent: ImmediatelyFast-NeoForge-1.6.11+1.21.1.jar, locator: jarinjar]
-[21:03:00] [main/INFO]: Found mod file "fabric-particles-v1-4.0.2+824f924c19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-content-registries-v0-8.0.19+5e0d320019.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-transitive-access-wideners-v1-6.2.0+6c854b6f19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "dev.ryanhcode.offroad.offroad-neoforge-1.21.1-1.3.0.jar" [parent: create-aeronautics-bundled-1.21.1-1.3.0.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found gamelibrary file "mixinextras-neoforge-0.5.3.jar" [parent: neoforge-21.1.235-universal.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found gamelibrary file "yumi-commons-core-1.0.0.jar" [parent: lambdynamiclights-api-4.8.8+1.21.1-mojmap.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-game-rule-api-v1-1.0.53+36d727be19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-api-lookup-api-v1-1.6.71+c290471319.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-blockrenderlayer-v1-1.1.52+c290471319.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found gamelibrary file "dev.ryanhcode.sable.sable-sable_rapier-1.21.1-2.0.3.jar" [parent: sable-neoforge-1.21.1-2.0.3.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-block-api-v1-1.1.0+b0c22bb819.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-resource-conditions-api-v1-4.3.0+5bdd099819.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found library file "jcpp-1.4.14.jar" [parent: iris-neoforge-1.8.14-beta.1+mc1.21.1.jar, locator: jarinjar]
-[21:03:00] [main/INFO]: Found library file "glsl-transformer-3.0.0-pre3.jar" [parent: iris-neoforge-1.8.14-beta.1+mc1.21.1.jar, locator: jarinjar]
-[21:03:00] [main/INFO]: Found mod file "sable-companion-common-1.21.1-1.6.0.jar" [parent: searchlights-1.2.2.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "flywheel-neoforge-1.21.1-1.0.6.jar" [parent: create-1.21.1-6.0.10.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-item-group-api-v1-4.1.7+e324903319.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-gametest-api-v1-2.0.5+29f188ce19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-biome-api-v1-13.0.31+1e62d33c19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-entity-events-v1-1.8.0+5ede667619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-registry-sync-v0-5.3.1+f9aace1619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "lambdynamiclights-api-4.8.8+1.21.1-mojmap.jar" [parent: searchlights-1.2.2.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-recipe-api-v1-5.0.15+59440bcc19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-object-builder-api-v1-15.2.1+cc242efd19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-loot-api-v2-3.0.15+a3ee712d19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-loot-api-v3-1.0.3+333dfad919.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "TRansition-1.0.21-1.21.1-neoforge-SNAPSHOT.jar" [parent: entityculling-neoforge-1.10.5-mc1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-networking-api-v1-4.3.0+30a980d919.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found gamelibrary file "Registrate-MC1.21-1.3.0+67.jar" [parent: create-1.21.1-6.0.10.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-sound-api-v1-1.0.23+10b84f8419.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-message-api-v1-6.0.14+6a754fce19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-lifecycle-events-v1-2.6.0+e40d8add19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-data-generation-api-v1-20.2.34+a4c3605619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-events-interaction-v0-0.7.13+86e0887119.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-key-binding-api-v1-1.0.47+62cc7ce119.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Found mod file "fabric-client-tags-api-v1-1.1.15+e053909619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
-[21:03:00] [main/INFO]: Dependency resolution found 1 candidates to load
-[21:03:02] [main/INFO]: Found mod file "photonics-0.4.0-fabric+MC-1.21.1_mapped_moj_1.21.1.jar" [locator: org.sinytra.connector.locator.ConnectorLocator@71ea1fda]
-[21:03:02] [main/INFO]: Found 2 dependencies adding them to mods collection
-[21:03:02] [main/INFO]: Found mod file "org.sinytra.connector-2.0.0-beta.15+1.21.1-mod.jar" [parent: , locator: org.sinytra.connector.locator.ConnectorLocator@71ea1fda, reader: mod manifest]
-[21:03:02] [main/INFO]: Found gamelibrary file "runtime-1.0.0+1.21.1.jar" [parent: , locator: org.sinytra.connector.locator.ConnectorLocator@71ea1fda, reader: mod manifest]
-[21:03:02] [main/INFO]: 
+[21:10:35] [main/INFO]: ModLauncher running: args [--username, Eutio, --version, 1.21.1, --gameDir, /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1), --assetsDir, /home/krzysztofkalisiak/.local/share/ModrinthApp/meta/assets, --assetIndex, 17, --uuid, daa1735b3ea84b2a94748a7aa356e30b, --accessToken, ❄❄❄❄❄❄❄❄, --clientId, c4502edb-87c6-40cb-b595-64a280cf8906, --xuid, 0, --userType, msa, --versionType, release, --width, 854, --height, 480, --fml.neoForgeVersion, 21.1.235, --fml.fmlVersion, 4.0.42, --fml.mcVersion, 1.21.1, --fml.neoFormVersion, 20240808.144430, --launchTarget, forgeclient]
+[21:10:35] [main/INFO]: JVM identified as Azul Systems, Inc. OpenJDK 64-Bit Server VM 21.0.9+10-LTS
+[21:10:35] [main/INFO]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.9 by Azul Systems, Inc.; OS Linux arch amd64 version 7.0.0-27-generic
+[21:10:35] [main/INFO]: Searching for graphics cards...
+[21:10:35] [main/INFO]: Found graphics adapter: LinuxPciAdapterInfo[vendor=AMD, name=Navi 31 [Radeon RX 7900 XT/7900 XTX/7900 GRE/7900M], pciVendorId=0x1002, pciDeviceId=0x744c]
+[21:10:35] [main/WARN]: Sodium has applied one or more workarounds to prevent crashes or other issues on your system: [NO_ERROR_CONTEXT_UNSUPPORTED]
+[21:10:35] [main/WARN]: This is not necessarily an issue, but it may result in certain features or optimizations being disabled. You can sometimes fix these issues by upgrading your graphics driver.
+[21:10:35] [main/INFO]: Loading ImmediateWindowProvider fmlearlywindow
+[21:10:35] [main/INFO]: Trying GL version 4.6
+[21:10:35] [main/INFO]: Requested GL version 4.6 got version 4.6
+[21:10:35] [pool-2-thread-1/INFO]: GL info: AMD Radeon RX 7900 GRE (radeonsi, navi31, ACO, DRM 3.64, 7.0.0-27-generic) GL version 4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA, AMD
+[21:10:35] [main/INFO]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/krzysztofkalisiak/.local/share/ModrinthApp/meta/libraries/net/fabricmc/sponge-mixin/0.15.2+mixin.0.8.7/sponge-mixin-0.15.2+mixin.0.8.7.jar%23170!/ Service=ModLauncher Env=CLIENT
+[21:10:35] [main/INFO]: Found mod file "client-1.21.1-20240808.144430-srg.jar" [locator: production client provider +net.neoforged:neoforge:21.1.235:client]
+[21:10:35] [main/INFO]: Found mod file "neoforge-21.1.235-universal.jar" [locator: PathBasedLocator[name=neoforge, paths=[/home/krzysztofkalisiak/.local/share/ModrinthApp/meta/libraries/net/neoforged/neoforge/21.1.235/neoforge-21.1.235-universal.jar]], reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "net.caffeinemc.sodium-neoforge-0.8.12-beta.2+mc1.21.1-mod.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "fabric-rendering-data-attachment-v1-0.3.48+73761d2e19.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "fabric-renderer-api-v1-3.4.1+9125b6dc19.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "fabric-block-view-api-v2-1.0.10+9afaaf8c19.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "fabric-api-base-0.4.42+d1308ded19.jar" [locator: net.caffeinemc.mods.sodium.service.SodiumServiceModLocator@2c1dc8e, reader: mod manifest]
+[21:10:35] [main/INFO]: Found library file "~nonexistent" [locator: org.sinytra.connector.locator.ConnectorEarlyLocatorBootstrap@1b70203f]
+[21:10:35] [main/INFO]: Found mod file "contraption-lights-neoforge-1.21.1-1.1.0-beta.2.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "create-1.21.1-6.0.10.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "create-aeronautics-bundled-1.21.1-1.3.0.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "entityculling-neoforge-1.10.5-mc1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "ferritecore-7.0.3-neoforge.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "ImmediatelyFast-NeoForge-1.6.11+1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "irisveil-0.3.0.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "lithium-neoforge-0.15.4+mc1.21.1.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/WARN]: Skipping jar. File mods/photonics-0.4.0-fabric+MC-1.21.1.jar is a Fabric mod and cannot be loaded
+[21:10:35] [main/INFO]: Found mod file "sable-neoforge-1.21.1-2.0.3.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "searchlights-1.2.2.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "simurail-1.21.1-0.0.0-a+b18d457.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:35] [main/INFO]: Found mod file "xaerominimap-neoforge-1.21.1-26.1.0.jar" [locator: {mods folder locator at /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/mods}, reader: mod manifest]
+[21:10:36] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: fabric_renderer_api_v1. Using Mod File: 
+[21:10:36] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: fabric_block_view_api_v2. Using Mod File: 
+[21:10:36] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: library:net.fabricmc.loader. Using Mod File: /~nonexistent
+[21:10:36] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: fabric_api_base. Using Mod File: 
+[21:10:36] [main/WARN]: Attempted to select a dependency jar for JarJar which was passed in as source: fabric_rendering_data_attachment_v1. Using Mod File: 
+[21:10:36] [main/INFO]: Found 61 dependencies adding them to mods collection
+[21:10:36] [main/INFO]: Found mod file "fabric-transfer-api-v1-5.4.3+a25cb45619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found library file "glsl-processor-0.2.3.jar" [parent: veil-neoforge-1.21.1-4.1.4.jar, locator: jarinjar]
+[21:10:36] [main/INFO]: Found mod file "ponder-neoforge-1.0.82+mc1.21.1.jar" [parent: create-1.21.1-6.0.10.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-item-api-v1-11.2.0+0c57911319.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-model-loading-api-v1-2.1.0+6e8f52c719.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found library file "net.neoforged.neoforge-coremods-21.1.235.jar" [parent: neoforge-21.1.235-universal.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-rendering-fluids-v1-3.1.6+a51883b219.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "dev.eriksonn.aeronautics.aeronautics-neoforge-1.21.1-1.3.0.jar" [parent: create-aeronautics-bundled-1.21.1-1.3.0.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "xaerolib-neoforge-1.21.1-1.1.15.jar" [parent: xaerominimap-neoforge-1.21.1-26.1.0.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-screen-handler-api-v1-1.3.90+8dbc56dd19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-resource-loader-v0-1.3.1+4ea8954419.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "TRender-1.0.15-1.21.1-neoforge-SNAPSHOT.jar" [parent: entityculling-neoforge-1.10.5-mc1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found gamelibrary file "yumi-commons-collections-1.0.0.jar" [parent: lambdynamiclights-api-4.8.8+1.21.1-mojmap.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-rendering-v1-5.1.0+1a09bd5a19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-renderer-indigo-1.7.1+9125b6dc19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-convention-tags-v1-2.1.5+7f945d5b19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-command-api-v2-2.2.28+36d727be19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-convention-tags-v2-2.11.1+87e5848019.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-data-attachment-api-v1-1.4.5+26d408aa19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "veil-neoforge-1.21.1-4.2.0.jar" [parent: searchlights-1.2.2.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "dev.simulated_team.simulated.simulated-neoforge-1.21.1-1.3.0.jar" [parent: create-aeronautics-bundled-1.21.1-1.3.0.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found gamelibrary file "yumi-commons-event-1.0.0.jar" [parent: lambdynamiclights-api-4.8.8+1.21.1-mojmap.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-screen-api-v1-2.0.25+0ae1214819.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found library file "molang-compiler-3.1.1.19.jar" [parent: veil-neoforge-1.21.1-4.1.4.jar, locator: jarinjar]
+[21:10:36] [main/INFO]: Found library file "Reflect-1.6.2.jar" [parent: ImmediatelyFast-NeoForge-1.6.11+1.21.1.jar, locator: jarinjar]
+[21:10:36] [main/INFO]: Found mod file "fabric-particles-v1-4.0.2+824f924c19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-content-registries-v0-8.0.19+5e0d320019.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-transitive-access-wideners-v1-6.2.0+6c854b6f19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "dev.ryanhcode.offroad.offroad-neoforge-1.21.1-1.3.0.jar" [parent: create-aeronautics-bundled-1.21.1-1.3.0.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found gamelibrary file "mixinextras-neoforge-0.5.3.jar" [parent: neoforge-21.1.235-universal.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found gamelibrary file "yumi-commons-core-1.0.0.jar" [parent: lambdynamiclights-api-4.8.8+1.21.1-mojmap.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-game-rule-api-v1-1.0.53+36d727be19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-api-lookup-api-v1-1.6.71+c290471319.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-blockrenderlayer-v1-1.1.52+c290471319.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found gamelibrary file "dev.ryanhcode.sable.sable-sable_rapier-1.21.1-2.0.3.jar" [parent: sable-neoforge-1.21.1-2.0.3.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-block-api-v1-1.1.0+b0c22bb819.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-resource-conditions-api-v1-4.3.0+5bdd099819.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found library file "jcpp-1.4.14.jar" [parent: iris-neoforge-1.8.14-beta.1+mc1.21.1.jar, locator: jarinjar]
+[21:10:36] [main/INFO]: Found library file "glsl-transformer-3.0.0-pre3.jar" [parent: iris-neoforge-1.8.14-beta.1+mc1.21.1.jar, locator: jarinjar]
+[21:10:36] [main/INFO]: Found mod file "sable-companion-common-1.21.1-1.6.0.jar" [parent: searchlights-1.2.2.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "flywheel-neoforge-1.21.1-1.0.6.jar" [parent: create-1.21.1-6.0.10.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-item-group-api-v1-4.1.7+e324903319.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-gametest-api-v1-2.0.5+29f188ce19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-biome-api-v1-13.0.31+1e62d33c19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-entity-events-v1-1.8.0+5ede667619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-registry-sync-v0-5.3.1+f9aace1619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "lambdynamiclights-api-4.8.8+1.21.1-mojmap.jar" [parent: searchlights-1.2.2.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-recipe-api-v1-5.0.15+59440bcc19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-object-builder-api-v1-15.2.1+cc242efd19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-loot-api-v2-3.0.15+a3ee712d19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-loot-api-v3-1.0.3+333dfad919.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "TRansition-1.0.21-1.21.1-neoforge-SNAPSHOT.jar" [parent: entityculling-neoforge-1.10.5-mc1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-networking-api-v1-4.3.0+30a980d919.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found gamelibrary file "Registrate-MC1.21-1.3.0+67.jar" [parent: create-1.21.1-6.0.10.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-sound-api-v1-1.0.23+10b84f8419.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-message-api-v1-6.0.14+6a754fce19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-lifecycle-events-v1-2.6.0+e40d8add19.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-data-generation-api-v1-20.2.34+a4c3605619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-events-interaction-v0-0.7.13+86e0887119.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-key-binding-api-v1-1.0.47+62cc7ce119.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Found mod file "fabric-client-tags-api-v1-1.1.15+e053909619.jar" [parent: forgified-fabric-api-0.116.7+2.2.4+1.21.1.jar, locator: jarinjar, reader: mod manifest]
+[21:10:36] [main/INFO]: Dependency resolution found 1 candidates to load
+[21:10:36] [main/INFO]: Found mod file "photonics-0.4.0-fabric+MC-1.21.1_mapped_moj_1.21.1.jar" [locator: org.sinytra.connector.locator.ConnectorLocator@71ea1fda]
+[21:10:36] [main/INFO]: Found 2 dependencies adding them to mods collection
+[21:10:36] [main/INFO]: Found mod file "org.sinytra.connector-2.0.0-beta.15+1.21.1-mod.jar" [parent: , locator: org.sinytra.connector.locator.ConnectorLocator@71ea1fda, reader: mod manifest]
+[21:10:36] [main/INFO]: Found gamelibrary file "runtime-1.0.0+1.21.1.jar" [parent: , locator: org.sinytra.connector.locator.ConnectorLocator@71ea1fda, reader: mod manifest]
+[21:10:36] [main/INFO]: 
      Mod List:
 		Name Version (Mod Id)
 
@@ -117,7 +116,6 @@
 		Create Offroad 1.3.0 (offroad)
 		Create Simulated 1.3.0 (simulated)
 		Create Simurail 0.0.0-a+b18d457 (simurail)
-		Distant Horizons 3.1.2-b (distanthorizons)
 		EntityCulling 1.10.5 (entityculling)
 		Ferrite Core 7.0.3 (ferritecore)
 		Flywheel 1.0.6 (flywheel)
@@ -183,391 +181,340 @@
 		Veil 4.2.0 (veil)
 		Xaero's Minimap 26.1.0 (xaerominimap)
 		XaeroLib 1.1.15 (xaerolib)
-[21:03:02] [main/INFO]: Successfully made module authlib transformable
-[21:03:02] [main/INFO]: Successfully made module brigadier transformable
-[21:03:02] [main/INFO]: Loading coremod script-engine for [xaerominimap]
-[21:03:02] [main/INFO]: Compatibility level set to JAVA_17
-[21:03:02] [main/INFO]: Compatibility level set to JAVA_21
-[21:03:02] [main/INFO]: Launching target 'forgeclient' with arguments [--version, 1.21.1, --gameDir, /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1), --assetsDir, /home/krzysztofkalisiak/.local/share/ModrinthApp/meta/assets, --uuid, daa1735b3ea84b2a94748a7aa356e30b, --username, Eutio, --assetIndex, 17, --accessToken, ❄❄❄❄❄❄❄❄, --clientId, c4502edb-87c6-40cb-b595-64a280cf8906, --xuid, 0, --userType, msa, --versionType, release, --width, 854, --height, 480]
-[21:03:02] [main/INFO]: Option 'mixin.experimental.entity.block_caching.suffocation' requires 'mixin.util.block_tracking=true' but found 'false'. Setting 'mixin.experimental.entity.block_caching.suffocation=false'.
-[21:03:02] [main/INFO]: Option 'mixin.experimental.entity.block_caching.block_support' requires 'mixin.util.block_tracking=true' but found 'false'. Setting 'mixin.experimental.entity.block_caching.block_support=false'.
-[21:03:02] [main/INFO]: Option 'mixin.experimental.entity.block_caching.block_touching' requires 'mixin.util.block_tracking=true' but found 'false'. Setting 'mixin.experimental.entity.block_caching.block_touching=false'.
-[21:03:02] [main/INFO]: Option 'mixin.experimental.entity.block_caching' requires 'mixin.util.block_tracking=true' but found 'false'. Setting 'mixin.experimental.entity.block_caching=false'.
-[21:03:02] [main/INFO]: Loaded configuration file for Lithium: 148 options available, 4 override(s) found
-[21:03:02] [main/WARN]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'xaerolib.refmap.json' for xaerolib.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'iris.refmap.json' for mixins.iris.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'iris.refmap.json' for mixins.iris.fantastic.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'iris.refmap.json' for mixins.iris.vertexformat.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'iris.refmap.json' for iris-batched-entity-rendering.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'iris.refmap.json' for mixins.iris.compat.sodium.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/INFO]: Loaded configuration file for Sodium: 45 options available, 1 override(s) found
-[21:03:02] [main/WARN]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/INFO]: Using Sodium renderer mixins
-[21:03:02] [main/INFO]: Using Sodium renderer mixins
-[21:03:02] [main/WARN]: Reference map 'xaerominimap.refmap.json' for xaerohud.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'xaerominimap.refmap.json' for xaerominimap.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map 'entityculling.refmap.mixins.json' for entityculling.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.predicates.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.fastmap.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.mrl.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.dedupmultipart.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.blockstatecache.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.dedupbakedquad.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.threaddetec.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.modelsides.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.datacomponents.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.accessors.mixin.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/WARN]: Reference map '' for adapter.init.mixins.json could not be read. If this is a development environment you can ignore this message
-[21:03:02] [main/INFO]: Force-disabling mixin 'entity.collisions.unpushable_cramming.EntityMixin' as rule 'mixin.entity.collisions.unpushable_cramming' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'entity.collisions.unpushable_cramming.EntitySectionMixin' as rule 'mixin.entity.collisions.unpushable_cramming' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'entity.collisions.unpushable_cramming.EntitySelectorMixin' as rule 'mixin.entity.collisions.unpushable_cramming' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'entity.collisions.unpushable_cramming.LivingEntityMixin' as rule 'mixin.entity.collisions.unpushable_cramming' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'world.chunk_access.ChunkHolderMixin' as rule 'mixin.world.chunk_access' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'world.chunk_access.GenerationChunkHolderAccessor' as rule 'mixin.world.chunk_access' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'world.chunk_access.LevelMixin' as rule 'mixin.world.chunk_access' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'world.chunk_access.ServerChunkCacheMixin' as rule 'mixin.world.chunk_access' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'world.chunk_ticking.spread_ice.BiomeMixin' as rule 'mixin.world.chunk_ticking' (added by mods [sable]) disables it and children
-[21:03:02] [main/INFO]: Force-disabling mixin 'world.tick_scheduler.LevelChunkTicksMixin' as rule 'mixin.world.tick_scheduler' (added by mods [sable]) disables it and children
-[21:03:03] [main/WARN]: Error loading class: com/portingdeadmods/cable_facades/events/GameClientEvents$2 (java.lang.ClassNotFoundException: com.portingdeadmods.cable_facades.events.GameClientEvents$2)
-[21:03:03] [main/WARN]: Error loading class: com/direwolf20/justdirethings/client/renderers/OurRenderTypes (java.lang.ClassNotFoundException: com.direwolf20.justdirethings.client.renderers.OurRenderTypes)
-[21:03:03] [main/WARN]: Error loading class: mekanism/client/render/entity/RenderFlame (java.lang.ClassNotFoundException: mekanism.client.render.entity.RenderFlame)
-[21:03:03] [main/WARN]: Error loading class: mekanism/client/render/armor/MekaSuitArmor (java.lang.ClassNotFoundException: mekanism.client.render.armor.MekaSuitArmor)
-[21:03:03] [main/WARN]: Error loading class: mekanism/client/render/lib/effect/BillboardingEffectRenderer (java.lang.ClassNotFoundException: mekanism.client.render.lib.effect.BillboardingEffectRenderer)
-[21:03:03] [main/WARN]: Error loading class: blusunrize/immersiveengineering/client/utils/IEGLShaders (java.lang.ClassNotFoundException: blusunrize.immersiveengineering.client.utils.IEGLShaders)
-[21:03:03] [main/WARN]: Error loading class: mezz/jei/library/plugins/vanilla/ingredients/ItemStackListFactory (java.lang.ClassNotFoundException: mezz.jei.library.plugins.vanilla.ingredients.ItemStackListFactory)
-[21:03:03] [main/WARN]: Error loading class: qouteall/imm_ptl/core/render/context_management/RenderStates (java.lang.ClassNotFoundException: qouteall.imm_ptl.core.render.context_management.RenderStates)
-[21:03:03] [main/WARN]: Force-disabling mixin 'features.render.world.sky.ClientLevelMixin' as rule 'mixin.features.render.world.sky' (added by mods [iris]) disables it and children
-[21:03:03] [main/WARN]: Force-disabling mixin 'features.render.world.sky.FogRendererMixin' as rule 'mixin.features.render.world.sky' (added by mods [iris]) disables it and children
-[21:03:03] [main/WARN]: Force-disabling mixin 'features.render.world.sky.LevelRendererMixin' as rule 'mixin.features.render.world.sky' (added by mods [iris]) disables it and children
-[21:03:03] [main/WARN]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
-[21:03:03] [main/INFO]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.3).
-[07Jul2026 21:03:04.238] [Datafixer Bootstrap/INFO] [com.mojang.datafixers.DataFixerBuilder/]: 229 Datafixer optimizations took 105 milliseconds
-[07Jul2026 21:03:06.968] [Render thread/WARN] [net.minecraft.server.packs.VanillaPackResourcesBuilder/]: Assets URL 'union:/home/krzysztofkalisiak/.local/share/ModrinthApp/meta/libraries/net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.144430-srg.jar%23214!/assets/.mcassetsroot' uses unexpected schema
-[07Jul2026 21:03:06.968] [Render thread/WARN] [net.minecraft.server.packs.VanillaPackResourcesBuilder/]: Assets URL 'union:/home/krzysztofkalisiak/.local/share/ModrinthApp/meta/libraries/net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.144430-srg.jar%23214!/data/.mcassetsroot' uses unexpected schema
-[07Jul2026 21:03:06.984] [Render thread/INFO] [com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService/]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
-[07Jul2026 21:03:06.989] [Render thread/INFO] [net.minecraft.client.Minecraft/]: Setting user: Eutio
-[07Jul2026 21:03:07.001] [Render thread/INFO] [Photonics/]: Reloading config
-[07Jul2026 21:03:07.059] [Render thread/INFO] [Iris/]: Queuing DH event binding...
-[07Jul2026 21:03:07.116] [Render thread/INFO] [net.minecraft.client.Minecraft/]: Backend library: LWJGL version 3.3.3+5
-[07Jul2026 21:03:07.132] [Render thread/INFO] [com.mojang.blaze3d.platform.Window/]: OpenGL Vendor: AMD
-[07Jul2026 21:03:07.133] [Render thread/INFO] [com.mojang.blaze3d.platform.Window/]: OpenGL Renderer: AMD Radeon RX 7900 GRE (radeonsi, navi31, ACO, DRM 3.64, 7.0.0-27-generic)
-[07Jul2026 21:03:07.133] [Render thread/INFO] [com.mojang.blaze3d.platform.Window/]: OpenGL Version: 4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA
-[07Jul2026 21:03:07.155] [Render thread/INFO] [ImmediatelyFast/]: Initializing ImmediatelyFast 1.6.11+1.21.1 on AMD Radeon RX 7900 GRE (radeonsi, navi31, ACO, DRM 3.64, 7.0.0-27-generic) (AMD) with OpenGL 4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA
-[07Jul2026 21:03:07.155] [Render thread/INFO] [ImmediatelyFast/]: Found Iris 1.8.14-beta.1+mc1.21.1. Enabling compatibility.
-[07Jul2026 21:03:07.442] [Render thread/INFO] [Iris/]: Debug functionality is disabled.
-[07Jul2026 21:03:07.443] [Render thread/INFO] [Iris/]: OpenGL 4.5 detected, enabling DSA.
-[07Jul2026 21:03:07.508] [ForkJoinPool.commonPool-worker-6/WARN] [Iris/]: [Iris Update Check] This version doesn't have an update index, skipping.
-[07Jul2026 21:03:07.589] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
-[07Jul2026 21:03:07.590] [modloading-worker-0/INFO] [net.fabricmc.fabric.impl.client.indigo.Indigo/]: [Indigo] Different rendering plugin detected; not applying Indigo.
-[07Jul2026 21:03:07.598] [modloading-worker-0/INFO] [net.neoforged.neoforge.common.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.235, for MC 1.21.1
-[07Jul2026 21:03:07.766] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Registering common data for channel xaerolib:main!
-[07Jul2026 21:03:07.784] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Registering client data for channel xaerolib:main!
-[07Jul2026 21:03:07.787] [modloading-worker-0/INFO] [com.simibubi.create.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
-[07Jul2026 21:03:07.795] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Loading primary common config for channel xaerolib:main!
-[07Jul2026 21:03:07.796] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Loading server config profiles for channel xaerolib:main!
-[07Jul2026 21:03:07.798] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Loading primary client config for channel xaerolib:main!
-[07Jul2026 21:03:07.798] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Loading client config profiles for channel xaerolib:main!
-[07Jul2026 21:03:07.799] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Registering common data for channel xaerominimap:main!
-[07Jul2026 21:03:07.830] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Registering client data for channel xaerominimap:main!
-[07Jul2026 21:03:07.846] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Loading primary common config for channel xaerominimap:main!
-[07Jul2026 21:03:07.847] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Loading server config profiles for channel xaerominimap:main!
-[07Jul2026 21:03:07.847] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Loading primary client config for channel xaerominimap:main!
-[07Jul2026 21:03:07.848] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Loading client config profiles for channel xaerominimap:main!
-[07Jul2026 21:03:08.616] [modloading-worker-0/INFO] [dev.ryanhcode.sable.Sable/]: Sable loaded!
-[07Jul2026 21:03:08.625] [modloading-worker-0/WARN] [dev.ryanhcode.sable.Sable/]: NOTE: Sable is loaded with Flywheel. Sable contains extensive shader overrides and a full light-storage replacement. Expect this to cause compatibility issues. If issues arise, please report them to the Sable issue tracker (https://github.com/ryanhcode/sable/issues) instead of the Flywheel issue tracker.
-[07Jul2026 21:03:09.422] [Render thread/INFO] [Veil/]: GL Debug supported
-[07Jul2026 21:03:09.646] [Render thread/INFO] [Iris/]: Hardware information:
-[07Jul2026 21:03:09.646] [Render thread/INFO] [Iris/]: CPU: 16x AMD Ryzen 7 7700 8-Core Processor
-[07Jul2026 21:03:09.646] [Render thread/INFO] [Iris/]: GPU: AMD Radeon RX 7900 GRE (radeonsi, navi31, ACO, DRM 3.64, 7.0.0-27-generic) (Supports OpenGL 4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA)
-[07Jul2026 21:03:09.647] [Render thread/INFO] [Iris/]: OS: Linux (7.0.0-27-generic)
-[07Jul2026 21:03:10.110] [Render thread/INFO] [net.minecraft.server.packs.resources.ReloadableResourceManager/]: Reloading ResourceManager: vanilla, fabric, mod_resources, mod/sodium, mod/fabric_transfer_api_v1, mod/fabric_renderer_api_v1, mod/fabric_item_api_v1, mod/fabric_model_loading_api_v1, mod/fabric_rendering_fluids_v1, mod/lithium, mod/aeronautics, mod/xaerolib, mod/aeronautics_bundled, mod/fabric_screen_handler_api_v1, mod/fabric_resource_loader_v0, mod/trender, mod/fabric_rendering_v1, mod/fabric_renderer_indigo, mod/fabric_convention_tags_v1, mod/neoforge, mod/photonics, mod/fabric_block_view_api_v2, mod/fabric_command_api_v2, mod/fabric_convention_tags_v2, mod/fabric_data_attachment_api_v1, mod/iris, mod/veil, mod/simulated, mod/simurail, mod/distanthorizons, mod/fabric_screen_api_v1, mod/fabric_particles_v1, mod/connector, mod/fabric_api,forgified_fabric_api, mod/fabric_content_registries_v0, mod/fabric_transitive_access_wideners_v1, mod/offroad, mod/irisveil, mod/fabric_game_rule_api_v1, mod/fabric_api_base, mod/fabric_api_lookup_api_v1, mod/fabric_blockrenderlayer_v1, mod/fabric_block_api_v1, mod/fabric_resource_conditions_api_v1, mod/sablecompanion, mod/flywheel, mod/ponder, mod/create, mod/sable, mod/contraptionlights, mod/xaerominimap, mod/fabric_item_group_api_v1, mod/fabric_gametest_api_v1, mod/entityculling, mod/fabric_biome_api_v1, mod/fabric_entity_events_v1, mod/fabric_registry_sync_v0, mod/immediatelyfast, mod/lambdynlights_api, mod/fabric_recipe_api_v1, mod/ferritecore, mod/fabric_object_builder_api_v1, mod/fabric_loot_api_v2, mod/fabric_loot_api_v3, mod/transition, mod/fabric_rendering_data_attachment_v1, mod/searchlights, mod/fabric_networking_api_v1, mod/fabric_sound_api_v1, mod/fabric_message_api_v1, mod/fabric_lifecycle_events_v1, mod/fabric_data_generation_api_v1, mod/fabric_events_interaction_v0, mod/fabric_key_binding_api_v1, mod/fabric_client_tags_api_v1
-[07Jul2026 21:03:10.122] [Worker-Main-4/INFO] [xaero.lib.XaeroLib/]: Loading XaeroLib common 1/2!
-[07Jul2026 21:03:10.123] [Worker-Main-9/INFO] [me.yurtema.searchlights.Searchlights/]: HELLO FROM COMMON SETUP
-[07Jul2026 21:03:10.134] [NeoForge Version Check/INFO] [net.neoforged.fml.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
-[07Jul2026 21:03:10.167] [Worker-Main-8/INFO] [net.minecraft.client.gui.font.providers.UnihexProvider/]: Found unifont_jp_patch-15.1.05.hex, loading
-[07Jul2026 21:03:10.167] [Worker-Main-5/INFO] [net.minecraft.client.gui.font.providers.UnihexProvider/]: Found unifont_all_no_pua-15.1.05.hex, loading
-[07Jul2026 21:03:10.299] [Worker-Main-15/INFO] [xaero.lib.XaeroLib/]: Loading XaeroLib client 1/2!
-[07Jul2026 21:03:10.372] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.AbstractModInitializer_neoforge/]: Initializing Distant Horizons client, firing DhApiBeforeDhInitEvent...
-[07Jul2026 21:03:10.382] [Worker-Main-3/INFO] [top.leonx.irisveil.IrisVeilCompat/]: HELLO FROM CLIENT SETUP
-[07Jul2026 21:03:10.382] [Worker-Main-3/INFO] [top.leonx.irisveil.IrisVeilCompat/]: MINECRAFT NAME >> Eutio
-[07Jul2026 21:03:10.386] [Worker-Main-2/INFO] [xaero.minimap.XaeroMinimap/]: Loading Xaero's Minimap - Stage 1/2
-[07Jul2026 21:03:10.392] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.Initializer/]: Running library validation...
-[07Jul2026 21:03:10.399] [Worker-Main-6/INFO] [me.yurtema.searchlights.Searchlights/]: HELLO FROM CLIENT SETUP
-[07Jul2026 21:03:10.399] [Worker-Main-6/INFO] [me.yurtema.searchlights.Searchlights/]: MINECRAFT NAME >> Eutio
-[07Jul2026 21:03:10.571] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.AbstractModInitializer_neoforge/]: Distant Horizons, Version: 3.1.2-b
-[07Jul2026 21:03:10.581] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.AbstractModInitializer_neoforge/]: Skipping mod compatibility accessor for: [optifine]
-[07Jul2026 21:03:10.581] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.AbstractModInitializer_neoforge/]: Skipping mod compatibility accessor for: [c2me]
-[07Jul2026 21:03:10.582] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.AbstractModInitializer_neoforge/]: Skipping mod compatibility accessor for: [immersive_portals_core]
-[07Jul2026 21:03:10.582] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.dependencyInjection.ModAccessorInjector/]: Registered mod compatibility accessor for: [iris].
-[07Jul2026 21:03:10.599] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.config.ConfigHandler/]: Initialising config for [DistantHorizons]
-[07Jul2026 21:03:10.653] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.config.ConfigHandler/]: [DistantHorizons] Config initialised
-[07Jul2026 21:03:10.657] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.config.eventHandlers.IgnoredDimensionCsvHandler/]: Dimension ignoring disabled, DH will render all dimensions.
-[07Jul2026 21:03:10.657] [Worker-Main-8/INFO] [com.seibel.distanthorizons.core.logging.DhLogger/]: Applying config to loggers
-[07Jul2026 21:03:10.658] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.Initializer/]: Garbage collectors: [G1 Young Generation, G1 Concurrent GC, G1 Old Generation]
-[07Jul2026 21:03:10.658] [Worker-Main-8/WARN] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.Initializer/]: Distant Horizons: G1 Garbage collector detected.
-This can cause FPS stuttering. 
-It's recommended to use a concurrent garbage collector 
-like ZGC (Java 21+) or Shenandoah (Java 8 through 17) 
-for a smoother experience.
-[07Jul2026 21:03:10.662] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.AbstractModInitializer_neoforge/]: Distant Horizons client Initialized.
-[07Jul2026 21:03:10.662] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.AbstractModInitializer_neoforge/]: Running Delayed setup...
-[07Jul2026 21:03:10.662] [Worker-Main-8/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.AbstractModInitializer_neoforge/]: Delayed setup complete, firing DhApiAfterDhInitEvent event...
-[07Jul2026 21:03:10.662] [Worker-Main-8/INFO] [Iris/]: DH Ready, binding Iris event handlers...
-[07Jul2026 21:03:10.666] [Worker-Main-8/INFO] [Iris/]: DH Iris events bound.
-[07Jul2026 21:03:10.666] [DH-PostClientInit Thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.wrappers.DependencySetup_neoforge/]: Setting DH Rendering API to: [OPEN_GL]...
-[07Jul2026 21:03:10.674] [DH-PostClientInit Thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.wrappers.DependencySetup_neoforge/]: DH Rendering successfully bound to: [OpenGL]...
-[07Jul2026 21:03:10.869] [Render thread/WARN] [Iris/]: Invalid pack option: GTAO
-[07Jul2026 21:03:10.869] [Render thread/WARN] [Iris/]: Invalid pack option: GTAO
-[07Jul2026 21:03:10.873] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "WATER_REFRACTION" defined in shaders.properties
-[07Jul2026 21:03:10.873] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "WATER_REFRACTION_INTENSITY" defined in shaders.properties
-[07Jul2026 21:03:10.874] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "CLOUDS_DAILY_WEATHER" defined in shaders.properties
-[07Jul2026 21:03:10.874] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "CLOUDS_CUMULUS_CONGESTUS_PRIMARY_STEPS_H" defined in shaders.properties
-[07Jul2026 21:03:10.874] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "CLOUDS_CUMULUS_CONGESTUS_PRIMARY_STEPS_Z" defined in shaders.properties
-[07Jul2026 21:03:10.875] [Render thread/INFO] [Iris/]: Profile: ultra (+1 option changed by user)
-[07Jul2026 21:03:10.956] [NeoForge Version Check/INFO] [net.neoforged.fml.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
-[07Jul2026 21:03:11.531] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10056: state properties are currently not supported: calibrated_sculk_sensor:sculk_sensor_phase=inactive
-[07Jul2026 21:03:11.531] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10056: state properties are currently not supported: calibrated_sculk_sensor:sculk_sensor_phase=cooldown
-[07Jul2026 21:03:11.531] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10057: state properties are currently not supported: calibrated_sculk_sensor:sculk_sensor_phase=active
-[07Jul2026 21:03:11.531] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10057: state properties are currently not supported: sculk_sensor:sculk_sensor_phase=active
-[07Jul2026 21:03:11.531] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: weathered_copper_bulb:lit=true
-[07Jul2026 21:03:11.531] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: oxidized_copper_bulb:lit=true
-[07Jul2026 21:03:11.531] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: waxed_weathered_copper_bulb:lit=true
-[07Jul2026 21:03:11.532] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: waxed_oxidized_copper_bulb:lit=true
-[07Jul2026 21:03:11.532] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: copper_bulb:lit=true
-[07Jul2026 21:03:11.532] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: exposed_copper_bulb:lit=true
-[07Jul2026 21:03:11.532] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: waxed_copper_bulb:lit=true
-[07Jul2026 21:03:11.532] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: waxed_exposed_copper_bulb:lit=true
-[07Jul2026 21:03:11.556] [Render thread/INFO] [Iris/]: Using shaderpack: photon-main (1).zip
-[07Jul2026 21:03:12.029] [Worker-Main-15/WARN] [xaero.lib.XaeroLib/]: io exception while checking patreon: Online mod data expired! Date: Sat Jul 04 07:52:27 CEST 2026
-[07Jul2026 21:03:12.034] [Render thread/INFO] [xaero.minimap.XaeroMinimap/]: Loading Xaero's Minimap - Stage 2/2
-[07Jul2026 21:03:13.899] [Render thread/WARN] [xaero.hud.minimap.MinimapLogs/]: io exception while checking versions: Online mod data expired! Date: Sat Jul 04 07:52:27 CEST 2026
-[07Jul2026 21:03:13.899] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Registered player tracker system: minimap_synced
-[07Jul2026 21:03:13.900] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: No Optifine!
-[07Jul2026 21:03:13.900] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Xaero's Minimap: No Vivecraft!
-[07Jul2026 21:03:13.900] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Xaero's Minimap: Iris found!
-[07Jul2026 21:03:13.900] [Render thread/WARN] [net.neoforged.fml.DeferredWorkQueue/LOADING]: Mod 'xaerominimap' took 1.866 s to run a deferred task.
-[07Jul2026 21:03:13.901] [Render thread/INFO] [xaero.lib.XaeroLib/]: Loading XaeroLib common 2/2!
-[07Jul2026 21:03:13.901] [Render thread/INFO] [xaero.lib.XaeroLib/]: Loading XaeroLib client 2/2!
-[07Jul2026 21:03:13.918] [Render thread/INFO] [Veil/]: Loaded 0 shader redirects, 0 replacements
-[07Jul2026 21:03:13.923] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:necromancer/skinned_mesh': 5049 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.965] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:necromancer/skinned_mesh': 2073 chars
-[07Jul2026 21:03:13.973] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.973] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:blit_depth': 532 chars
-[07Jul2026 21:03:13.974] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.974] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:blit_screen': 495 chars
-[07Jul2026 21:03:13.978] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:core/blit_screen_effect': 600 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.978] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/blit_screen_effect': 543 chars
-[07Jul2026 21:03:13.978] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:light/area': 1703 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.979] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:light/area': 14130 chars
-[07Jul2026 21:03:13.989] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.989] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:debug/cubemap': 1758 chars
-[07Jul2026 21:03:13.989] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:end_sea': 1127 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.989] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:end_sea': 1278 chars
-[07Jul2026 21:03:13.992] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:rope/rope': 4214 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.992] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:rope/rope': 1948 chars
-[07Jul2026 21:03:13.992] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:quasar/particle_additive': 1985 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.992] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:quasar/particle_additive': 1874 chars
-[07Jul2026 21:03:13.992] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:redstone_accumulator/diode': 4070 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.992] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:redstone_accumulator/diode': 3788 chars
-[07Jul2026 21:03:13.993] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'contraptionlights:light/sublevel_point': 1054 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:13.993] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'contraptionlights:light/sublevel_point': 15830 chars
-[07Jul2026 21:03:14.000] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:debug/shell': 629 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.001] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:debug/shell': 605 chars
-[07Jul2026 21:03:14.001] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.001] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:light/directional': 9064 chars
-[07Jul2026 21:03:14.003] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:quasar/particle': 1985 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.003] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:quasar/particle': 1898 chars
-[07Jul2026 21:03:14.003] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'contraptionlights:light/world_light': 1054 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.003] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'contraptionlights:light/world_light': 14744 chars
-[07Jul2026 21:03:14.009] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'aeronautics:levitite/levitite': 5585 chars, hasGetVelocity=true, hasOffset=true
-[07Jul2026 21:03:14.009] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'aeronautics:levitite/levitite': 3656 chars
-[07Jul2026 21:03:14.010] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:spring/spring': 4196 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.010] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:spring/spring': 1972 chars
-[07Jul2026 21:03:14.010] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.010] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/composite': 783 chars
-[07Jul2026 21:03:14.010] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'aeronautics:hot_air_overlay': 1167 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'aeronautics:hot_air_overlay': 907 chars
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'aeronautics:burner_flame': 1770 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'aeronautics:burner_flame': 5298 chars
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/bloom': 2631 chars
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/blur': 937 chars
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.011] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'aeronautics:soft_light': 1108 chars
-[07Jul2026 21:03:14.012] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.012] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:debug/array': 539 chars
-[07Jul2026 21:03:14.012] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.012] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/unblur': 1318 chars
-[07Jul2026 21:03:14.012] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:light/point': 1136 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.012] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:light/point': 13059 chars
-[07Jul2026 21:03:14.017] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:laser_pointer/lens': 4016 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.018] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:laser_pointer/lens': 4048 chars
-[07Jul2026 21:03:14.018] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:contraption_diagram/outline_diagram': 610 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.018] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:contraption_diagram/outline_diagram': 5629 chars
-[07Jul2026 21:03:14.018] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:laser/laser': 774 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.018] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:laser/laser': 1878 chars
-[07Jul2026 21:03:14.018] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
-[07Jul2026 21:03:14.018] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:spread_end_sea': 2427 chars
-[07Jul2026 21:03:14.021] [Render thread/INFO] [Veil/]: Loaded 31 shaders from: pinwheel/shaders/program
-[07Jul2026 21:03:14.089] [Worker-Main-8/INFO] [PonderIndex/]: Registering Ponder Scenes took 47.80 ms
-[07Jul2026 21:03:14.091] [Worker-Main-8/INFO] [PonderIndex/]: Registering Ponder Tags took 2.173 ms
-[07Jul2026 21:03:14.171] [Render thread/WARN] [net.minecraft.client.sounds.SoundEngine/]: Missing sound for event: minecraft:item.goat_horn.play
-[07Jul2026 21:03:14.171] [Render thread/WARN] [net.minecraft.client.sounds.SoundEngine/]: Missing sound for event: minecraft:entity.goat.screaming.horn_break
-[07Jul2026 21:03:14.200] [Render thread/INFO] [com.mojang.blaze3d.audio.Library/]: OpenAL initialized on device Navi 31 HDMI/DP Audio Digital Stereo (HDMI 2)
-[07Jul2026 21:03:14.201] [Render thread/INFO] [net.minecraft.client.sounds.SoundEngine/SOUNDS]: Sound engine started
-[07Jul2026 21:03:14.265] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 2048x1024x4 minecraft:textures/atlas/blocks.png-atlas
-[07Jul2026 21:03:14.301] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 256x256x4 minecraft:textures/atlas/signs.png-atlas
-[07Jul2026 21:03:14.302] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x512x4 minecraft:textures/atlas/shield_patterns.png-atlas
-[07Jul2026 21:03:14.303] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x512x4 minecraft:textures/atlas/banner_patterns.png-atlas
-[07Jul2026 21:03:14.303] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 2048x1024x4 minecraft:textures/atlas/armor_trims.png-atlas
-[07Jul2026 21:03:14.313] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 128x64x4 minecraft:textures/atlas/decorated_pot.png-atlas
-[07Jul2026 21:03:14.313] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 256x256x4 minecraft:textures/atlas/chest.png-atlas
-[07Jul2026 21:03:14.314] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x256x4 minecraft:textures/atlas/beds.png-atlas
-[07Jul2026 21:03:14.314] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x256x4 minecraft:textures/atlas/shulker_boxes.png-atlas
-[07Jul2026 21:03:14.358] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x512x0 minecraft:textures/atlas/particles.png-atlas
-[07Jul2026 21:03:14.360] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x256x0 minecraft:textures/atlas/paintings.png-atlas
-[07Jul2026 21:03:14.361] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 256x128x0 minecraft:textures/atlas/mob_effects.png-atlas
-[07Jul2026 21:03:14.362] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 64x64x0 minecraft:textures/atlas/map_decorations.png-atlas
-[07Jul2026 21:03:14.362] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 1024x1024x0 minecraft:textures/atlas/gui.png-atlas
-[07Jul2026 21:03:14.382] [Render thread/WARN] [net.minecraft.client.renderer.ShaderInstance/]: Shader rendertype_entity_translucent_emissive could not find sampler named Sampler2 in the specified shader program.
-[07Jul2026 21:03:14.438] [Render thread/INFO] [xaero.lib.XaeroLib/]: Successfully reloaded the XaeroLib shaders!
-[07Jul2026 21:03:14.438] [Render thread/INFO] [net.neoforged.neoforge.client.entity.animation.json.AnimationLoader/]: Loaded 0 entity animations
-[07Jul2026 21:03:14.438] [Render thread/INFO] [Veil/]: Loaded 3 framebuffers
-[07Jul2026 21:03:14.444] [Render thread/INFO] [Veil/]: Loaded 6 post pipelines
-[07Jul2026 21:03:14.447] [Render thread/INFO] [Veil/]: Loaded 6 render types
-[07Jul2026 21:03:14.447] [Render thread/INFO] [Veil/]: Enabled bloom pipeline
-[07Jul2026 21:03:14.447] [Render thread/INFO] [Veil/]: Loaded 0 quasar particles
-[07Jul2026 21:03:14.447] [Render thread/INFO] [Veil/]: Loaded 0 templates
-[07Jul2026 21:03:14.447] [Render thread/INFO] [Veil/]: Loaded 0 modules
-[07Jul2026 21:03:14.461] [Render thread/INFO] [flywheel/backend/shaders/]: Loaded 77 shader sources in 9.927 ms
-[07Jul2026 21:03:14.470] [Render thread/INFO] [com.simibubi.create.Create/]: Loaded 58 train hat configurations.
-[07Jul2026 21:03:14.497] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.jar.updater.SelfUpdater/]: Checking for Distant Horizons [STABLE] update for MC [1.21.1]...
-[07Jul2026 21:03:16.686] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.jar.updater.SelfUpdater/]: Distant Horizons already up to date.
-[07Jul2026 21:03:16.919] [Render thread/INFO] [Iris/]: Creating pipeline for dimension minecraft:overworld
-[07Jul2026 21:03:17.423] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.499] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.506] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.513] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.520] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.526] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.533] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.707] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.728] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:17.751] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:18.090] [Render thread/WARN] [Iris/]: Type is VERTEX
-[07Jul2026 21:03:18.092] [Render thread/WARN] [Iris/]: Type is FRAGMENT
-[07Jul2026 21:03:18.098] [Render thread/WARN] [Iris/]: Type is VERTEX
-[07Jul2026 21:03:18.099] [Render thread/WARN] [Iris/]: Type is FRAGMENT
-[07Jul2026 21:03:18.119] [Render thread/WARN] [Iris/]: Type is VERTEX
-[07Jul2026 21:03:18.120] [Render thread/WARN] [Iris/]: Type is FRAGMENT
-[07Jul2026 21:03:21.622] [Render thread/INFO] [com.simibubi.create.Create/]: Created 157 recipes which will be injected into the game
-[07Jul2026 21:03:21.625] [Render thread/INFO] [com.simibubi.create.Create/]: Created 0 tags which will be injected into the game
-[07Jul2026 21:03:21.978] [Worker-Main-6/ERROR] [net.minecraft.world.level.storage.loot.LootDataType/]: Couldn't parse element ResourceKey[minecraft:root / minecraft:loot_table]:simurail:blocks/automatic_coupler - Not a valid resource location: simurail:blocks/simurail:automatic_coupler Non [a-z0-9/._-] character in path of location: simurail:blocks/simurail:automatic_coupler
-[07Jul2026 21:03:22.243] [Render thread/INFO] [net.minecraft.world.item.crafting.RecipeManager/]: Loaded 2943 recipes
-[07Jul2026 21:03:22.342] [Render thread/INFO] [net.minecraft.advancements.AdvancementTree/]: Loaded 2644 advancements
-[07Jul2026 21:03:22.805] [Server thread/INFO] [net.minecraft.client.server.IntegratedServer/]: Starting integrated minecraft server version 1.21.1
-[07Jul2026 21:03:22.805] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Generating keypair
-[07Jul2026 21:03:22.858] [Server thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.world.AbstractDhWorld/]: Started DhWorld of type [CLIENT_SERVER].
-[07Jul2026 21:03:22.910] [Server thread/INFO] [dev.ryanhcode.sable.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
-[07Jul2026 21:03:23.238] [DH-Full Data Migration Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.file.fullDatafile.V2.DataMigratorV1/]: No migration necessary.
-[07Jul2026 21:03:23.239] [Server thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.level.AbstractDhServerLevel/]: Started DhClientServerLevel for [Wrapped{ServerLevel[New World]@minecraft:overworld}] at [[LocalSaveStructure@(/home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/saves/New World/data)]].
-[07Jul2026 21:03:23.278] [Server thread/INFO] [dev.ryanhcode.sable.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
-[07Jul2026 21:03:23.597] [DH-Full Data Migration Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.file.fullDatafile.V2.DataMigratorV1/]: No migration necessary.
-[07Jul2026 21:03:23.600] [Server thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.level.AbstractDhServerLevel/]: Started DhClientServerLevel for [Wrapped{ServerLevel[New World]@minecraft:the_end}] at [[LocalSaveStructure@(/home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/saves/New World/DIM1/data;/home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/saves/New World/data)]].
-[07Jul2026 21:03:23.601] [Server thread/INFO] [dev.ryanhcode.sable.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
-[07Jul2026 21:03:23.616] [DH-Full Data Migration Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.file.fullDatafile.V2.DataMigratorV1/]: No migration necessary.
-[07Jul2026 21:03:23.619] [Server thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.level.AbstractDhServerLevel/]: Started DhClientServerLevel for [Wrapped{ServerLevel[New World]@minecraft:the_nether}] at [[LocalSaveStructure@(/home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/saves/New World/DIM1/data;/home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/saves/New World/DIM-1/data;/home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1)/saves/New World/data)]].
-[07Jul2026 21:03:23.620] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Preparing start region for dimension minecraft:overworld
-[07Jul2026 21:03:23.766] [DH-Request Module Ticker [minecraft:overworld] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.BatchGenerator/]: Batch Chunk Generator initialized
-[07Jul2026 21:03:23.768] [DH-Request Module Ticker [minecraft:overworld] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.queues.WorldGenerationQueue/]: Creating world gen queue
-[07Jul2026 21:03:23.768] [DH-Request Module Ticker [minecraft:overworld] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.queues.WorldGenerationQueue/]: Created world gen queue
-[07Jul2026 21:03:23.768] [DH-Request Module Ticker [minecraft:overworld] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.file.fullDatafile.GeneratedFullDataSourceProvider/]: Set world gen queue for level [minecraft:overworld].
-[07Jul2026 21:03:23.786] [Render thread/INFO] [net.minecraft.server.level.progress.LoggerChunkProgressListener/]: Preparing spawn area: 0%
-[07Jul2026 21:03:23.860] [Server thread/INFO] [net.neoforged.neoforge.server.permission.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
-[07Jul2026 21:03:23.860] [Server thread/INFO] [me.yurtema.searchlights.Searchlights/]: HELLO from server starting
-[07Jul2026 21:03:23.872] [Render thread/INFO] [net.minecraft.server.level.progress.LoggerChunkProgressListener/]: Time elapsed: 238 ms
-[07Jul2026 21:03:23.954] [Server thread/INFO] [net.minecraft.client.server.IntegratedServer/]: Changing view distance to 12, from 10
-[07Jul2026 21:03:23.954] [Server thread/INFO] [net.minecraft.client.server.IntegratedServer/]: Changing simulation distance to 12, from 0
-[07Jul2026 21:03:23.995] [Render thread/INFO] [dev.ryanhcode.sable.Sable/]: Adding local UDP server channel future
-[07Jul2026 21:03:23.999] [Render thread/WARN] [io.netty.bootstrap.Bootstrap/]: Unknown channel option 'SO_BROADCAST' for channel '[id: 0x56e9fdf1]'
-[07Jul2026 21:03:24.002] [Netty Server IO #1/INFO] [dev.ryanhcode.sable.Sable/]: Server UDP channel active
-[07Jul2026 21:03:24.015] [Render thread/INFO] [dev.ryanhcode.sable.Sable/]: Starting local client UDP channel future
-[07Jul2026 21:03:24.016] [Netty Local Client IO #1/INFO] [dev.ryanhcode.sable.Sable/]: Client UDP channel active
-[07Jul2026 21:03:24.118] [DH-Request Module Ticker [minecraft:the_end] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.BatchGenerator/]: Batch Chunk Generator initialized
-[07Jul2026 21:03:24.118] [DH-Request Module Ticker [minecraft:the_end] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.queues.WorldGenerationQueue/]: Creating world gen queue
-[07Jul2026 21:03:24.118] [DH-Request Module Ticker [minecraft:the_end] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.queues.WorldGenerationQueue/]: Created world gen queue
-[07Jul2026 21:03:24.118] [DH-Request Module Ticker [minecraft:the_end] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.file.fullDatafile.GeneratedFullDataSourceProvider/]: Set world gen queue for level [minecraft:the_end].
-[07Jul2026 21:03:24.137] [DH-Request Module Ticker [minecraft:the_nether] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.BatchGenerator/]: Batch Chunk Generator initialized
-[07Jul2026 21:03:24.137] [DH-Request Module Ticker [minecraft:the_nether] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.queues.WorldGenerationQueue/]: Creating world gen queue
-[07Jul2026 21:03:24.137] [DH-Request Module Ticker [minecraft:the_nether] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.generation.queues.WorldGenerationQueue/]: Created world gen queue
-[07Jul2026 21:03:24.137] [DH-Request Module Ticker [minecraft:the_nether] Thread[0]/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.file.fullDatafile.GeneratedFullDataSourceProvider/]: Set world gen queue for level [minecraft:the_nether].
-[07Jul2026 21:03:24.287] [Server thread/INFO] [net.minecraft.server.players.PlayerList/]: Eutio[local:E:10fdfd38] logged in with entity id 12 at (184.29775576876153, 84.29785800476711, -216.95547296771636)
-[07Jul2026 21:03:24.291] [Server thread/INFO] [dev.ryanhcode.sable.Sable/]: Beginning attempted authentication with player Eutio
-[07Jul2026 21:03:24.314] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Eutio joined the game
-[07Jul2026 21:03:24.316] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Minimap required item set to nothing.
-[07Jul2026 21:03:24.316] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: New Xaero hud session initialized!
-[07Jul2026 21:03:24.331] [Server thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.api.internal.ServerApi/]: Player [Eutio] joined.
-[07Jul2026 21:03:24.348] [Render thread/INFO] [Iris/]: Reloading pipeline on dimension change: minecraft:overworld => minecraft:overworld
-[07Jul2026 21:03:24.350] [Render thread/INFO] [Iris/]: Destroying pipeline minecraft:overworld
-[07Jul2026 21:03:24.572] [Render thread/INFO] [Iris/]: Creating pipeline for dimension minecraft:overworld
-[07Jul2026 21:03:24.637] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.645] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.656] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.667] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.680] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.690] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.698] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.713] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.726] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.735] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
-[07Jul2026 21:03:24.900] [Render thread/WARN] [flywheel/]: Flywheel backend fell back from 'flywheel:indirect' to 'flywheel:off'
-[07Jul2026 21:03:25.029] [Render thread/INFO] [ChunkBuilder/]: Started 10 worker threads
-[07Jul2026 21:03:25.117] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Minimap updated server level id: -2043031532 for world ResourceKey[minecraft:dimension / minecraft:overworld]
-[07Jul2026 21:03:25.119] [Render thread/INFO] [net.minecraft.advancements.AdvancementTree/]: Loaded 118 advancements
-[07Jul2026 21:03:25.458] [Render thread/INFO] [ChunkBuilder/]: Stopping worker threads
-[07Jul2026 21:03:25.467] [Render thread/INFO] [ChunkBuilder/]: Started 10 worker threads
-[07Jul2026 21:03:25.472] [Render thread/WARN] [flywheel/]: Flywheel backend fell back from 'flywheel:indirect' to 'flywheel:off'
-[07Jul2026 21:03:25.630] [Render thread/WARN] [Sodium-VertexConsumerTracker/]: Class com.mojang.blaze3d.vertex.BufferBuilder does not support optimized vertex writing code paths, which may cause reduced rendering performance
-[07Jul2026 21:03:25.778] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.GLProxy/]: Iris detected, Distant Horizons OpenGL error logging won't be sent in the chat due to Iris throwing known (harmless) OpenGL errors. This is a bug with Iris, not Distant Horizons.
-[07Jul2026 21:03:25.781] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.GLProxy/]: Creating [GLProxy]... If this is the last message you see there must have been an OpenGL error.
-[07Jul2026 21:03:25.781] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.GLProxy/]: Lod Render OpenGL version [4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA].
-[07Jul2026 21:03:25.781] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.GLProxy/]: minecraftGlCapabilities:
-Your OpenGL support:
-openGL version 3.2+: [true] <- REQUIRED
-Vertex Attribute Buffer Binding: [true] <- optional improvement
-Buffer Storage: [true] <- optional improvement
+[21:10:36] [main/INFO]: Successfully made module authlib transformable
+[21:10:36] [main/INFO]: Successfully made module brigadier transformable
+[21:10:36] [main/INFO]: Loading coremod script-engine for [xaerominimap]
+[21:10:36] [main/INFO]: Compatibility level set to JAVA_17
+[21:10:36] [main/INFO]: Compatibility level set to JAVA_21
+[21:10:36] [main/INFO]: Launching target 'forgeclient' with arguments [--version, 1.21.1, --gameDir, /home/krzysztofkalisiak/.local/share/ModrinthApp/profiles/Create Aeronautics (1), --assetsDir, /home/krzysztofkalisiak/.local/share/ModrinthApp/meta/assets, --uuid, daa1735b3ea84b2a94748a7aa356e30b, --username, Eutio, --assetIndex, 17, --accessToken, ❄❄❄❄❄❄❄❄, --clientId, c4502edb-87c6-40cb-b595-64a280cf8906, --xuid, 0, --userType, msa, --versionType, release, --width, 854, --height, 480]
+[21:10:37] [main/INFO]: Option 'mixin.experimental.entity.block_caching.suffocation' requires 'mixin.util.block_tracking=true' but found 'false'. Setting 'mixin.experimental.entity.block_caching.suffocation=false'.
+[21:10:37] [main/INFO]: Option 'mixin.experimental.entity.block_caching.block_support' requires 'mixin.util.block_tracking=true' but found 'false'. Setting 'mixin.experimental.entity.block_caching.block_support=false'.
+[21:10:37] [main/INFO]: Option 'mixin.experimental.entity.block_caching.block_touching' requires 'mixin.util.block_tracking=true' but found 'false'. Setting 'mixin.experimental.entity.block_caching.block_touching=false'.
+[21:10:37] [main/INFO]: Option 'mixin.experimental.entity.block_caching' requires 'mixin.util.block_tracking=true' but found 'false'. Setting 'mixin.experimental.entity.block_caching=false'.
+[21:10:37] [main/INFO]: Loaded configuration file for Lithium: 148 options available, 4 override(s) found
+[21:10:37] [main/WARN]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'xaerolib.refmap.json' for xaerolib.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'iris.refmap.json' for mixins.iris.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'iris.refmap.json' for mixins.iris.fantastic.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'iris.refmap.json' for mixins.iris.vertexformat.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'iris.refmap.json' for iris-batched-entity-rendering.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'iris.refmap.json' for mixins.iris.compat.sodium.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/INFO]: Loaded configuration file for Sodium: 45 options available, 1 override(s) found
+[21:10:37] [main/WARN]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/INFO]: Using Sodium renderer mixins
+[21:10:37] [main/INFO]: Using Sodium renderer mixins
+[21:10:37] [main/WARN]: Reference map 'xaerominimap.refmap.json' for xaerohud.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'xaerominimap.refmap.json' for xaerominimap.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map 'entityculling.refmap.mixins.json' for entityculling.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.predicates.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.fastmap.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.mrl.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.dedupmultipart.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.blockstatecache.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.dedupbakedquad.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.threaddetec.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.modelsides.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.datacomponents.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '${refmap_target}refmap.json' for ferritecore.accessors.mixin.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/WARN]: Reference map '' for adapter.init.mixins.json could not be read. If this is a development environment you can ignore this message
+[21:10:37] [main/INFO]: Force-disabling mixin 'entity.collisions.unpushable_cramming.EntityMixin' as rule 'mixin.entity.collisions.unpushable_cramming' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'entity.collisions.unpushable_cramming.EntitySectionMixin' as rule 'mixin.entity.collisions.unpushable_cramming' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'entity.collisions.unpushable_cramming.EntitySelectorMixin' as rule 'mixin.entity.collisions.unpushable_cramming' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'entity.collisions.unpushable_cramming.LivingEntityMixin' as rule 'mixin.entity.collisions.unpushable_cramming' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'world.chunk_access.ChunkHolderMixin' as rule 'mixin.world.chunk_access' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'world.chunk_access.GenerationChunkHolderAccessor' as rule 'mixin.world.chunk_access' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'world.chunk_access.LevelMixin' as rule 'mixin.world.chunk_access' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'world.chunk_access.ServerChunkCacheMixin' as rule 'mixin.world.chunk_access' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'world.chunk_ticking.spread_ice.BiomeMixin' as rule 'mixin.world.chunk_ticking' (added by mods [sable]) disables it and children
+[21:10:37] [main/INFO]: Force-disabling mixin 'world.tick_scheduler.LevelChunkTicksMixin' as rule 'mixin.world.tick_scheduler' (added by mods [sable]) disables it and children
+[21:10:37] [main/WARN]: Error loading class: com/portingdeadmods/cable_facades/events/GameClientEvents$2 (java.lang.ClassNotFoundException: com.portingdeadmods.cable_facades.events.GameClientEvents$2)
+[21:10:37] [main/WARN]: Error loading class: com/direwolf20/justdirethings/client/renderers/OurRenderTypes (java.lang.ClassNotFoundException: com.direwolf20.justdirethings.client.renderers.OurRenderTypes)
+[21:10:37] [main/WARN]: Error loading class: mekanism/client/render/entity/RenderFlame (java.lang.ClassNotFoundException: mekanism.client.render.entity.RenderFlame)
+[21:10:37] [main/WARN]: Error loading class: mekanism/client/render/armor/MekaSuitArmor (java.lang.ClassNotFoundException: mekanism.client.render.armor.MekaSuitArmor)
+[21:10:37] [main/WARN]: Error loading class: mekanism/client/render/lib/effect/BillboardingEffectRenderer (java.lang.ClassNotFoundException: mekanism.client.render.lib.effect.BillboardingEffectRenderer)
+[21:10:37] [main/WARN]: Error loading class: blusunrize/immersiveengineering/client/utils/IEGLShaders (java.lang.ClassNotFoundException: blusunrize.immersiveengineering.client.utils.IEGLShaders)
+[21:10:37] [main/WARN]: Error loading class: mezz/jei/library/plugins/vanilla/ingredients/ItemStackListFactory (java.lang.ClassNotFoundException: mezz.jei.library.plugins.vanilla.ingredients.ItemStackListFactory)
+[21:10:37] [main/WARN]: Force-disabling mixin 'features.render.world.sky.ClientLevelMixin' as rule 'mixin.features.render.world.sky' (added by mods [iris]) disables it and children
+[21:10:37] [main/WARN]: Force-disabling mixin 'features.render.world.sky.FogRendererMixin' as rule 'mixin.features.render.world.sky' (added by mods [iris]) disables it and children
+[21:10:37] [main/WARN]: Force-disabling mixin 'features.render.world.sky.LevelRendererMixin' as rule 'mixin.features.render.world.sky' (added by mods [iris]) disables it and children
+[21:10:37] [main/WARN]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[21:10:37] [main/INFO]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.3).
+[07Jul2026 21:10:38.611] [Datafixer Bootstrap/INFO] [com.mojang.datafixers.DataFixerBuilder/]: 229 Datafixer optimizations took 107 milliseconds
+[07Jul2026 21:10:41.189] [Render thread/WARN] [net.minecraft.server.packs.VanillaPackResourcesBuilder/]: Assets URL 'union:/home/krzysztofkalisiak/.local/share/ModrinthApp/meta/libraries/net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.144430-srg.jar%23213!/assets/.mcassetsroot' uses unexpected schema
+[07Jul2026 21:10:41.190] [Render thread/WARN] [net.minecraft.server.packs.VanillaPackResourcesBuilder/]: Assets URL 'union:/home/krzysztofkalisiak/.local/share/ModrinthApp/meta/libraries/net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.144430-srg.jar%23213!/data/.mcassetsroot' uses unexpected schema
+[07Jul2026 21:10:41.203] [Render thread/INFO] [com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService/]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[07Jul2026 21:10:41.207] [Render thread/INFO] [net.minecraft.client.Minecraft/]: Setting user: Eutio
+[07Jul2026 21:10:41.218] [Render thread/INFO] [Photonics/]: Reloading config
+[07Jul2026 21:10:41.320] [Render thread/INFO] [net.minecraft.client.Minecraft/]: Backend library: LWJGL version 3.3.3+5
+[07Jul2026 21:10:41.333] [Render thread/INFO] [com.mojang.blaze3d.platform.Window/]: OpenGL Vendor: AMD
+[07Jul2026 21:10:41.333] [Render thread/INFO] [com.mojang.blaze3d.platform.Window/]: OpenGL Renderer: AMD Radeon RX 7900 GRE (radeonsi, navi31, ACO, DRM 3.64, 7.0.0-27-generic)
+[07Jul2026 21:10:41.333] [Render thread/INFO] [com.mojang.blaze3d.platform.Window/]: OpenGL Version: 4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA
+[07Jul2026 21:10:41.353] [Render thread/INFO] [ImmediatelyFast/]: Initializing ImmediatelyFast 1.6.11+1.21.1 on AMD Radeon RX 7900 GRE (radeonsi, navi31, ACO, DRM 3.64, 7.0.0-27-generic) (AMD) with OpenGL 4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA
+[07Jul2026 21:10:41.353] [Render thread/INFO] [ImmediatelyFast/]: Found Iris 1.8.14-beta.1+mc1.21.1. Enabling compatibility.
+[07Jul2026 21:10:41.629] [Render thread/INFO] [Iris/]: Debug functionality is disabled.
+[07Jul2026 21:10:41.630] [Render thread/INFO] [Iris/]: OpenGL 4.5 detected, enabling DSA.
+[07Jul2026 21:10:41.795] [Render thread/WARN] [Iris/]: Invalid pack option: GTAO
+[07Jul2026 21:10:41.796] [Render thread/WARN] [Iris/]: Invalid pack option: GTAO
+[07Jul2026 21:10:41.798] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "WATER_REFRACTION" defined in shaders.properties
+[07Jul2026 21:10:41.798] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "WATER_REFRACTION_INTENSITY" defined in shaders.properties
+[07Jul2026 21:10:41.799] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "CLOUDS_DAILY_WEATHER" defined in shaders.properties
+[07Jul2026 21:10:41.799] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "CLOUDS_CUMULUS_CONGESTUS_PRIMARY_STEPS_H" defined in shaders.properties
+[07Jul2026 21:10:41.799] [Render thread/WARN] [Iris/]: Unable to resolve shader pack option menu element "CLOUDS_CUMULUS_CONGESTUS_PRIMARY_STEPS_Z" defined in shaders.properties
+[07Jul2026 21:10:41.799] [Render thread/INFO] [Iris/]: Profile: ultra (+1 option changed by user)
+[07Jul2026 21:10:42.078] [ForkJoinPool.commonPool-worker-5/WARN] [Iris/]: [Iris Update Check] This version doesn't have an update index, skipping.
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10056: state properties are currently not supported: calibrated_sculk_sensor:sculk_sensor_phase=inactive
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10056: state properties are currently not supported: calibrated_sculk_sensor:sculk_sensor_phase=cooldown
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10057: state properties are currently not supported: calibrated_sculk_sensor:sculk_sensor_phase=active
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10057: state properties are currently not supported: sculk_sensor:sculk_sensor_phase=active
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: weathered_copper_bulb:lit=true
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: oxidized_copper_bulb:lit=true
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: waxed_weathered_copper_bulb:lit=true
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: waxed_oxidized_copper_bulb:lit=true
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: copper_bulb:lit=true
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: exposed_copper_bulb:lit=true
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: waxed_copper_bulb:lit=true
+[07Jul2026 21:10:42.352] [Render thread/WARN] [Iris/]: Failed to parse an ResourceLocation in item.properties for the key item.10061: state properties are currently not supported: waxed_exposed_copper_bulb:lit=true
+[07Jul2026 21:10:42.367] [Render thread/INFO] [Iris/]: Using shaderpack: photon-main (1).zip
+[07Jul2026 21:10:42.508] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[07Jul2026 21:10:42.509] [modloading-worker-0/INFO] [net.fabricmc.fabric.impl.client.indigo.Indigo/]: [Indigo] Different rendering plugin detected; not applying Indigo.
+[07Jul2026 21:10:42.528] [modloading-worker-0/INFO] [net.neoforged.neoforge.common.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.235, for MC 1.21.1
+[07Jul2026 21:10:42.663] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Registering common data for channel xaerolib:main!
+[07Jul2026 21:10:42.673] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Registering client data for channel xaerolib:main!
+[07Jul2026 21:10:42.684] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Loading primary common config for channel xaerolib:main!
+[07Jul2026 21:10:42.684] [modloading-worker-0/INFO] [com.simibubi.create.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[07Jul2026 21:10:42.689] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Loading server config profiles for channel xaerolib:main!
+[07Jul2026 21:10:42.690] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Loading primary client config for channel xaerolib:main!
+[07Jul2026 21:10:42.690] [modloading-worker-0/INFO] [xaero.lib.XaeroLib/]: Loading client config profiles for channel xaerolib:main!
+[07Jul2026 21:10:42.690] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Registering common data for channel xaerominimap:main!
+[07Jul2026 21:10:42.718] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Registering client data for channel xaerominimap:main!
+[07Jul2026 21:10:42.727] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Loading primary common config for channel xaerominimap:main!
+[07Jul2026 21:10:42.727] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Loading server config profiles for channel xaerominimap:main!
+[07Jul2026 21:10:42.728] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Loading primary client config for channel xaerominimap:main!
+[07Jul2026 21:10:42.728] [modloading-worker-0/INFO] [xaero.common.HudMod/]: Loading client config profiles for channel xaerominimap:main!
+[07Jul2026 21:10:43.455] [modloading-worker-0/INFO] [dev.ryanhcode.sable.Sable/]: Sable loaded!
+[07Jul2026 21:10:43.462] [modloading-worker-0/WARN] [dev.ryanhcode.sable.Sable/]: NOTE: Sable is loaded with Flywheel. Sable contains extensive shader overrides and a full light-storage replacement. Expect this to cause compatibility issues. If issues arise, please report them to the Sable issue tracker (https://github.com/ryanhcode/sable/issues) instead of the Flywheel issue tracker.
+[07Jul2026 21:10:44.233] [Render thread/INFO] [Veil/]: GL Debug supported
+[07Jul2026 21:10:44.386] [Render thread/INFO] [Iris/]: Hardware information:
+[07Jul2026 21:10:44.386] [Render thread/INFO] [Iris/]: CPU: 16x AMD Ryzen 7 7700 8-Core Processor
+[07Jul2026 21:10:44.386] [Render thread/INFO] [Iris/]: GPU: AMD Radeon RX 7900 GRE (radeonsi, navi31, ACO, DRM 3.64, 7.0.0-27-generic) (Supports OpenGL 4.6 (Core Profile) Mesa 26.1.2 - kisak-mesa PPA)
+[07Jul2026 21:10:44.386] [Render thread/INFO] [Iris/]: OS: Linux (7.0.0-27-generic)
+[07Jul2026 21:10:44.727] [Render thread/INFO] [net.minecraft.server.packs.resources.ReloadableResourceManager/]: Reloading ResourceManager: vanilla, fabric, mod_resources, mod/sodium, mod/fabric_transfer_api_v1, mod/fabric_renderer_api_v1, mod/fabric_item_api_v1, mod/fabric_model_loading_api_v1, mod/fabric_rendering_fluids_v1, mod/lithium, mod/aeronautics, mod/xaerolib, mod/aeronautics_bundled, mod/fabric_screen_handler_api_v1, mod/fabric_resource_loader_v0, mod/trender, mod/fabric_rendering_v1, mod/fabric_renderer_indigo, mod/fabric_convention_tags_v1, mod/neoforge, mod/photonics, mod/fabric_block_view_api_v2, mod/fabric_command_api_v2, mod/fabric_convention_tags_v2, mod/fabric_data_attachment_api_v1, mod/iris, mod/veil, mod/simulated, mod/simurail, mod/fabric_screen_api_v1, mod/fabric_particles_v1, mod/connector, mod/fabric_api,forgified_fabric_api, mod/fabric_content_registries_v0, mod/fabric_transitive_access_wideners_v1, mod/offroad, mod/irisveil, mod/fabric_game_rule_api_v1, mod/fabric_api_base, mod/fabric_api_lookup_api_v1, mod/fabric_blockrenderlayer_v1, mod/fabric_block_api_v1, mod/fabric_resource_conditions_api_v1, mod/sablecompanion, mod/flywheel, mod/ponder, mod/create, mod/sable, mod/contraptionlights, mod/xaerominimap, mod/fabric_item_group_api_v1, mod/fabric_gametest_api_v1, mod/entityculling, mod/fabric_biome_api_v1, mod/fabric_entity_events_v1, mod/fabric_registry_sync_v0, mod/immediatelyfast, mod/lambdynlights_api, mod/fabric_recipe_api_v1, mod/ferritecore, mod/fabric_object_builder_api_v1, mod/fabric_loot_api_v2, mod/fabric_loot_api_v3, mod/transition, mod/fabric_rendering_data_attachment_v1, mod/searchlights, mod/fabric_networking_api_v1, mod/fabric_sound_api_v1, mod/fabric_message_api_v1, mod/fabric_lifecycle_events_v1, mod/fabric_data_generation_api_v1, mod/fabric_events_interaction_v0, mod/fabric_key_binding_api_v1, mod/fabric_client_tags_api_v1
+[07Jul2026 21:10:44.739] [Worker-Main-4/INFO] [xaero.lib.XaeroLib/]: Loading XaeroLib common 1/2!
+[07Jul2026 21:10:44.740] [Worker-Main-11/INFO] [me.yurtema.searchlights.Searchlights/]: HELLO FROM COMMON SETUP
+[07Jul2026 21:10:44.761] [NeoForge Version Check/INFO] [net.neoforged.fml.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[07Jul2026 21:10:44.796] [Worker-Main-13/INFO] [net.minecraft.client.gui.font.providers.UnihexProvider/]: Found unifont_all_no_pua-15.1.05.hex, loading
+[07Jul2026 21:10:44.909] [Worker-Main-15/INFO] [net.minecraft.client.gui.font.providers.UnihexProvider/]: Found unifont_jp_patch-15.1.05.hex, loading
+[07Jul2026 21:10:44.925] [Worker-Main-7/INFO] [xaero.lib.XaeroLib/]: Loading XaeroLib client 1/2!
+[07Jul2026 21:10:45.121] [Worker-Main-12/INFO] [top.leonx.irisveil.IrisVeilCompat/]: HELLO FROM CLIENT SETUP
+[07Jul2026 21:10:45.122] [Worker-Main-12/INFO] [top.leonx.irisveil.IrisVeilCompat/]: MINECRAFT NAME >> Eutio
+[07Jul2026 21:10:45.143] [Worker-Main-9/INFO] [xaero.minimap.XaeroMinimap/]: Loading Xaero's Minimap - Stage 1/2
+[07Jul2026 21:10:45.146] [Worker-Main-1/INFO] [me.yurtema.searchlights.Searchlights/]: HELLO FROM CLIENT SETUP
+[07Jul2026 21:10:45.146] [Worker-Main-1/INFO] [me.yurtema.searchlights.Searchlights/]: MINECRAFT NAME >> Eutio
+[07Jul2026 21:10:45.219] [NeoForge Version Check/INFO] [net.neoforged.fml.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[07Jul2026 21:10:46.485] [Worker-Main-7/WARN] [xaero.lib.XaeroLib/]: io exception while checking patreon: Online mod data expired! Date: Sat Jul 04 07:52:27 CEST 2026
+[07Jul2026 21:10:46.487] [Render thread/INFO] [xaero.minimap.XaeroMinimap/]: Loading Xaero's Minimap - Stage 2/2
+[07Jul2026 21:10:48.112] [Render thread/WARN] [xaero.hud.minimap.MinimapLogs/]: io exception while checking versions: Online mod data expired! Date: Sat Jul 04 07:52:27 CEST 2026
+[07Jul2026 21:10:48.113] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Registered player tracker system: minimap_synced
+[07Jul2026 21:10:48.113] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: No Optifine!
+[07Jul2026 21:10:48.113] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Xaero's Minimap: No Vivecraft!
+[07Jul2026 21:10:48.114] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Xaero's Minimap: Iris found!
+[07Jul2026 21:10:48.114] [Render thread/WARN] [net.neoforged.fml.DeferredWorkQueue/LOADING]: Mod 'xaerominimap' took 1.626 s to run a deferred task.
+[07Jul2026 21:10:48.114] [Render thread/INFO] [xaero.lib.XaeroLib/]: Loading XaeroLib common 2/2!
+[07Jul2026 21:10:48.114] [Render thread/INFO] [xaero.lib.XaeroLib/]: Loading XaeroLib client 2/2!
+[07Jul2026 21:10:48.132] [Render thread/INFO] [Veil/]: Loaded 0 shader redirects, 0 replacements
+[07Jul2026 21:10:48.138] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:necromancer/skinned_mesh': 5049 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.190] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:necromancer/skinned_mesh': 2073 chars
+[07Jul2026 21:10:48.200] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.200] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:blit_screen': 495 chars
+[07Jul2026 21:10:48.200] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.200] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:blit_depth': 532 chars
+[07Jul2026 21:10:48.203] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:core/blit_screen_effect': 600 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.203] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/blit_screen_effect': 543 chars
+[07Jul2026 21:10:48.203] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:light/area': 1702 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.204] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:light/area': 14129 chars
+[07Jul2026 21:10:48.213] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.213] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:debug/cubemap': 1758 chars
+[07Jul2026 21:10:48.213] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:end_sea': 1126 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.213] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:end_sea': 1278 chars
+[07Jul2026 21:10:48.216] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:rope/rope': 4214 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.216] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:rope/rope': 1948 chars
+[07Jul2026 21:10:48.216] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:quasar/particle_additive': 1985 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.216] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:quasar/particle_additive': 1874 chars
+[07Jul2026 21:10:48.216] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'contraptionlights:light/sublevel_point': 1053 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.216] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'contraptionlights:light/sublevel_point': 15829 chars
+[07Jul2026 21:10:48.224] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:redstone_accumulator/diode': 4070 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.224] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:redstone_accumulator/diode': 3788 chars
+[07Jul2026 21:10:48.225] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:debug/shell': 629 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.225] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:debug/shell': 605 chars
+[07Jul2026 21:10:48.225] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.225] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:light/directional': 9063 chars
+[07Jul2026 21:10:48.227] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:quasar/particle': 1985 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.227] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:quasar/particle': 1898 chars
+[07Jul2026 21:10:48.227] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'contraptionlights:light/world_light': 1053 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.227] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'contraptionlights:light/world_light': 14743 chars
+[07Jul2026 21:10:48.234] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'aeronautics:levitite/levitite': 5585 chars, hasGetVelocity=true, hasOffset=true
+[07Jul2026 21:10:48.234] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'aeronautics:levitite/levitite': 3656 chars
+[07Jul2026 21:10:48.234] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:spring/spring': 4196 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.234] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:spring/spring': 1972 chars
+[07Jul2026 21:10:48.235] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.235] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/composite': 783 chars
+[07Jul2026 21:10:48.235] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'aeronautics:hot_air_overlay': 1167 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.235] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'aeronautics:hot_air_overlay': 907 chars
+[07Jul2026 21:10:48.235] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'aeronautics:burner_flame': 1770 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.235] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'aeronautics:burner_flame': 5298 chars
+[07Jul2026 21:10:48.235] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/blur': 937 chars
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/bloom': 2631 chars
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'aeronautics:soft_light': 1108 chars
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:debug/array': 539 chars
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:core/unblur': 1318 chars
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:light/point': 1135 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.236] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'veil:light/point': 13058 chars
+[07Jul2026 21:10:48.241] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:laser_pointer/lens': 4016 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.242] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:laser_pointer/lens': 4048 chars
+[07Jul2026 21:10:48.242] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:contraption_diagram/outline_diagram': 610 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.242] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:contraption_diagram/outline_diagram': 5629 chars
+[07Jul2026 21:10:48.242] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'simulated:laser/laser': 774 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.242] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:laser/laser': 1878 chars
+[07Jul2026 21:10:48.242] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured vertex source for 'veil:blit_screen': 542 chars, hasGetVelocity=false, hasOffset=false
+[07Jul2026 21:10:48.242] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: [VeilHook] Captured fragment source for 'simulated:spread_end_sea': 2427 chars
+[07Jul2026 21:10:48.245] [Render thread/INFO] [Veil/]: Loaded 31 shaders from: pinwheel/shaders/program
+[07Jul2026 21:10:48.314] [Worker-Main-5/INFO] [PonderIndex/]: Registering Ponder Scenes took 48.87 ms
+[07Jul2026 21:10:48.316] [Worker-Main-5/INFO] [PonderIndex/]: Registering Ponder Tags took 2.397 ms
+[07Jul2026 21:10:48.404] [Render thread/WARN] [net.minecraft.client.sounds.SoundEngine/]: Missing sound for event: minecraft:item.goat_horn.play
+[07Jul2026 21:10:48.404] [Render thread/WARN] [net.minecraft.client.sounds.SoundEngine/]: Missing sound for event: minecraft:entity.goat.screaming.horn_break
+[07Jul2026 21:10:48.432] [Render thread/INFO] [com.mojang.blaze3d.audio.Library/]: OpenAL initialized on device Navi 31 HDMI/DP Audio Digital Stereo (HDMI 2)
+[07Jul2026 21:10:48.432] [Render thread/INFO] [net.minecraft.client.sounds.SoundEngine/SOUNDS]: Sound engine started
+[07Jul2026 21:10:48.491] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 2048x1024x4 minecraft:textures/atlas/blocks.png-atlas
+[07Jul2026 21:10:48.526] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 256x256x4 minecraft:textures/atlas/signs.png-atlas
+[07Jul2026 21:10:48.526] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x512x4 minecraft:textures/atlas/shield_patterns.png-atlas
+[07Jul2026 21:10:48.527] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x512x4 minecraft:textures/atlas/banner_patterns.png-atlas
+[07Jul2026 21:10:48.528] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 2048x1024x4 minecraft:textures/atlas/armor_trims.png-atlas
+[07Jul2026 21:10:48.538] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 256x256x4 minecraft:textures/atlas/chest.png-atlas
+[07Jul2026 21:10:48.538] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 128x64x4 minecraft:textures/atlas/decorated_pot.png-atlas
+[07Jul2026 21:10:48.539] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x256x4 minecraft:textures/atlas/beds.png-atlas
+[07Jul2026 21:10:48.539] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x256x4 minecraft:textures/atlas/shulker_boxes.png-atlas
+[07Jul2026 21:10:48.581] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x512x0 minecraft:textures/atlas/particles.png-atlas
+[07Jul2026 21:10:48.583] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 512x256x0 minecraft:textures/atlas/paintings.png-atlas
+[07Jul2026 21:10:48.584] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 256x128x0 minecraft:textures/atlas/mob_effects.png-atlas
+[07Jul2026 21:10:48.584] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 64x64x0 minecraft:textures/atlas/map_decorations.png-atlas
+[07Jul2026 21:10:48.584] [Render thread/INFO] [net.minecraft.client.renderer.texture.TextureAtlas/]: Created: 1024x1024x0 minecraft:textures/atlas/gui.png-atlas
+[07Jul2026 21:10:48.603] [Render thread/WARN] [net.minecraft.client.renderer.ShaderInstance/]: Shader rendertype_entity_translucent_emissive could not find sampler named Sampler2 in the specified shader program.
+[07Jul2026 21:10:48.656] [Render thread/INFO] [xaero.lib.XaeroLib/]: Successfully reloaded the XaeroLib shaders!
+[07Jul2026 21:10:48.656] [Render thread/INFO] [net.neoforged.neoforge.client.entity.animation.json.AnimationLoader/]: Loaded 0 entity animations
+[07Jul2026 21:10:48.656] [Render thread/INFO] [Veil/]: Loaded 3 framebuffers
+[07Jul2026 21:10:48.661] [Render thread/INFO] [Veil/]: Loaded 6 post pipelines
+[07Jul2026 21:10:48.664] [Render thread/INFO] [Veil/]: Loaded 6 render types
+[07Jul2026 21:10:48.664] [Render thread/INFO] [Veil/]: Enabled bloom pipeline
+[07Jul2026 21:10:48.664] [Render thread/INFO] [Veil/]: Loaded 0 quasar particles
+[07Jul2026 21:10:48.664] [Render thread/INFO] [Veil/]: Loaded 0 templates
+[07Jul2026 21:10:48.664] [Render thread/INFO] [Veil/]: Loaded 0 modules
+[07Jul2026 21:10:48.678] [Render thread/INFO] [flywheel/backend/shaders/]: Loaded 77 shader sources in 10.631 ms
+[07Jul2026 21:10:48.688] [Render thread/INFO] [com.simibubi.create.Create/]: Loaded 58 train hat configurations.
+[07Jul2026 21:10:48.947] [Render thread/INFO] [Iris/]: Creating pipeline for dimension minecraft:overworld
+[07Jul2026 21:10:49.446] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.535] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.542] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.548] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.557] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.564] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.570] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.644] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=2, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:513(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.648] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for initial direct.fsh: 0:513(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
 
-[07Jul2026 21:03:25.789] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.GLProxy/]: GPU Vendor [AMD] with OS [Linux], Preferred upload method is [BUFFER_STORAGE].
-[07Jul2026 21:03:25.789] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.GLProxy/]: GLProxy creation successful. OpenGL smiles upon you this day.
-[07Jul2026 21:03:25.789] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.GlDhMetaRenderer_neoforge/]: Setting up renderer
-[07Jul2026 21:03:25.797] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.GlDhMetaRenderer_neoforge/]: Renderer setup complete
-[07Jul2026 21:03:25.802] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Loading shader with type: [35633]
-[07Jul2026 21:03:25.803] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Shader loaded sucessfully.
-[07Jul2026 21:03:25.803] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Loading shader with type: [35632]
-[07Jul2026 21:03:25.803] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Shader loaded sucessfully.
-[07Jul2026 21:03:25.805] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.vertexAttribute.GlVertexAttributePostGL43/]: Vertex Attribute (GL43+) completed. It contains 1 binding points and a stride size of 16
-[07Jul2026 21:03:25.808] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.core.render.renderer.LodRenderer/]: Overriding vanilla MC settings to better fit Distant Horizons... This behavior can be disabled in the Distant Horizons config.
-[07Jul2026 21:03:25.808] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftClientWrapper_neoforge/]: Disabling vanilla clouds... This is done to prevent vanilla clouds from rendering on top of Distant Horizons LODs.
-[07Jul2026 21:03:25.808] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftClientWrapper_neoforge/]: Disabling fabulous graphics... This is done to fix vanilla chunks (specifically water blocks) not fading into Distant Horizons LODs when DH's 'Vanilla Fade' option is enabled.
-[07Jul2026 21:03:25.817] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Loading shader with type: [35633]
-[07Jul2026 21:03:25.818] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Shader loaded sucessfully.
-[07Jul2026 21:03:25.818] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Loading shader with type: [35632]
-[07Jul2026 21:03:25.819] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Shader loaded sucessfully.
-[07Jul2026 21:03:25.820] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.vertexAttribute.GlVertexAttributePostGL43/]: Vertex Attribute (GL43+) completed. It contains 1 binding points and a stride size of 12
-[07Jul2026 21:03:25.821] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Loading shader with type: [35633]
-[07Jul2026 21:03:25.821] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Shader loaded sucessfully.
-[07Jul2026 21:03:25.821] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Loading shader with type: [35632]
-[07Jul2026 21:03:25.821] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.shader.GlShader/]: Shader loaded sucessfully.
-[07Jul2026 21:03:25.822] [Render thread/INFO] [DistantHorizons-DistantHorizons-com.seibel.distanthorizons.common.render.openGl.glObject.vertexAttribute.GlVertexAttributePostGL43/]: Vertex Attribute (GL43+) completed. It contains 1 binding points and a stride size of 12
-[07Jul2026 21:03:25.904] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: IrisVeilCompat: using Block program with dithering for translucent 'aeronautics:levitite/levitite'
-[07Jul2026 21:03:25.978] [Render thread/WARN] [net.irisshaders.iris.pipeline.transform.transformer.CompatibilityTransformer/]: The in declaration '_veil_ghostLayerFullness' in the gbuffers_veil_aeronautics_levitite_levitite FRAGMENT shader is missing a corresponding out declaration in the previous stage VERTEX and has been compatibility-patched. See debugging.md for more information.
-[07Jul2026 21:03:25.979] [Render thread/WARN] [net.irisshaders.iris.pipeline.transform.transformer.CompatibilityTransformer/]: The in declaration '_veil_ghostNoiseMagnitude' in the gbuffers_veil_aeronautics_levitite_levitite FRAGMENT shader is missing a corresponding out declaration in the previous stage VERTEX and has been compatibility-patched. See debugging.md for more information.
-[07Jul2026 21:03:25.979] [Render thread/WARN] [net.irisshaders.iris.pipeline.transform.transformer.CompatibilityTransformer/]: The in declaration '_veil_depth' in the gbuffers_veil_aeronautics_levitite_levitite FRAGMENT shader is missing a corresponding out declaration in the previous stage VERTEX and has been compatibility-patched. See debugging.md for more information.
-[07Jul2026 21:03:25.984] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: IrisVeilCompat: created Iris ShaderInstance for 'aeronautics:levitite/levitite'
-[07Jul2026 21:03:26.044] [Render thread/INFO] [Veil/]: Multi-Bind supported, using core
-[07Jul2026 21:03:26.078] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Reloading radar icon resources...
-[07Jul2026 21:03:26.096] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Reloaded radar icon resources!
+[07Jul2026 21:10:49.686] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=3, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:507(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.689] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for validate initial direct.fsh: 0:507(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
+
+[07Jul2026 21:10:49.725] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=4, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:509(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.727] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for temporal reuse.fsh: 0:509(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
+
+[07Jul2026 21:10:49.759] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=5, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:507(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.762] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for spatial reuse.fsh: 0:507(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
+
+[07Jul2026 21:10:49.793] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=6, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:513(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.795] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for diffuse.fsh: 0:513(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
+
+[07Jul2026 21:10:49.823] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=7, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:511(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.826] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for accumulation.fsh: 0:511(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
+
+[07Jul2026 21:10:49.840] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.859] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=8, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:507(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.861] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for variance prefilter.fsh: 0:507(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
+
+[07Jul2026 21:10:49.871] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.889] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=9, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:510(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.891] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for atrous iteration.fsh: 0:510(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
+
+[07Jul2026 21:10:49.904] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:49.921] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=10, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:461(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability'
+[07Jul2026 21:10:49.922] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=11, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:791(22): warning: `main_hand' used uninitialized'
+[07Jul2026 21:10:49.922] [Render thread/INFO] [com.mojang.blaze3d.platform.GlDebug/]: OpenGL debug message: id=12, source=SHADER COMPILER, type=OTHER, severity=HIGH, message='0:794(22): warning: `off_hand' used uninitialized'
+[07Jul2026 21:10:49.928] [Render thread/WARN] [net.irisshaders.iris.gl.shader.GlShader/]: Shader compilation log for handheld.fsh: 0:461(75): warning: some implementations may not support implicit int -> uint conversions for `&' operators; consider casting explicitly for portability
+0:791(22): warning: `main_hand' used uninitialized
+0:794(22): warning: `off_hand' used uninitialized
+
+[07Jul2026 21:10:53.312] [Render thread/WARN] [net.neoforged.neoforge.common.CommonHooks/WP]: The following mods have version differences that were not resolved:
+distanthorizons (version 3.1.2-b -> MISSING)
+Things may not work well.
+[07Jul2026 21:10:53.353] [Render thread/INFO] [com.simibubi.create.Create/]: Created 157 recipes which will be injected into the game
+[07Jul2026 21:10:53.356] [Render thread/INFO] [com.simibubi.create.Create/]: Created 0 tags which will be injected into the game
+[07Jul2026 21:10:53.723] [Worker-Main-6/ERROR] [net.minecraft.world.level.storage.loot.LootDataType/]: Couldn't parse element ResourceKey[minecraft:root / minecraft:loot_table]:simurail:blocks/automatic_coupler - Not a valid resource location: simurail:blocks/simurail:automatic_coupler Non [a-z0-9/._-] character in path of location: simurail:blocks/simurail:automatic_coupler
+[07Jul2026 21:10:53.978] [Render thread/INFO] [net.minecraft.world.item.crafting.RecipeManager/]: Loaded 2943 recipes
+[07Jul2026 21:10:54.063] [Render thread/INFO] [net.minecraft.advancements.AdvancementTree/]: Loaded 2644 advancements
+[07Jul2026 21:10:54.490] [Server thread/INFO] [net.minecraft.client.server.IntegratedServer/]: Starting integrated minecraft server version 1.21.1
+[07Jul2026 21:10:54.490] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Generating keypair
+[07Jul2026 21:10:54.585] [Server thread/INFO] [dev.ryanhcode.sable.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[07Jul2026 21:10:54.853] [Server thread/INFO] [dev.ryanhcode.sable.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[07Jul2026 21:10:55.121] [Server thread/INFO] [dev.ryanhcode.sable.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[07Jul2026 21:10:55.138] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Preparing start region for dimension minecraft:overworld
+[07Jul2026 21:10:55.250] [Render thread/INFO] [net.minecraft.server.level.progress.LoggerChunkProgressListener/]: Preparing spawn area: 0%
+[07Jul2026 21:10:55.317] [Server thread/INFO] [net.neoforged.neoforge.server.permission.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[07Jul2026 21:10:55.317] [Server thread/INFO] [me.yurtema.searchlights.Searchlights/]: HELLO from server starting
+[07Jul2026 21:10:55.319] [Render thread/INFO] [net.minecraft.server.level.progress.LoggerChunkProgressListener/]: Time elapsed: 170 ms
+[07Jul2026 21:10:55.389] [Server thread/INFO] [net.minecraft.client.server.IntegratedServer/]: Changing view distance to 12, from 10
+[07Jul2026 21:10:55.389] [Server thread/INFO] [net.minecraft.client.server.IntegratedServer/]: Changing simulation distance to 12, from 0
+[07Jul2026 21:10:55.442] [Render thread/INFO] [dev.ryanhcode.sable.Sable/]: Adding local UDP server channel future
+[07Jul2026 21:10:55.445] [Render thread/WARN] [io.netty.bootstrap.Bootstrap/]: Unknown channel option 'SO_BROADCAST' for channel '[id: 0x0d32aded]'
+[07Jul2026 21:10:55.449] [Netty Server IO #1/INFO] [dev.ryanhcode.sable.Sable/]: Server UDP channel active
+[07Jul2026 21:10:55.459] [Render thread/INFO] [dev.ryanhcode.sable.Sable/]: Starting local client UDP channel future
+[07Jul2026 21:10:55.460] [Netty Local Client IO #1/INFO] [dev.ryanhcode.sable.Sable/]: Client UDP channel active
+[07Jul2026 21:10:55.735] [Server thread/INFO] [net.minecraft.server.players.PlayerList/]: Eutio[local:E:772f14c8] logged in with entity id 12 at (184.29775576876153, 84.29785800476711, -216.95547296771636)
+[07Jul2026 21:10:55.738] [Server thread/INFO] [dev.ryanhcode.sable.Sable/]: Beginning attempted authentication with player Eutio
+[07Jul2026 21:10:55.765] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Eutio joined the game
+[07Jul2026 21:10:55.770] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Minimap required item set to nothing.
+[07Jul2026 21:10:55.770] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: New Xaero hud session initialized!
+[07Jul2026 21:10:55.814] [Render thread/INFO] [Iris/]: Reloading pipeline on dimension change: minecraft:overworld => minecraft:overworld
+[07Jul2026 21:10:55.816] [Render thread/INFO] [Iris/]: Destroying pipeline minecraft:overworld
+[07Jul2026 21:10:56.042] [Render thread/INFO] [Iris/]: Creating pipeline for dimension minecraft:overworld
+[07Jul2026 21:10:56.113] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.122] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.138] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.150] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.158] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.167] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.178] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.191] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.199] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.210] [Render thread/INFO] [org.anarres.cpp.DefaultPreprocessorListener/]: null:0:0: error: #endif without #if
+[07Jul2026 21:10:56.355] [Render thread/WARN] [flywheel/]: Flywheel backend fell back from 'flywheel:indirect' to 'flywheel:off'
+[07Jul2026 21:10:56.464] [Render thread/INFO] [ChunkBuilder/]: Started 10 worker threads
+[07Jul2026 21:10:56.544] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Minimap updated server level id: -2043031532 for world ResourceKey[minecraft:dimension / minecraft:overworld]
+[07Jul2026 21:10:56.547] [Render thread/INFO] [net.minecraft.advancements.AdvancementTree/]: Loaded 118 advancements
+[07Jul2026 21:10:56.975] [Render thread/INFO] [ChunkBuilder/]: Stopping worker threads
+[07Jul2026 21:10:56.987] [Render thread/INFO] [ChunkBuilder/]: Started 10 worker threads
+[07Jul2026 21:10:56.993] [Render thread/WARN] [flywheel/]: Flywheel backend fell back from 'flywheel:indirect' to 'flywheel:off'
+[07Jul2026 21:10:57.056] [Render thread/WARN] [Sodium-VertexConsumerTracker/]: Class com.mojang.blaze3d.vertex.BufferBuilder does not support optimized vertex writing code paths, which may cause reduced rendering performance
+[07Jul2026 21:10:57.187] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: IrisVeilCompat: using Block program with dithering for translucent 'aeronautics:levitite/levitite'
+[07Jul2026 21:10:57.234] [Render thread/WARN] [net.irisshaders.iris.pipeline.transform.transformer.CompatibilityTransformer/]: The in declaration '_veil_ghostLayerFullness' in the gbuffers_veil_aeronautics_levitite_levitite FRAGMENT shader is missing a corresponding out declaration in the previous stage VERTEX and has been compatibility-patched. See debugging.md for more information.
+[07Jul2026 21:10:57.234] [Render thread/WARN] [net.irisshaders.iris.pipeline.transform.transformer.CompatibilityTransformer/]: The in declaration '_veil_ghostNoiseMagnitude' in the gbuffers_veil_aeronautics_levitite_levitite FRAGMENT shader is missing a corresponding out declaration in the previous stage VERTEX and has been compatibility-patched. See debugging.md for more information.
+[07Jul2026 21:10:57.234] [Render thread/WARN] [net.irisshaders.iris.pipeline.transform.transformer.CompatibilityTransformer/]: The in declaration '_veil_depth' in the gbuffers_veil_aeronautics_levitite_levitite FRAGMENT shader is missing a corresponding out declaration in the previous stage VERTEX and has been compatibility-patched. See debugging.md for more information.
+[07Jul2026 21:10:57.262] [Render thread/INFO] [top.leonx.irisveil.IrisVeilCompat/]: IrisVeilCompat: created Iris ShaderInstance for 'aeronautics:levitite/levitite'
+[07Jul2026 21:10:57.305] [Render thread/INFO] [Veil/]: Multi-Bind supported, using core
+[07Jul2026 21:10:57.333] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Reloading radar icon resources...
+[07Jul2026 21:10:57.346] [Render thread/INFO] [xaero.hud.minimap.MinimapLogs/]: Reloaded radar icon resources!
