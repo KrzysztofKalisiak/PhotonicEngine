@@ -3,16 +3,21 @@ package at.redi2go.photonics.common.mixins.iris;
 import at.redi2go.photonics.api.shaders.AlphaMode;
 import at.redi2go.photonics.api.shaders.LightingMode;
 import at.redi2go.photonics.common.iris.ShaderPropertiesBridge;
-import com.llamalad7.mixinextras.sugar.Local;
 import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
 import net.irisshaders.iris.Iris;
+import net.irisshaders.iris.helpers.StringPair;
 import net.irisshaders.iris.shaderpack.properties.ShaderProperties;
+import net.irisshaders.iris.shaderpack.option.ShaderPackOptions;
+import net.irisshaders.iris.shaderpack.preprocessor.PropertiesPreprocessor;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.Properties;
 import java.util.function.Consumer;
 
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.ALPHA_MODE_KEY;
@@ -40,17 +45,38 @@ import static at.redi2go.photonics.api.shaders.PhotonicsProperties.SEPARATE_HAND
 @Mixin(ShaderProperties.class)
 public abstract class ShaderPropertiesMixin {
     @Inject(
-            method = "lambda$new$54",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/irisshaders/iris/shaderpack/properties/ShaderProperties;handleIntDirective(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/function/Consumer;)Z"
-            )
+            method = "<init>(Ljava/lang/String;Lnet/irisshaders/iris/shaderpack/option/ShaderPackOptions;Ljava/lang/Iterable;)V",
+            at = @At("RETURN"),
+            require = 0
     )
     private void initFromProperties(
-            CallbackInfo ci,
-            @Local(name = "key") String key,
-            @Local(name = "value") String value
+            String source,
+            ShaderPackOptions shaderPackOptions,
+            Iterable<StringPair> environmentDefines,
+            CallbackInfo ci
     ) {
+        String propertiesSource = source;
+        try {
+            propertiesSource = PropertiesPreprocessor.preprocessSource(source, shaderPackOptions, environmentDefines);
+        } catch (LinkageError | RuntimeException e) {
+            Iris.logger.warn("Could not preprocess Photonics shader properties, parsing raw source instead", e);
+        }
+
+        Properties properties = new Properties();
+        try {
+            properties.load(new StringReader(propertiesSource));
+        } catch (IOException e) {
+            Iris.logger.warn("Could not parse Photonics shader properties", e);
+            return;
+        }
+
+        for (var entry : properties.entrySet()) {
+            handlePhotonicsDirective((String) entry.getKey(), (String) entry.getValue());
+        }
+    }
+
+    @Unique
+    private static void handlePhotonicsDirective(String key, String value) {
         var phProperties = ShaderPropertiesBridge.getProperties();
 
         handleBooleanDirective(key, value, ENABLED_KEY, e -> phProperties.enabled = e);

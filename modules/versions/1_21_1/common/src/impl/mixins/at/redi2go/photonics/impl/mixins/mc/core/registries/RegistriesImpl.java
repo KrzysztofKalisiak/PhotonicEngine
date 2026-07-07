@@ -12,6 +12,6 @@ import org.spongepowered.asm.mixin.Overwrite;
 public interface RegistriesImpl {
     @Overwrite
     static IHolderLookup<IBlock> block() {
-        return (IHolderLookup<IBlock>) BuiltInRegistries.BLOCK;
+        return (IHolderLookup<IBlock>) BuiltInRegistries.BLOCK.asLookup();
     }
 }
