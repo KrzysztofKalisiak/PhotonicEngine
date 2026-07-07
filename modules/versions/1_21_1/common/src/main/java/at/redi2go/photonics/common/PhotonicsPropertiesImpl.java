@@ -5,7 +5,7 @@ import at.redi2go.photonics.api.shaders.LightingMode;
 import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 
 public class PhotonicsPropertiesImpl implements PhotonicsProperties {
-    private static final boolean DISABLE_ACTIVE_PIPELINE_FOR_DIAGNOSTICS = true;
+    private static final boolean DISABLE_ACTIVE_PIPELINE_FOR_DIAGNOSTICS = false;
     private static final int MAX_RESTIR_INITIAL_SAMPLES = 4;
 
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;

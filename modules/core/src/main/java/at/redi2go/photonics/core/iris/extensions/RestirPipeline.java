@@ -2,6 +2,7 @@ package at.redi2go.photonics.core.iris.extensions;
 
 import at.redi2go.photonics.api.gpu.textures.ITextureFormat;
 import at.redi2go.photonics.api.shaders.PhotonicsProperties;
+import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.iris.AbstractPhotonicsExtension;
 import at.redi2go.photonics.core.iris.Pipelines;
 import at.redi2go.photonics.core.iris.pipeline.rendering.IrisFactory;
@@ -15,6 +16,8 @@ import static at.redi2go.photonics.core.iris.pipeline.texture.AttachmentUsage.CR
 import static at.redi2go.photonics.core.iris.pipeline.texture.AttachmentUsage.FLIP;
 
 public class RestirPipeline extends AbstractPhotonicsExtension {
+    private static final boolean FRAMEBUFFER_ONLY_DIAGNOSTIC = true;
+
     private final int denoiserPasses;
 
     private int atrousIteration = 0;
@@ -28,16 +31,19 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     ) {
         super(properties, atlasDownloader, handheldItemSupplier);
 
+        if (FRAMEBUFFER_ONLY_DIAGNOSTIC)
+            Photonics.LOGGER.info("Photonics diagnostic: ReSTIR framebuffers/samplers only; render passes disabled");
+
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
         this.denoiserPasses = Math.max(requestedDenoiserPasses, 0);
 
         var restirFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
-                .addAttachment("restir_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirEnabled)
-                .addAttachment("restir_lighting_variance", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirEnabled)
-                .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
-                .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
-                .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
-                .addAttachment("restir_indirect_reservoirs2", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
+                .addAttachment("restir_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateRestirLighting)
+                .addAttachment("restir_lighting_variance", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateRestirLighting)
+                .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateDirectReservoir)
+                .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateIndirectReservoir)
+                .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateIndirectReservoir)
+                .addAttachment("restir_indirect_reservoirs2", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateIndirectReservoir)
                 .build(this::registerComponent);
 
         var denoiseFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
@@ -45,10 +51,11 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .build(this::registerComponent);
 
         var otherFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
-                .addAttachment("other_handheld", ITextureFormat.rgb16f(), CREATE_SAMPLER, this::isHandheldLightingEnabled)
+                .addAttachment("other_handheld", ITextureFormat.rgb16f(), CREATE_SAMPLER, this::shouldCreateHandheldLighting)
                 .build(this::registerComponent);
 
-        Pipelines.fragData(this, irisFactory, properties.getRenderScale());
+        if (!FRAMEBUFFER_ONLY_DIAGNOSTIC)
+            Pipelines.fragData(this, irisFactory, properties.getRenderScale());
 
         irisFactory.newPipeline()
                 .debugGroup("restir")
@@ -91,11 +98,11 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isBlockLightEnabled() {
-        return properties.isBlockLightEnabled();
+        return !FRAMEBUFFER_ONLY_DIAGNOSTIC && properties.isBlockLightEnabled();
     }
 
     public boolean isRestirGiEnabled() {
-        return properties.isGiEnabled() && properties.useRestirCombinedGi();
+        return !FRAMEBUFFER_ONLY_DIAGNOSTIC && properties.isGiEnabled() && properties.useRestirCombinedGi();
     }
 
     public boolean isRestirEnabled() {
@@ -119,7 +126,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isHandheldLightingEnabled() {
-        return properties.isHandheldLightEnabled();
+        return !FRAMEBUFFER_ONLY_DIAGNOSTIC && properties.isHandheldLightEnabled();
     }
 
     public boolean isDenoisingEnabled() {
@@ -128,5 +135,21 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
     private String spatialReusePass(String file) {
         return "/photonics/rendering/restir/passes/spatial_reuse/" + file;
+    }
+
+    private boolean shouldCreateRestirLighting() {
+        return FRAMEBUFFER_ONLY_DIAGNOSTIC || isRestirEnabled();
+    }
+
+    private boolean shouldCreateDirectReservoir() {
+        return FRAMEBUFFER_ONLY_DIAGNOSTIC || isBlockLightEnabled();
+    }
+
+    private boolean shouldCreateIndirectReservoir() {
+        return FRAMEBUFFER_ONLY_DIAGNOSTIC || isRestirGiEnabled();
+    }
+
+    private boolean shouldCreateHandheldLighting() {
+        return FRAMEBUFFER_ONLY_DIAGNOSTIC || isHandheldLightingEnabled();
     }
 }
