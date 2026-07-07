@@ -16,7 +16,8 @@ import static at.redi2go.photonics.core.iris.pipeline.texture.AttachmentUsage.CR
 import static at.redi2go.photonics.core.iris.pipeline.texture.AttachmentUsage.FLIP;
 
 public class RestirPipeline extends AbstractPhotonicsExtension {
-    private static final boolean FRAMEBUFFER_ONLY_DIAGNOSTIC = true;
+    private static final boolean DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS = true;
+    private static final boolean ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS = true;
 
     private final int denoiserPasses;
 
@@ -31,8 +32,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     ) {
         super(properties, atlasDownloader, handheldItemSupplier);
 
-        if (FRAMEBUFFER_ONLY_DIAGNOSTIC)
-            Photonics.LOGGER.info("Photonics diagnostic: ReSTIR framebuffers/samplers only; render passes disabled");
+        if (DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS) {
+            if (ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)
+                Photonics.LOGGER.info("Photonics diagnostic: frag data pass only; ReSTIR lighting passes disabled");
+            else
+                Photonics.LOGGER.info("Photonics diagnostic: ReSTIR framebuffers/samplers only; render passes disabled");
+        }
 
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
         this.denoiserPasses = Math.max(requestedDenoiserPasses, 0);
@@ -54,7 +59,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("other_handheld", ITextureFormat.rgb16f(), CREATE_SAMPLER, this::shouldCreateHandheldLighting)
                 .build(this::registerComponent);
 
-        if (!FRAMEBUFFER_ONLY_DIAGNOSTIC)
+        if (!DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS || ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)
             Pipelines.fragData(this, irisFactory, properties.getRenderScale());
 
         irisFactory.newPipeline()
@@ -98,11 +103,11 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isBlockLightEnabled() {
-        return !FRAMEBUFFER_ONLY_DIAGNOSTIC && properties.isBlockLightEnabled();
+        return !DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS && properties.isBlockLightEnabled();
     }
 
     public boolean isRestirGiEnabled() {
-        return !FRAMEBUFFER_ONLY_DIAGNOSTIC && properties.isGiEnabled() && properties.useRestirCombinedGi();
+        return !DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS && properties.isGiEnabled() && properties.useRestirCombinedGi();
     }
 
     public boolean isRestirEnabled() {
@@ -126,7 +131,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isHandheldLightingEnabled() {
-        return !FRAMEBUFFER_ONLY_DIAGNOSTIC && properties.isHandheldLightEnabled();
+        return !DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS && properties.isHandheldLightEnabled();
     }
 
     public boolean isDenoisingEnabled() {
@@ -138,18 +143,18 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     private boolean shouldCreateRestirLighting() {
-        return FRAMEBUFFER_ONLY_DIAGNOSTIC || isRestirEnabled();
+        return DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS || isRestirEnabled();
     }
 
     private boolean shouldCreateDirectReservoir() {
-        return FRAMEBUFFER_ONLY_DIAGNOSTIC || isBlockLightEnabled();
+        return DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS || isBlockLightEnabled();
     }
 
     private boolean shouldCreateIndirectReservoir() {
-        return FRAMEBUFFER_ONLY_DIAGNOSTIC || isRestirGiEnabled();
+        return DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS || isRestirGiEnabled();
     }
 
     private boolean shouldCreateHandheldLighting() {
-        return FRAMEBUFFER_ONLY_DIAGNOSTIC || isHandheldLightingEnabled();
+        return DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS || isHandheldLightingEnabled();
     }
 }
