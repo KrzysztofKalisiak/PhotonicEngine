@@ -59,7 +59,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .deferredPass("validate initial direct", "/photonics/rendering/restir/passes/r2_validate_initial_direct.fsh", null, this::isBlockLightEnabled)
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
                 .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isRestirEnabled)
-                .deferredPass("spatial reuse", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null)
+                .deferredPass("spatial reuse", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isSpatialReuseEnabled)
                 .deferredPass("diffuse", "/photonics/rendering/restir/passes/r6_diffuse.fsh", null, this::isRestirEnabled)
                 .deferredPass("accumulation", "/photonics/rendering/restir/passes/r7_accumulation.fsh", null, this::isRestirEnabled)
                 .when(this::isDenoisingEnabled, b0 -> {
@@ -104,7 +104,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isSpatialReuseEnabled() {
-        return properties.getRestirSpatialReuseSamples() > 0;
+        return isRestirEnabled() && properties.getRestirSpatialReuseSamples() > 0;
     }
 
     public boolean isHandheldLightingEnabled() {
