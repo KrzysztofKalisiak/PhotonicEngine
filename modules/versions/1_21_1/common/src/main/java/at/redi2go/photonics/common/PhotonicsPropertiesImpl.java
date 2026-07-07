@@ -5,10 +5,7 @@ import at.redi2go.photonics.api.shaders.LightingMode;
 import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 
 public class PhotonicsPropertiesImpl implements PhotonicsProperties {
-    private static final int MAX_RESTIR_INITIAL_SAMPLES = 16;
-    private static final int MAX_RESTIR_SPATIAL_REUSE_SAMPLES = 2;
-    private static final int MAX_RESTIR_DENOISER_PASSES = 2;
-    private static final boolean FORCE_RESTIR_TO_BASIC = true;
+    private static final int MAX_RESTIR_INITIAL_SAMPLES = 4;
 
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
     public float renderScale = PhotonicsProperties.DEFAULT_RENDER_SCALE;
@@ -89,7 +86,7 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public LightingMode getLightingMode() {
-        return FORCE_RESTIR_TO_BASIC && lightingMode == LightingMode.RESTIR ? LightingMode.BASIC : lightingMode;
+        return lightingMode;
     }
 
     @Override
@@ -109,7 +106,7 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public int getRestirSpatialReuseSamples() {
-        return Math.min(restirSpatialReuseSamples, MAX_RESTIR_SPATIAL_REUSE_SAMPLES);
+        return 0;
     }
 
     @Override
@@ -124,16 +121,16 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public boolean useRestirSoftShadows() {
-        return restirSoftShadows;
+        return false;
     }
 
     @Override
     public boolean useRestirCombinedGi() {
-        return restirCombinedGi;
+        return false;
     }
 
     @Override
     public int getRestirDenoiserPasses() {
-        return Math.min(restirDenoiserPasses, MAX_RESTIR_DENOISER_PASSES);
+        return 0;
     }
 }
