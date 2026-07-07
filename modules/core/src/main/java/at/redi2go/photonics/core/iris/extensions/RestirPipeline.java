@@ -19,6 +19,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     private static final boolean DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS = true;
     private static final boolean ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS = true;
     private static final boolean ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS = true;
+    private static final boolean ENABLE_DIRECT_DIFFUSE_PASS_FOR_DIAGNOSTICS = true;
 
     private final int denoiserPasses;
 
@@ -34,7 +35,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         super(properties, atlasDownloader, handheldItemSupplier);
 
         if (DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS) {
-            if (ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS)
+            if (ENABLE_DIRECT_DIFFUSE_PASS_FOR_DIAGNOSTICS)
+                Photonics.LOGGER.info("Photonics diagnostic: direct diffuse pass only; handheld and remaining ReSTIR passes disabled");
+            else if (ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS)
                 Photonics.LOGGER.info("Photonics diagnostic: initial direct pass only; remaining ReSTIR lighting passes disabled");
             else if (ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)
                 Photonics.LOGGER.info("Photonics diagnostic: frag data pass only; ReSTIR lighting passes disabled");
@@ -106,7 +109,8 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isBlockLightEnabled() {
-        return !DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS && properties.isBlockLightEnabled();
+        return ENABLE_DIRECT_DIFFUSE_PASS_FOR_DIAGNOSTICS ||
+                (!DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS && properties.isBlockLightEnabled());
     }
 
     public boolean isInitialDirectPassEnabled() {
