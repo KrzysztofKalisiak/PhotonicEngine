@@ -5,6 +5,10 @@ import at.redi2go.photonics.api.shaders.LightingMode;
 import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 
 public class PhotonicsPropertiesImpl implements PhotonicsProperties {
+    private static final int MAX_RESTIR_INITIAL_SAMPLES = 16;
+    private static final int MAX_RESTIR_SPATIAL_REUSE_SAMPLES = 2;
+    private static final int MAX_RESTIR_DENOISER_PASSES = 2;
+
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
     public float renderScale = PhotonicsProperties.DEFAULT_RENDER_SCALE;
     public int maxLights = PhotonicsProperties.DEFAULT_MAX_LIGHTS;
@@ -99,12 +103,12 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public int getRestirInitialSamples() {
-        return restirInitialSamples;
+        return Math.min(restirInitialSamples, MAX_RESTIR_INITIAL_SAMPLES);
     }
 
     @Override
     public int getRestirSpatialReuseSamples() {
-        return restirSpatialReuseSamples;
+        return Math.min(restirSpatialReuseSamples, MAX_RESTIR_SPATIAL_REUSE_SAMPLES);
     }
 
     @Override
@@ -129,6 +133,6 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public int getRestirDenoiserPasses() {
-        return restirDenoiserPasses;
+        return Math.min(restirDenoiserPasses, MAX_RESTIR_DENOISER_PASSES);
     }
 }

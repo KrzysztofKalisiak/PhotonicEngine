@@ -28,9 +28,8 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     ) {
         super(properties, atlasDownloader, handheldItemSupplier);
 
-        // The hand always needs at least 7 denoiser passes.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
-        this.denoiserPasses = requestedDenoiserPasses != 0 ? Math.max(requestedDenoiserPasses, 7) : 0;
+        this.denoiserPasses = Math.max(requestedDenoiserPasses, 0);
 
         var restirFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment("restir_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirEnabled)
