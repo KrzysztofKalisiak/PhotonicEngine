@@ -1,7 +1,6 @@
 package at.redi2go.photonics.core.rendering.lights;
 
 import at.redi2go.photonics.core.rendering.WorldOrigin;
-import it.unimi.dsi.fastutil.ints.IntIntBiConsumer;
 import org.joml.Vector3i;
 
 import java.util.AbstractList;
@@ -94,7 +93,7 @@ public class LightList extends AbstractList<TracedLightPosition> {
             invalidation.afterIndex = index;
         }
 
-        public void forEachIndex(IntIntBiConsumer consumer) {
+        public void forEachIndex(IndexConsumer consumer) {
             for (var e : mapping.entrySet()) {
                 final var difference = e.getValue();
 
@@ -111,6 +110,11 @@ public class LightList extends AbstractList<TracedLightPosition> {
                     consumer.accept(beforeIndex, -1);
                 }
             }
+        }
+
+        @FunctionalInterface
+        public interface IndexConsumer {
+            void accept(int beforeIndex, int afterIndex);
         }
     }
 }
