@@ -16,7 +16,6 @@ import com.google.common.collect.Sets;
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.Strictness;
 
 import java.io.IOException;
 import java.lang.reflect.Modifier;
@@ -213,7 +212,7 @@ public class PhConfig {
             .enableComplexMapKeySerialization()
             .disableHtmlEscaping()
             .setPrettyPrinting()
-            .setStrictness(Strictness.LENIENT)
+            .setLenient()
             .create();
 
     private PhConfig() {

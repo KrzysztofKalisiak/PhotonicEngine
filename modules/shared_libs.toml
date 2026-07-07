@@ -5,7 +5,7 @@ shadow = "9.4.1"
 
 # Common
 joml = "1.10.8"
-gson = "2.13.2"
+gson = "2.10.1"
 semver = "3.1.0"
 fastutil = "8.5.18"
 guava = "32.1.2-jre"

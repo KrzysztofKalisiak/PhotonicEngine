@@ -7,7 +7,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.Strictness;
 import com.google.gson.annotations.Expose;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.Nullable;
@@ -35,7 +34,7 @@ public class Patch {
     private static final Gson GSON = new GsonBuilder()
             .registerTypeAdapter(IPackPath.class, new IPackPath.Adapter())
             .excludeFieldsWithoutExposeAnnotation()
-            .setStrictness(Strictness.LENIENT)
+            .setLenient()
             .create();
 
     private String name;
