@@ -5,6 +5,7 @@ import at.redi2go.photonics.api.shaders.LightingMode;
 import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 
 public class PhotonicsPropertiesImpl implements PhotonicsProperties {
+    private static final boolean DISABLE_ACTIVE_PIPELINE_FOR_DIAGNOSTICS = true;
     private static final int MAX_RESTIR_INITIAL_SAMPLES = 4;
 
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
@@ -86,6 +87,7 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public LightingMode getLightingMode() {
+        if (DISABLE_ACTIVE_PIPELINE_FOR_DIAGNOSTICS) return LightingMode.OFF;
         if (lightingMode == LightingMode.OFF) return LightingMode.OFF;
 
         // BASIC has no active direct-light pipeline in this port. Force RESTIR so
