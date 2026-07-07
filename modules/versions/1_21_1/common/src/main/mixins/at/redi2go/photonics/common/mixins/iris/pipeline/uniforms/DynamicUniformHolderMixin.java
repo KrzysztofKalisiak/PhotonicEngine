@@ -72,6 +72,6 @@ public interface DynamicUniformHolderMixin extends DynamicUniformHolder, IDynami
 
     @Override
     default IUniformHolder uniformMatrix3(String var1, Supplier<Matrix3fc> var2, IValueUpdateNotifier var3) {
-        return (IUniformHolder) uniformMatrix3(var1, var2, (ValueUpdateNotifier) var3);
+        throw new UnsupportedOperationException("Iris 1.8.8 for Minecraft 1.21.1 does not expose dynamic mat3 uniforms");
     }
 }

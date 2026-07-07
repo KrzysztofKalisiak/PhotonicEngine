@@ -22,6 +22,9 @@ repositories {
 dependencies {
     implementation(sharedLibs.joml)
     implementation(sharedLibs.gson)
+    implementation(sharedLibs.guava)
+    implementation(sharedLibs.commons.lang3)
+    implementation(sharedLibs.log4j.api)
     implementation(sharedLibs.semver)
     implementation(sharedLibs.fastutil)
     implementation(sharedLibs.dataFixerUpper)

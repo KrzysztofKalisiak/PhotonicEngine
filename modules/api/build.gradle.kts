@@ -21,6 +21,7 @@ repositories {
 
 dependencies {
     implementation(sharedLibs.joml)
+    implementation(sharedLibs.gson)
     implementation(sharedLibs.dataFixerUpper)
     implementation(sharedLibs.brigadier)
     implementation(sharedLibs.fastutil)

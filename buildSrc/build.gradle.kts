@@ -34,7 +34,6 @@ repositories {
 }
 
 dependencies {
-    implementation(plugin(sharedLibs.plugins.idea.gradle))
     implementation(plugin(sharedLibs.plugins.shadow))
 
     implementation(plugin(mcLibs.plugins.loom.gradle))

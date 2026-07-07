@@ -3,15 +3,11 @@ package at.redi2go.photonics.common.mixins.iris.pipeline.passes.composite;
 import at.redi2go.photonics.common.iris.pipeline.CompositeRendererPassExt;
 import at.redi2go.photonics.common.iris.pipeline.framebuffer.InternalIrisFramebuffer;
 import at.redi2go.photonics.core.iris.pipeline.texture.IrisFramebuffer;
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import net.irisshaders.iris.gl.framebuffer.GlFramebuffer;
 import net.irisshaders.iris.gl.framebuffer.ViewportData;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
 
 import java.util.Optional;
 
@@ -36,20 +32,6 @@ public abstract class CompositePassMixin implements CompositeRendererPassExt {
     @Override
     public void setIndex(int index) {
         this.index = index;
-    }
-
-    @WrapOperation(
-            method = "setupState",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/irisshaders/iris/gl/framebuffer/GlFramebuffer;bind()V"
-            )
-    )
-    public void bindFramebuffer(GlFramebuffer instance, Operation<Void> original) {
-        if (phFramebuffer != null)
-            phFramebuffer.bind();
-        else
-            original.call(instance);
     }
 
     @Override

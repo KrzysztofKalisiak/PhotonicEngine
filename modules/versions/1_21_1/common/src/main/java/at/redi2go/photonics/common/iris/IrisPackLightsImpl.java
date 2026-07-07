@@ -46,8 +46,8 @@ public class IrisPackLightsImpl extends AbstractIrisPackLights {
             for (var blockId : entry) {
                 ResourceLocation identifier = ResourceLocation.fromNamespaceAndPath(blockId.id().getNamespace(), blockId.id().getName());
 
-                BuiltInRegistries.BLOCK.get(identifier)
-                        .ifPresent(e -> usedBlocks.add(e.value()));
+                BuiltInRegistries.BLOCK.getOptional(identifier)
+                        .ifPresent(usedBlocks::add);
             }
         }
     }
@@ -96,11 +96,11 @@ public class IrisPackLightsImpl extends AbstractIrisPackLights {
             if (blocks != null) {
                 for (var block : blocks) {
                     var id = ResourceLocation.fromNamespaceAndPath(block.id().getNamespace(), block.id().getName());
-                    BuiltInRegistries.BLOCK.get(id)
-                            .ifPresent(e -> {
+                    BuiltInRegistries.BLOCK.getOptional(id)
+                            .ifPresent(mcBlock -> {
                                 out.add(
                                         new ShaderPredicate(
-                                                e.value(),
+                                                mcBlock,
                                                 block.propertyPredicates()
                                         )
                                 );
@@ -113,7 +113,7 @@ public class IrisPackLightsImpl extends AbstractIrisPackLights {
                     var id = ResourceLocation.fromNamespaceAndPath(tag.id().getNamespace(), tag.id().getName());
                     var key = TagKey.create(Registries.BLOCK, id);
 
-                    BuiltInRegistries.BLOCK.get(key)
+                    BuiltInRegistries.BLOCK.getTag(key)
                             .ifPresent(blocks -> {
                                 for (var block : blocks) {
                                     if (usedBlocks.contains(block.value())) continue;
@@ -166,8 +166,8 @@ public class IrisPackLightsImpl extends AbstractIrisPackLights {
             Map<String, String> vagueProperties
     ) implements LightPredicate {
         public ShaderPredicate {
-            Objects.requireNotNull(mcBlock, "block was null");
-            Objects.requireNotNull(vagueProperties, "vagueProperties was null");
+            Objects.requireNonNull(mcBlock, "block was null");
+            Objects.requireNonNull(vagueProperties, "vagueProperties was null");
         }
 
         @Override

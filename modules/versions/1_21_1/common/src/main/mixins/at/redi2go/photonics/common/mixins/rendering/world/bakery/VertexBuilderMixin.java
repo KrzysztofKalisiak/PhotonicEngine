@@ -52,9 +52,4 @@ public interface VertexBuilderMixin extends VertexConsumer {
     default VertexConsumer setNormal(float f, float g, float h) {
         return this;
     }
-
-    @Override
-   default VertexConsumer setLineWidth(float f) {
-        return this;
-    }
 }

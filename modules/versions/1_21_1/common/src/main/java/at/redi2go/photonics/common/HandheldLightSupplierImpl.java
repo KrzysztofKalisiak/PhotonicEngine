@@ -1,11 +1,9 @@
 package at.redi2go.photonics.common;
 
 import at.redi2go.photonics.api.mc.world.level.IBlockState;
-import at.redi2go.photonics.common.mixins.InventoryAccessor;
 import at.redi2go.photonics.core.rendering.lights.HandheldItem;
 import at.redi2go.photonics.core.rendering.lights.HandheldItemSupplier;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.HumanoidArm;
@@ -31,18 +29,14 @@ public class HandheldLightSupplierImpl implements HandheldItemSupplier {
 
     private Optional<HandheldItem> getHandheldItem(EquipmentSlot slot) {
         return Optional.ofNullable(Minecraft.getInstance().player)
-                .map(player -> {
-                    var inventory = player.getInventory();
-                    return ((InventoryAccessor) inventory).getEquipment().get(slot);
-                })
+                .map(player -> player.getItemBySlot(slot))
                 .filter(stack -> !stack.isEmpty())
                 .flatMap(stack -> {
                     var mapped = ITEM_TO_BLOCK.get(stack.getItem());
                     if (mapped != null) return Optional.of(new BlockItem(mapped, false));
 
                     return BuiltInRegistries.ITEM.getResourceKey(stack.getItem())
-                            .flatMap(e -> BuiltInRegistries.BLOCK.get(e.identifier()))
-                            .map(Holder.Reference::value)
+                            .flatMap(e -> BuiltInRegistries.BLOCK.getOptional(e.location()))
                             .map(block -> new BlockItem(block.defaultBlockState(), stack.isEnchanted()));
                 });
     }

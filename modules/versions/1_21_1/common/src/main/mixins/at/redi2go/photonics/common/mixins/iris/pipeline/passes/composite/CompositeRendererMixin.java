@@ -8,7 +8,7 @@ import com.google.common.collect.ImmutableList;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
-import com.mojang.blaze3d.systems.RenderPass;
+import net.irisshaders.iris.gl.framebuffer.GlFramebuffer;
 import net.irisshaders.iris.gl.program.ComputeProgram;
 import net.irisshaders.iris.gl.program.Program;
 import net.irisshaders.iris.pipeline.CompositePass;
@@ -83,20 +83,19 @@ public abstract class CompositeRendererMixin {
             method = "renderAll",
             at = @At(
                     value = "INVOKE",
-                    target = "Lcom/mojang/blaze3d/systems/RenderPass;drawIndexed(IIII)V"
+                    target = "Lnet/irisshaders/iris/gl/framebuffer/GlFramebuffer;bind()V"
             )
     )
-    public void renderAll(
-            RenderPass instance,
-            int i,
-            int j,
-            int k,
-            int l,
-            Operation<Void> original
+    private void bindFramebuffer(
+            GlFramebuffer instance,
+            Operation<Void> original,
+            @Local(name = "renderPass") Object renderPass
     ) {
-        original.call(instance, i, j, k, l);
-        ((CompositeRendererPassExt) instance.iris$getCustomPass())
-                .getFramebuffer()
-                .ifPresent(e -> ((InternalIrisFramebuffer) e).unbind());
+        if (renderPass instanceof CompositeRendererPassExt passExt && passExt.getFramebuffer().isPresent()) {
+            ((InternalIrisFramebuffer) passExt.getFramebuffer().orElseThrow()).bind();
+            return;
+        }
+
+        original.call(instance);
     }
 }

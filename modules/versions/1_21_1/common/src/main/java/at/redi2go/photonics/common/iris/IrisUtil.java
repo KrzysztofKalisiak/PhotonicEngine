@@ -4,6 +4,7 @@ import at.redi2go.photonics.api.gpu.textures.IGpuSampler;
 import at.redi2go.photonics.api.gpu.textures.IGpuTexture;
 import at.redi2go.photonics.api.gpu.textures.IGpuTexture2D;
 import at.redi2go.photonics.api.gpu.textures.IGpuTexture3D;
+import at.redi2go.photonics.api.gpu.textures.IFilterMode;
 import at.redi2go.photonics.common.iris.pipeline.IrisRenderingPipelineExt;
 import at.redi2go.photonics.common.iris.pipeline.PipelineManagerExt;
 import at.redi2go.photonics.core.iris.PhotonicsExtension;
@@ -64,6 +65,12 @@ public class IrisUtil {
     }
 
     public static GlSampler getGlSampler(IGpuSampler sampler) {
-        return new GlSampler(((at.redi2go.photonics.impl.mc.blaze3d.opengl.textures.GlSampler) sampler).id());
+        boolean linear = sampler.ph$magFilter() == IFilterMode.linear() || sampler.ph$minFilter() == IFilterMode.linear();
+        boolean mipmapped = sampler.ph$maxLod().isPresent();
+
+        if (linear)
+            return mipmapped ? GlSampler.MIPPED_LINEAR : GlSampler.LINEAR;
+
+        return mipmapped ? GlSampler.MIPPED_NEAREST : GlSampler.NEAREST;
     }
 }

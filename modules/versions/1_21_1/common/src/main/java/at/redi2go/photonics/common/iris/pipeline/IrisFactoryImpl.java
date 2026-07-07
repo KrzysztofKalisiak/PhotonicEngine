@@ -36,7 +36,7 @@ public class IrisFactoryImpl implements IrisFactory {
     }
 
     public IrisRendererBuilder newRenderer(@NonNls String name) {
-        Objects.requireNotNull(name, "name");
+        Objects.requireNonNull(name, "name");
         return new IrisRendererBuilder(name, commonRenderers);
     }
 

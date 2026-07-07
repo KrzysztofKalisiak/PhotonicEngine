@@ -28,7 +28,7 @@ public class DeferredIrisRenderer implements IrisRenderer, PipelineAction {
 
     @Override
     public void renderAll() {
-        Objects.requireNotNull(activeRenderer).renderAll();
+        Objects.requireNonNull(activeRenderer).renderAll();
     }
 
     public List<Pass> getPasses() {
