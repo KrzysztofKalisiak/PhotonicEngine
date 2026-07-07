@@ -18,6 +18,7 @@ import static at.redi2go.photonics.core.iris.pipeline.texture.AttachmentUsage.FL
 public class RestirPipeline extends AbstractPhotonicsExtension {
     private static final boolean DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS = true;
     private static final boolean ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS = true;
+    private static final boolean ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS = true;
 
     private final int denoiserPasses;
 
@@ -33,7 +34,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         super(properties, atlasDownloader, handheldItemSupplier);
 
         if (DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS) {
-            if (ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)
+            if (ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS)
+                Photonics.LOGGER.info("Photonics diagnostic: initial direct pass only; remaining ReSTIR lighting passes disabled");
+            else if (ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)
                 Photonics.LOGGER.info("Photonics diagnostic: frag data pass only; ReSTIR lighting passes disabled");
             else
                 Photonics.LOGGER.info("Photonics diagnostic: ReSTIR framebuffers/samplers only; render passes disabled");
@@ -66,7 +69,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .debugGroup("restir")
                 .withFramebuffer(restirFramebuffer)
                 .thenFlip(restirFramebuffer)
-                .deferredPass("initial direct", "/photonics/rendering/restir/passes/r1_initial_direct.fsh", null, this::isBlockLightEnabled)
+                .deferredPass("initial direct", "/photonics/rendering/restir/passes/r1_initial_direct.fsh", null, this::isInitialDirectPassEnabled)
                 .deferredPass("validate initial direct", "/photonics/rendering/restir/passes/r2_validate_initial_direct.fsh", null, this::isReservoirValidationEnabled)
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
                 .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isTemporalReuseEnabled)
@@ -104,6 +107,10 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
     public boolean isBlockLightEnabled() {
         return !DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS && properties.isBlockLightEnabled();
+    }
+
+    public boolean isInitialDirectPassEnabled() {
+        return ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS || isBlockLightEnabled();
     }
 
     public boolean isRestirGiEnabled() {
