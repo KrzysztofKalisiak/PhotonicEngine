@@ -23,7 +23,7 @@ void main() {
     DirectReservoir direct_reservoir = direct_reservoir_empty();
     direct_reservoir_load_flipped(direct_reservoir, frag_tex_coord);
 
-    lighting.rgb += direct_reservoir_get_final_color(
+    lighting.rgb += direct_reservoir_get_unshadowed_color(
         direct_reservoir,
         frag_rt_pos,
         frag_geo_normal,

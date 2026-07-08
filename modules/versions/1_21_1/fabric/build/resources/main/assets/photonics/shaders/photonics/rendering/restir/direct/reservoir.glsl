@@ -99,6 +99,19 @@ void direct_reservoir_finalize_weight(
     reservoir.weight = (1.0f / sample_weight) * (reservoir.weight / reservoir.total_samples);
 }
 
+vec3 direct_reservoir_get_unshadowed_color(
+    DirectReservoir reservoir,
+    vec3 sample_pos,
+    vec3 geo_normal,
+    vec3 tex_normal
+) {
+    if (direct_sample_is_empty(reservoir.smple))
+        return vec3(0.0f);
+
+    Light light = direct_sample_get_light(reservoir.smple);
+    return direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal) * reservoir.weight;
+}
+
 vec3 direct_reservoir_get_final_color(
     inout DirectReservoir reservoir,
     vec3 sample_pos,
