@@ -7,7 +7,7 @@
 #include "/photonics/utility/color.glsl"
 #include "/photonics/utility/normal_encoding.glsl"
 
-const uint PH_SIGN_BIT = 1 << 31;
+const uint PH_SIGN_BIT = 1u << 31;
 
 struct RayResult {
     uint _x;
@@ -29,7 +29,7 @@ RayResult ph_ray_miss = RayResult(
 const uint ph_ray_result_position_mask = 0x7fffffffu;
 
 const uvec3 ph_ray_result_normal_shift = uvec3(31, 30, 29);
-const uvec3 ph_ray_result_normal_mask = uvec3(1, 2, 4);
+const uvec3 ph_ray_result_normal_mask = uvec3(1u, 2u, 4u);
 
 const uint ph_ray_result_palette_mask = 0xffffffu;
 
@@ -42,11 +42,11 @@ RayResult new_ray_result(
     bool transparent
 ) {
     uvec3 pos = floatBitsToUint(position) | ((uvec3(normal) & ph_ray_result_normal_mask) << ph_ray_result_normal_shift);
-    uint skylight_face = skylight >> (normal << 2);
+    uint skylight_face = skylight >> (normal << 2u);
 
-    #define ph_transparent_part (transparent ? PH_SIGN_BIT : 0)
-    #define ph_skylight_part ((skylight_face & 0xf) << 27)
-    #define ph_palette_part (palette_ptr + 1)
+    #define ph_transparent_part (transparent ? PH_SIGN_BIT : 0u)
+    #define ph_skylight_part ((skylight_face & 0xfu) << 27)
+    #define ph_palette_part (palette_ptr + 1u)
 
     return RayResult(
         pos.x,
@@ -83,7 +83,7 @@ bool ray_result_is_transparent(RayResult hit) {
 }
 
 uint ray_result_skylight(RayResult hit) {
-    const uint skylight_mask = 0xf;
+    const uint skylight_mask = 0xfu;
     return (hit._data1 >> 27) & skylight_mask;
 }
 

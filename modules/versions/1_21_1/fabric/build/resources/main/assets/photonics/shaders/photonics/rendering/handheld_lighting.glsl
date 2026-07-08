@@ -135,16 +135,16 @@ void sample_handheld(out vec3 color) {
     color = vec3(0.0f);
     if (!main_hand_has_light && !off_hand_has_light) return;
 
-    HandheldSample main_hand;
-    HandheldSample off_hand;
+    HandheldSample main_hand = handheld_sample_empty();
+    HandheldSample off_hand = handheld_sample_empty();
 
     if (main_hand_has_light) {
         handheld_sample_init(main_hand, get_main_hand_light(), !left_handed);
-    } else main_hand = handheld_sample_empty();
+    }
 
     if (off_hand_has_light) {
         handheld_sample_init(off_hand, get_off_hand_light(), left_handed);
-    } else off_hand = handheld_sample_empty();
+    }
 
     vec3 tint_color = vec3(1.0f);
     float light_transmittance = 1.0f;
@@ -156,7 +156,11 @@ void sample_handheld(out vec3 color) {
         hit = handheld_sample_trace(off_hand, tint_color, light_transmittance);
         color+= handheld_sample_compute_color(off_hand, hit, tint_color, light_transmittance);
     #else
-       bool hit = handheld_sample_trace(off_hand.luminanace > main_hand.luminanace ? off_hand : main_hand, tint_color, light_transmittance);
+        bool hit;
+        if (off_hand.luminanace > main_hand.luminanace)
+            hit = handheld_sample_trace(off_hand, tint_color, light_transmittance);
+        else
+            hit = handheld_sample_trace(main_hand, tint_color, light_transmittance);
 
         color+= handheld_sample_compute_color(main_hand, hit, tint_color, light_transmittance);
         color+= handheld_sample_compute_color(off_hand, hit, tint_color, light_transmittance);

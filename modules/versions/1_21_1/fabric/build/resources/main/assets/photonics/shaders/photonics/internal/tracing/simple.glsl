@@ -11,15 +11,38 @@ bool trace_light_vis(
     light_transmittance = 1.0f;
     return true;
 #else
-    RayIterator ray;
-    ray_iter_begin(ray, rt_pos, direction);
-    RayResult result = missed_ray_result();
-
-    vec4 running_tint_color = vec4(0.0f);
+    tint_color = vec3(1.0f);
     light_transmittance = 1.0f;
 
-    while (true) {
-        result = ray_iter_next_block(ray, light_rt_pos);
+    float light_dist = dot(light_rt_pos - rt_pos, light_rt_pos - rt_pos);
+    if (light_dist <= 0.0001f) return true;
+
+    RayIterator ray;
+    ray_iter_begin(ray, rt_pos, direction);
+    ray.iterations = max(max_iterations, 1);
+
+    vec4 running_tint_color = vec4(0.0f);
+    vec3 start_block = floor(rt_pos);
+    vec3 light_block = floor(light_rt_pos);
+
+    while (ray_iter_has_next(ray)) {
+        RayResult result = ray_iter_next(ray);
+        if (!ray_result_is_hit(result)) break;
+
+        vec3 result_pos = ray_result_position(result);
+        vec3 result_block = floor(result_pos);
+
+        if (all(equal(result_block, start_block))) {
+            ray_iter_skip_block(ray);
+            continue;
+        }
+
+        if (all(equal(result_block, light_block)))
+            break;
+
+        float result_dist = dot(result_pos - rt_pos, result_pos - rt_pos);
+        if (result_dist >= light_dist - 0.01f)
+            break;
 
         if (ray_result_is_transparent(result)) {
             VoxelData voxel_data = ray_result_voxel_data(result);
@@ -32,14 +55,10 @@ bool trace_light_vis(
             continue;
         }
 
-        break;
+        return false;
     }
 
-    if (!ray_result_is_hit(result)) return false;
-    if (floor(ray_result_position(result)) != floor(light_rt_pos)) return false;
-
     tint_color = running_tint_color.a == 0.0f ? vec3(1.0f) : running_tint_color.rgb;
-
     return true;
 #endif
 }
