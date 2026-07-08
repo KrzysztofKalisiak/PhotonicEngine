@@ -240,10 +240,6 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     private LightList trimLights() {
         var loadedLights = tracedLightPositions.values().toArray(TracedLightPosition[]::new);
-        if (loadedLights.length < maxLights) {
-            return new LightList(loadedLights, WorldOrigin.get());
-        }
-
         Vector3d cameraPosition = Minecraft.getCameraPos();
         int mod = (int) System.nanoTime();
 
@@ -251,6 +247,10 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                 loadedLights,
                 Comparator.comparingDouble(light -> -light.getLuminance(cameraPosition, mod))
         );
+
+        if (loadedLights.length < maxLights) {
+            return new LightList(loadedLights, WorldOrigin.get());
+        }
 
         return new LightList(
                 Arrays.copyOf(loadedLights, maxLights),

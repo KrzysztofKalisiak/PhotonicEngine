@@ -13,16 +13,25 @@ struct HandheldSample {
     bool valid;
 };
 
-void handheld_sample_init(inout HandheldSample smple, Light light, bool right_hand) {
-    if (!any(notEqual(light.color, vec3(0.0f)))) {
-        smple.valid = false;
-        smple.luminanace = 0.0f;
+HandheldSample handheld_sample_empty() {
+    return HandheldSample(
+        new_invalid_light(),
+        vec3(0.0f),
+        0.0f,
+        false
+    );
+}
 
+void handheld_sample_init(inout HandheldSample smple, Light light, bool right_hand) {
+    smple = handheld_sample_empty();
+
+    if (!any(notEqual(light.color, vec3(0.0f)))) {
         return;
     }
 
     smple.light = light;
     if (frag_is_hand) {
+        smple.luminanace = ph_luminance(smple.light.color);
         smple.valid = true;
         return;
     }
@@ -45,10 +54,7 @@ void handheld_sample_init(inout HandheldSample smple, Light light, bool right_ha
         frag_is_hand ? frag_geo_normal : frag_tex_normal
     );
 
-    if (all(equal(light.color, vec3(0.0f)))) {
-        smple.valid = false;
-        smple.luminanace = 0.0f;
-
+    if (!any(notEqual(color, vec3(0.0f)))) {
         return;
     }
 
@@ -134,11 +140,11 @@ void sample_handheld(out vec3 color) {
 
     if (main_hand_has_light) {
         handheld_sample_init(main_hand, get_main_hand_light(), !left_handed);
-    } else main_hand.valid = false;
+    } else main_hand = handheld_sample_empty();
 
     if (off_hand_has_light) {
         handheld_sample_init(off_hand, get_off_hand_light(), left_handed);
-    } else off_hand.valid = false;
+    } else off_hand = handheld_sample_empty();
 
     vec3 tint_color = vec3(1.0f);
     float light_transmittance = 1.0f;
