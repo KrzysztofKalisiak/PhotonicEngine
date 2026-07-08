@@ -7,8 +7,13 @@ import at.redi2go.photonics.common.PhotonicsPropertiesImpl;
  */
 public class ShaderPropertiesBridge {
     public static PhotonicsPropertiesImpl PROPERTIES = null;
+    public static boolean PHOTONICS_ENABLED_OPTION = true;
 
     public static PhotonicsPropertiesImpl getProperties() {
         return PROPERTIES;
+    }
+
+    public static boolean getPhotonicsEnabledOption() {
+        return PHOTONICS_ENABLED_OPTION;
     }
 }

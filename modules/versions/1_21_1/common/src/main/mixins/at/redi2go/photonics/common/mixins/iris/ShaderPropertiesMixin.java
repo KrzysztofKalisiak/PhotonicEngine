@@ -111,17 +111,26 @@ public abstract class ShaderPropertiesMixin {
     @Unique
     private static void handleBooleanDirective(String key, String value, String expectedKey, BooleanConsumer handler) {
         if (expectedKey.equals(key)) {
-            if (!"true".equals(value) && !"1".equals(value)) {
-                if (!"false".equals(value) && !"0".equals(value)) {
-                    Iris.logger.warn("Unexpected value for boolean key " + key + " in shaders.properties: got " + value + ", but expected either true or false");
-                } else {
-                    handler.accept(false);
-                }
-            } else {
-                handler.accept(true);
-            }
-
+            Boolean parsed = parseBooleanDirectiveValue(value, expectedKey);
+            if (parsed == null)
+                Iris.logger.warn("Unexpected value for boolean key " + key + " in shaders.properties: got " + value + ", but expected either true or false");
+            else
+                handler.accept(parsed);
         }
+    }
+
+    @Unique
+    private static Boolean parseBooleanDirectiveValue(String value, String expectedKey) {
+        if ("true".equals(value) || "1".equals(value))
+            return true;
+
+        if ("false".equals(value) || "0".equals(value))
+            return false;
+
+        if (ENABLED_KEY.equals(expectedKey) && "PHOTONICS_ENABLED".equals(value))
+            return ShaderPropertiesBridge.getPhotonicsEnabledOption();
+
+        return null;
     }
 
 

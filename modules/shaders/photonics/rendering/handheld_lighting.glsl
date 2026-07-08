@@ -68,6 +68,11 @@ void handheld_sample_init(inout HandheldSample smple, Light light, bool right_ha
 bool handheld_sample_trace(in HandheldSample smple, out vec3 tint_color, out float light_transmittance) {
     if (!smple.valid || frag_is_hand) return false;
 
+#ifdef PH_DISABLE_RESTIR_VISIBILITY
+    tint_color = vec3(1.0f);
+    light_transmittance = 1.0f;
+    return true;
+#else
     RayIterator ray;
 
     ray_iter_begin(ray, smple.light.position, smple.dir);
@@ -105,6 +110,7 @@ bool handheld_sample_trace(in HandheldSample smple, out vec3 tint_color, out flo
 
     tint_color = running_tint_color.a == 0.0f ? vec3(1.0f) : running_tint_color.rgb;
     return !ray_result_is_hit(result) || (ray_dist - frag_dist) > -0.1f;
+#endif
 }
 
 vec3 handheld_sample_compute_color(inout HandheldSample smple, bool hit, vec3 tint_color, float light_transmittance) {
