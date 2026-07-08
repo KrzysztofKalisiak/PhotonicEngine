@@ -10,8 +10,7 @@ bool trace_light_vis(
     tint_color = vec3(1.0f);
     light_transmittance = 1.0f;
     return true;
-#endif
-
+#else
     RayIterator ray;
     ray_iter_begin(ray, rt_pos, direction);
     RayResult result = missed_ray_result();
@@ -42,4 +41,5 @@ bool trace_light_vis(
     tint_color = running_tint_color.a == 0.0f ? vec3(1.0f) : running_tint_color.rgb;
 
     return true;
+#endif
 }

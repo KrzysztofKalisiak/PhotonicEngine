@@ -5,9 +5,6 @@
 
 #define PHOTONICS_ENABLED
 
-#ifdef PHOTONICS_ENABLED
-#endif
-
 #define MAX_LIGHTS 1000 // [250 300 350 500 550 700 750 1000 1500 2000 2500 3000 3500 4000]
 #define MAX_SAMPLES 20 // [5 10 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100]
 
@@ -26,9 +23,6 @@
 //#define RESTIR_SOFT_SHADOWS
 #define RESTIR_DENOISER_PASSES 0 // [0]
 #define RESTIR_COMBINED_GI false // [false]
-
-#ifdef RESTIR_SOFT_SHADOWS
-#endif
 #endreplace
 
 #replace "//#define ADVANCED_MATERIALS"

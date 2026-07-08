@@ -23,19 +23,12 @@ void main() {
     DirectReservoir direct_reservoir = direct_reservoir_empty();
     direct_reservoir_load_flipped(direct_reservoir, frag_tex_coord);
 
-    if (!direct_reservoir_is_empty(direct_reservoir)) {
-        Light light = direct_sample_get_light(direct_reservoir.smple);
-        vec3 sampled_color = direct_sample_get_color(
-            direct_reservoir.smple,
-            light,
-            frag_rt_pos,
-            frag_geo_normal,
-            frag_is_hand ? frag_geo_normal : frag_tex_normal
-        );
-
-        lighting.rgb += sampled_color * direct_reservoir.weight;
-    }
-
+    lighting.rgb += direct_reservoir_get_final_color(
+        direct_reservoir,
+        frag_rt_pos,
+        frag_geo_normal,
+        frag_is_hand ? frag_geo_normal : frag_tex_normal
+    );
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
 #endif
 }
