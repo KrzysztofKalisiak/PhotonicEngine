@@ -53,8 +53,6 @@ public class IrisDefines {
         if (phProperties.useRestirSoftShadows())
             defines.stringDefine("PH_RESTIR_SOFT_SHADOWS", "");
 
-        defines.stringDefine("PH_DISABLE_RESTIR_VISIBILITY", "");
-
         if (phProperties.getLightingMode() == LightingMode.RESTIR && phProperties.useRestirCombinedGi())
             defines.stringDefine("PH_RESTIR_COMBINED_GI", "");
 
