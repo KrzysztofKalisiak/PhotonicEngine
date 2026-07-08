@@ -45,6 +45,9 @@ import java.util.Properties;
 @Mixin(ShaderPack.class)
 public abstract class ShaderPackMixin implements IShaderPack {
     @Unique
+    private static final String PHOTON_RESTIR_COMBINED_GI_OPTION = "PHOTONICS_RESTIR_COMBINED_GI";
+
+    @Unique
     private PhotonicsPropertiesImpl phProperties;
     @Unique
     private ShaderPatcher patcher;
@@ -66,6 +69,8 @@ public abstract class ShaderPackMixin implements IShaderPack {
             boolean isZip,
             CallbackInfo ci
     ) {
+        disableUnsupportedCombinedGi(changedConfigs);
+
         phProperties = new PhotonicsPropertiesImpl();
         var properties = loadShaderProperties(root);
 
@@ -80,6 +85,25 @@ public abstract class ShaderPackMixin implements IShaderPack {
             phProperties.enabled = ShaderPropertiesBridge.getPhotonicsEnabledOption();
 
         ShaderPropertiesBridge.PROPERTIES = phProperties;
+    }
+
+    @Unique
+    private static void disableUnsupportedCombinedGi(Map<String, String> changedConfigs) {
+        try {
+            if (Boolean.parseBoolean(changedConfigs.getOrDefault(PHOTON_RESTIR_COMBINED_GI_OPTION, "false"))) {
+                Photonics.LOGGER.info(
+                        "Photonics diagnostic: forcing {} off because combined GI is disabled in this 1.21.1 build",
+                        PHOTON_RESTIR_COMBINED_GI_OPTION
+                );
+            }
+
+            changedConfigs.put(PHOTON_RESTIR_COMBINED_GI_OPTION, "false");
+        } catch (UnsupportedOperationException e) {
+            Photonics.LOGGER.warn(
+                    "Photonics diagnostic: could not force {} off; shaderpack combined-GI option may conflict with this 1.21.1 build",
+                    PHOTON_RESTIR_COMBINED_GI_OPTION
+            );
+        }
     }
 
     @Override

@@ -45,6 +45,7 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
 
     @Override
     public Vector2ic viewportSize() {
+        recalculateSizes();
         return new Vector2i(currentSize);
     }
 
@@ -52,6 +53,7 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
     public void bind() {
         recalculateSizes();
         super.bind();
+        GL11.glViewport(0, 0, currentSize.x(), currentSize.y());
     }
 
     @Override
