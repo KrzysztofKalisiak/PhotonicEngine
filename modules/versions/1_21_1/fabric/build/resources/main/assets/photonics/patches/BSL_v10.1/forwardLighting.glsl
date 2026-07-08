@@ -6,5 +6,5 @@ vec3 sceneLighting = mix(dist * ambientCol * lightmap.y, lightCol, fullShadow * 
 #endreplace
 
 #replace "vec3 blockLighting = blocklightCol * newLightmap * newLightmap;"
-vec3 blockLighting = vec3(0.0f);
+vec3 blockLighting = blocklightCol * newLightmap * newLightmap;
 #endreplace
