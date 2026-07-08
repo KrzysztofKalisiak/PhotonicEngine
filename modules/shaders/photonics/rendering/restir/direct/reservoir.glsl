@@ -110,6 +110,9 @@ vec3 direct_reservoir_get_final_color(
 
     Light light = direct_sample_get_light(reservoir.smple);
 
+#ifdef PH_DISABLE_RESTIR_VISIBILITY
+    return direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal) * reservoir.weight;
+#else
 #ifdef PH_RESTIR_SOFT_SHADOWS
     vec3 trace_position = light.position;
     ph_rand_sample_position(frag_rnd_state, trace_position, sample_pos);
@@ -131,6 +134,7 @@ vec3 direct_reservoir_get_final_color(
     vec3 final_color = sampled_color * tint_color.rgb * light_transmittance;
 
     return final_color * reservoir.weight;
+#endif
 }
 
 void direct_reservoir_encode(DirectReservoir reservoir, out vec3 data0) {
