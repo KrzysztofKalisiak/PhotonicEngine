@@ -244,6 +244,41 @@ vec3 diagnostic_cardinal_occluder_mask(vec3 sample_pos, vec3 geo_normal) {
 
     return vec3(0.0f, 1.0f, 0.0f);
 }
+
+vec3 diagnostic_nearest_light_position_mask(vec3 sample_pos) {
+    int light_count = min(light_list_size, PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT);
+    int best_light_index = -1;
+    float best_dist_sq = 340282346638528859811704183484516925440.0f;
+    float best_radius = 1.0f;
+
+    for (int i = 0; i < light_count; i++) {
+        Light light = light_list_get(i);
+        vec3 to_light = light.position - sample_pos;
+        float dist_sq = dot(to_light, to_light);
+
+        if (dist_sq < best_dist_sq) {
+            best_dist_sq = dist_sq;
+            best_radius = max(light.block_radius, 1.0f);
+            best_light_index = i;
+        }
+    }
+
+    if (best_light_index < 0)
+        return vec3(1.0f, 0.0f, 1.0f);
+
+    float dist = sqrt(best_dist_sq);
+
+    if (dist < 0.75f)
+        return vec3(1.0f, 0.0f, 0.0f);
+
+    if (dist < 1.5f)
+        return vec3(1.0f, 1.0f, 0.0f);
+
+    if (dist <= best_radius)
+        return vec3(0.0f, 1.0f, 0.0f);
+
+    return vec3(0.0f, 0.0f, 1.0f);
+}
 #endif
 
 void main() {
@@ -255,10 +290,7 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_surface_self_hit_mask(
-        frag_rt_pos,
-        frag_geo_normal
-    );
+    lighting.rgb += diagnostic_nearest_light_position_mask(frag_rt_pos);
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
 #endif
 }
