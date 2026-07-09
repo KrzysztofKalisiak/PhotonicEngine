@@ -9,6 +9,8 @@
 #endif
 
 vec3 sample_photonics_direct(vec2 tex_coord) {
+    return vec3(4.0f, 0.0f, 4.0f);
+
     #if PH_RESTIR_DENOISER_PASSES != 0
     return texture(denoise_result, tex_coord).rgb;
     #else
