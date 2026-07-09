@@ -24,12 +24,11 @@ void load_frag_data(
     frag_rt_pos = frag_player_pos + rt_camera_position;
 
     float dist = distance(floor(frag_rt_pos), floor(rt_camera_position));
-    float resolution = ceil((dist / 16)) / (4 * PH_RENDER_SCALE);
 
     frag_is_bad_angle = dot(frag_geo_normal, normalize(frag_rt_pos - rt_camera_position)) > -0.2f && dist > 16.0f;
 
-    // Attempts to correct bias from depth
-    frag_rt_pos += frag_geo_normal * (0.01f + (0.04f * resolution));
+    // Keep the shaderpack-provided surface position stable. Ray passes apply
+    // their own start offsets when they need to avoid self-intersection.
 }
 
 void ph_encode_frag(out vec4 data0, out uvec4 data1) {
@@ -55,10 +54,15 @@ void ph_encode_frag(out vec4 data0, out uvec4 data1) {
 
     vec3 to_rt = frag_rt_pos - (frag_player_pos + rt_camera_position);
     float dist_sq = dot(to_rt, to_rt);
-    float dist_inv = inversesqrt(dist_sq);
 
-    to_rt *= dist_inv;
-    dist_sq *= dist_inv;
+    if (dist_sq > 0.0000001f) {
+        float dist_inv = inversesqrt(dist_sq);
+        to_rt *= dist_inv;
+        dist_sq *= dist_inv;
+    } else {
+        to_rt = frag_geo_normal;
+        dist_sq = 0.0f;
+    }
 
     data0.w = dist_sq;
     data1.x = packSnorm2x16(ph_encode_normal(to_rt));
