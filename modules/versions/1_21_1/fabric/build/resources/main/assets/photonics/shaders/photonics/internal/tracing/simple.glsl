@@ -26,6 +26,7 @@ bool trace_light_vis(
 
     vec4 running_tint_color = vec4(0.0f);
     vec3 light_block = floor(light_rt_pos);
+    vec3 fragment_block = floor(rt_pos);
 
     while (ray_iter_has_next(ray)) {
         RayResult result = ray_iter_next(ray);
@@ -38,6 +39,9 @@ bool trace_light_vis(
             ray_iter_skip_block(ray);
             continue;
         }
+
+        if (all(equal(result_block, fragment_block)))
+            break;
 
         float result_dist = dot(result_pos - light_rt_pos, result_pos - light_rt_pos);
         if (result_dist - fragment_dist > -0.1f)
