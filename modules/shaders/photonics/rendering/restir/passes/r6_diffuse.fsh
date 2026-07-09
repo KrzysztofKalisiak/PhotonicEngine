@@ -9,7 +9,7 @@
 
 const int PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT = 128;
 const int PH_DIAGNOSTIC_TRACE_ITERATIONS = 96;
-const float PH_DIAGNOSTIC_RADIUS_PADDING = 3.0f;
+const float PH_DIAGNOSTIC_RADIUS_PADDING = 0.0f;
 
 #if defined PH_ENABLE_BLOCKLIGHT
 layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
