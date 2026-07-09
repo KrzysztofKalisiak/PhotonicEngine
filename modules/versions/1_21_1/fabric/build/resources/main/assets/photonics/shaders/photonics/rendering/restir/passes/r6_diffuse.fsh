@@ -395,7 +395,11 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_nearest_light_first_hit_mask(frag_rt_pos);
+    lighting.rgb += diagnostic_direct_light_sum(
+        frag_rt_pos,
+        frag_geo_normal,
+        frag_is_hand ? frag_geo_normal : frag_tex_normal
+    );
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
 #endif
 }
