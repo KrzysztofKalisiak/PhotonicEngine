@@ -157,6 +157,32 @@ vec3 diagnostic_ray_classification_mask(vec3 sample_pos, vec3 geo_normal, vec3 t
 
     return vec3(0.0f, 1.0f, 0.0f);
 }
+
+vec3 diagnostic_surface_self_hit_mask(vec3 sample_pos, vec3 geo_normal) {
+    vec3 normal = normalize(geo_normal);
+    vec3 trace_origin = sample_pos + normal * 0.08f;
+
+    RayIterator ray;
+    ray_iter_begin(ray, trace_origin, -normal);
+    ray.iterations = 24;
+
+    while (ray_iter_has_next(ray)) {
+        RayResult result = ray_iter_next(ray);
+        if (!ray_result_is_hit(result))
+            break;
+
+        float hit_dist = length(ray_result_position(result) - sample_pos);
+        if (hit_dist > 1.25f)
+            break;
+
+        if (ray_result_is_transparent(result))
+            return vec3(0.0f, 0.0f, 1.0f);
+
+        return vec3(1.0f, 0.0f, 0.0f);
+    }
+
+    return vec3(0.0f, 1.0f, 0.0f);
+}
 #endif
 
 void main() {
@@ -168,10 +194,9 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_ray_classification_mask(
+    lighting.rgb += diagnostic_surface_self_hit_mask(
         frag_rt_pos,
-        frag_geo_normal,
-        frag_is_hand ? frag_geo_normal : frag_tex_normal
+        frag_geo_normal
     );
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
 #endif
