@@ -318,6 +318,72 @@ vec3 diagnostic_nearest_light_visibility_mask(vec3 sample_pos) {
 
     return vec3(1.0f, 0.0f, 0.0f);
 }
+
+vec3 diagnostic_nearest_light_first_hit_mask(vec3 sample_pos) {
+    int light_count = min(light_list_size, PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT);
+    int best_light_index = -1;
+    float best_dist_sq = 340282346638528859811704183484516925440.0f;
+    float best_radius = 1.0f;
+
+    for (int i = 0; i < light_count; i++) {
+        Light light = light_list_get(i);
+        vec3 to_light = light.position - sample_pos;
+        float dist_sq = dot(to_light, to_light);
+
+        if (dist_sq < best_dist_sq) {
+            best_dist_sq = dist_sq;
+            best_radius = max(light.block_radius, 1.0f);
+            best_light_index = i;
+        }
+    }
+
+    if (best_light_index < 0)
+        return vec3(1.0f, 0.0f, 1.0f);
+
+    Light light = light_list_get(best_light_index);
+    float light_dist = best_dist_sq;
+
+    if (sqrt(light_dist) > best_radius)
+        return vec3(0.0f, 0.0f, 1.0f);
+
+    if (light_dist <= 2.25f)
+        return vec3(1.0f, 1.0f, 0.0f);
+
+    vec3 to_light = light.position - sample_pos;
+    vec3 trace_origin = sample_pos + normalize(to_light) * 0.02f;
+
+    RayIterator ray;
+    ray_iter_begin(ray, trace_origin, to_light);
+    ray.iterations = PH_DIAGNOSTIC_TRACE_ITERATIONS;
+
+    vec3 start_block = floor(sample_pos);
+    vec3 light_block = floor(light.position);
+
+    while (ray_iter_has_next_block(ray, light.position)) {
+        RayResult result = ray_iter_next_block(ray, light.position);
+        if (!ray_result_is_hit(result))
+            break;
+
+        vec3 result_pos = ray_result_position(result);
+        vec3 result_block = floor(result_pos);
+
+        if (all(equal(result_block, start_block))) {
+            ray_iter_skip_block(ray);
+            continue;
+        }
+
+        float result_dist = dot(result_pos - sample_pos, result_pos - sample_pos);
+        if (all(equal(result_block, light_block)) || result_dist >= light_dist - 0.01f)
+            return vec3(1.0f, 1.0f, 0.0f);
+
+        if (ray_result_is_transparent(result))
+            return vec3(0.0f, 1.0f, 1.0f);
+
+        return vec3(1.0f, 0.0f, 0.0f);
+    }
+
+    return vec3(0.0f, 1.0f, 0.0f);
+}
 #endif
 
 void main() {
@@ -329,7 +395,7 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_nearest_light_visibility_mask(frag_rt_pos);
+    lighting.rgb += diagnostic_nearest_light_first_hit_mask(frag_rt_pos);
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
 #endif
 }
