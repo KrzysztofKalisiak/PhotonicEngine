@@ -183,6 +183,47 @@ vec3 diagnostic_surface_self_hit_mask(vec3 sample_pos, vec3 geo_normal) {
 
     return vec3(0.0f, 1.0f, 0.0f);
 }
+
+vec3 diagnostic_cardinal_occluder_mask(vec3 sample_pos, vec3 geo_normal) {
+    vec3 normal = normalize(geo_normal);
+    vec3 trace_origin = sample_pos + normal * 0.05f;
+    vec3 start_block = floor(sample_pos);
+
+    const vec3[4] directions = vec3[4](
+        vec3(1.0f, 0.0f, 0.0f),
+        vec3(-1.0f, 0.0f, 0.0f),
+        vec3(0.0f, 0.0f, 1.0f),
+        vec3(0.0f, 0.0f, -1.0f)
+    );
+
+    for (int i = 0; i < 4; i++) {
+        RayIterator ray;
+        ray_iter_begin(ray, trace_origin, directions[i]);
+        ray.iterations = PH_DIAGNOSTIC_TRACE_ITERATIONS;
+
+        while (ray_iter_has_next(ray)) {
+            RayResult result = ray_iter_next(ray);
+            if (!ray_result_is_hit(result))
+                break;
+
+            vec3 result_pos = ray_result_position(result);
+            if (dot(result_pos - trace_origin, result_pos - trace_origin) > 64.0f)
+                break;
+
+            if (all(equal(floor(result_pos), start_block))) {
+                ray_iter_skip_block(ray);
+                continue;
+            }
+
+            if (ray_result_is_transparent(result))
+                return vec3(0.0f, 0.0f, 1.0f);
+
+            return vec3(1.0f, 0.0f, 0.0f);
+        }
+    }
+
+    return vec3(0.0f, 1.0f, 0.0f);
+}
 #endif
 
 void main() {
@@ -194,10 +235,9 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_ray_classification_mask(
+    lighting.rgb += diagnostic_cardinal_occluder_mask(
         frag_rt_pos,
-        frag_geo_normal,
-        frag_is_hand ? frag_geo_normal : frag_tex_normal
+        frag_geo_normal
     );
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
 #endif
