@@ -37,7 +37,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         if (DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS) {
             if (ENABLE_DIRECT_DIFFUSE_PASS_FOR_DIAGNOSTICS)
-                Photonics.LOGGER.info("Photonics diagnostic: direct light visibility probe with stable fragment positions; Photon radiosity preserved; remaining ReSTIR passes disabled");
+                Photonics.LOGGER.info("Photonics diagnostic: ray classification mask with stable fragment positions (magenta no light candidate, red opaque blocker, blue transparent blocker, yellow reached light, green no voxel hit); Photon radiosity preserved; remaining ReSTIR passes disabled");
             else if (ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS)
                 Photonics.LOGGER.info("Photonics diagnostic: initial direct pass only; remaining ReSTIR lighting passes disabled");
             else if (ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)

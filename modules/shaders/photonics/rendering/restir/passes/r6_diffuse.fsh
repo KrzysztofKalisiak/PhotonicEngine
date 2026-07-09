@@ -77,7 +77,7 @@ vec3 diagnostic_visibility_mask(vec3 sample_pos, vec3 geo_normal, vec3 tex_norma
     }
 
     if (best_light_index < 0 || best_score <= PH_DIAGNOSTIC_MIN_LIGHT_SCORE)
-        return vec3(0.0f);
+        return vec3(1.0f, 0.0f, 1.0f);
 
     Light light = light_list_get(best_light_index);
     vec3 tint_color;
@@ -118,7 +118,7 @@ vec3 diagnostic_ray_classification_mask(vec3 sample_pos, vec3 geo_normal, vec3 t
     }
 
     if (best_light_index < 0 || best_score <= PH_DIAGNOSTIC_MIN_LIGHT_SCORE)
-        return vec3(0.0f);
+        return vec3(1.0f, 0.0f, 1.0f);
 
     Light light = light_list_get(best_light_index);
     vec3 to_light = light.position - sample_pos;
@@ -194,7 +194,7 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_direct_light_sum(
+    lighting.rgb += diagnostic_ray_classification_mask(
         frag_rt_pos,
         frag_geo_normal,
         frag_is_hand ? frag_geo_normal : frag_tex_normal
