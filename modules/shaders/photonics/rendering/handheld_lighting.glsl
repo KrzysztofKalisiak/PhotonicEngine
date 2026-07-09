@@ -92,6 +92,7 @@ bool handheld_sample_trace(in HandheldSample smple, out vec3 tint_color, out flo
     float frag_dist = dot(smple.dir, smple.dir);
     float ray_dist = 0.0f;
     vec3 fragment_block = floor(frag_rt_pos);
+    vec3 fragment_inner_block = floor(frag_rt_pos + normalize(smple.dir) * 0.05f);
     bool reached_fragment_block = false;
 
     while (ray_iter_has_next(ray)) {
@@ -101,7 +102,7 @@ bool handheld_sample_trace(in HandheldSample smple, out vec3 tint_color, out flo
         vec3 result_block = floor(result_pos);
         ray_dist = dot(result_pos - smple.light.position, result_pos - smple.light.position);
 
-        if (all(equal(result_block, fragment_block))) {
+        if (all(equal(result_block, fragment_block)) || all(equal(result_block, fragment_inner_block))) {
             reached_fragment_block = true;
             break;
         }
