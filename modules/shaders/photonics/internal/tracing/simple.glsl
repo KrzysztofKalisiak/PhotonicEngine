@@ -27,8 +27,8 @@ bool trace_light_vis(
     vec3 start_block = floor(rt_pos);
     vec3 light_block = floor(light_rt_pos);
 
-    while (ray_iter_has_next(ray)) {
-        RayResult result = ray_iter_next(ray);
+    while (ray_iter_has_next_block(ray, light_rt_pos)) {
+        RayResult result = ray_iter_next_block(ray, light_rt_pos);
         if (!ray_result_is_hit(result)) break;
 
         vec3 result_pos = ray_result_position(result);

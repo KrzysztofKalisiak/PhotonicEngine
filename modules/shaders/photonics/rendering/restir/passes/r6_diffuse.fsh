@@ -132,8 +132,8 @@ vec3 diagnostic_ray_classification_mask(vec3 sample_pos, vec3 geo_normal, vec3 t
     vec3 start_block = floor(sample_pos);
     vec3 light_block = floor(light.position);
 
-    while (ray_iter_has_next(ray)) {
-        RayResult result = ray_iter_next(ray);
+    while (ray_iter_has_next_block(ray, light.position)) {
+        RayResult result = ray_iter_next_block(ray, light.position);
         if (!ray_result_is_hit(result))
             break;
 
