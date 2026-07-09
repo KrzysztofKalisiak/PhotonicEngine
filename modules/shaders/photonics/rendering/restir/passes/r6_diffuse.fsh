@@ -189,14 +189,18 @@ vec3 diagnostic_cardinal_occluder_mask(vec3 sample_pos, vec3 geo_normal) {
     vec3 trace_origin = sample_pos + normal * 0.05f;
     vec3 start_block = floor(sample_pos);
 
-    const vec3[4] directions = vec3[4](
-        vec3(1.0f, 0.0f, 0.0f),
-        vec3(-1.0f, 0.0f, 0.0f),
-        vec3(0.0f, 0.0f, 1.0f),
-        vec3(0.0f, 0.0f, -1.0f)
+    const vec3[8] directions = vec3[8](
+        normalize(vec3(1.0f, 0.03125f, 0.0625f)),
+        normalize(vec3(-1.0f, 0.03125f, 0.0625f)),
+        normalize(vec3(0.0625f, 0.03125f, 1.0f)),
+        normalize(vec3(0.0625f, 0.03125f, -1.0f)),
+        normalize(vec3(1.0f, -0.03125f, -0.0625f)),
+        normalize(vec3(-1.0f, -0.03125f, -0.0625f)),
+        normalize(vec3(-0.0625f, -0.03125f, 1.0f)),
+        normalize(vec3(-0.0625f, -0.03125f, -1.0f))
     );
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 8; i++) {
         RayIterator ray;
         ray_iter_begin(ray, trace_origin, directions[i]);
         ray.iterations = PH_DIAGNOSTIC_TRACE_ITERATIONS;
