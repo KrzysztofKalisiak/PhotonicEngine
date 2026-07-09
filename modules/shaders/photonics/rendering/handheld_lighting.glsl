@@ -81,6 +81,7 @@ bool handheld_sample_trace(in HandheldSample smple, out vec3 tint_color, out flo
 #else
     return trace_light_vis(
         frag_rt_pos,
+        frag_geo_normal,
         smple.light.position - frag_rt_pos,
         smple.light.position,
         PH_HANDHELD_RAY_ITERATIONS,

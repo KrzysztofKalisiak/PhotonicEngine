@@ -12,6 +12,6 @@ void main() {
     DirectReservoir reservoir = direct_reservoir_empty();
     direct_reservoir_load(reservoir, frag_tex_coord);
 
-    direct_reservoir_validate_visiblity(reservoir, frag_rt_pos);
+    direct_reservoir_validate_visiblity(reservoir, frag_rt_pos, frag_geo_normal);
     direct_reservoir_encode(reservoir, di_reservoir_0);
 }
