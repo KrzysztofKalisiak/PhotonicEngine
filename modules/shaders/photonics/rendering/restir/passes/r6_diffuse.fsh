@@ -279,6 +279,45 @@ vec3 diagnostic_nearest_light_position_mask(vec3 sample_pos) {
 
     return vec3(0.0f, 0.0f, 1.0f);
 }
+
+vec3 diagnostic_nearest_light_visibility_mask(vec3 sample_pos) {
+    int light_count = min(light_list_size, PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT);
+    int best_light_index = -1;
+    float best_dist_sq = 340282346638528859811704183484516925440.0f;
+    float best_radius = 1.0f;
+
+    for (int i = 0; i < light_count; i++) {
+        Light light = light_list_get(i);
+        vec3 to_light = light.position - sample_pos;
+        float dist_sq = dot(to_light, to_light);
+
+        if (dist_sq < best_dist_sq) {
+            best_dist_sq = dist_sq;
+            best_radius = max(light.block_radius, 1.0f);
+            best_light_index = i;
+        }
+    }
+
+    if (best_light_index < 0)
+        return vec3(1.0f, 0.0f, 1.0f);
+
+    Light light = light_list_get(best_light_index);
+    float dist = sqrt(best_dist_sq);
+
+    if (dist > best_radius)
+        return vec3(0.0f, 0.0f, 1.0f);
+
+    if (dist < 1.5f)
+        return vec3(1.0f, 1.0f, 0.0f);
+
+    vec3 tint_color;
+    float light_transmittance;
+
+    if (trace_light_vis(sample_pos, light.position - sample_pos, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
+        return vec3(0.0f, 1.0f, 0.0f);
+
+    return vec3(1.0f, 0.0f, 0.0f);
+}
 #endif
 
 void main() {
@@ -290,7 +329,7 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_nearest_light_position_mask(frag_rt_pos);
+    lighting.rgb += diagnostic_nearest_light_visibility_mask(frag_rt_pos);
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
 #endif
 }
