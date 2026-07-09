@@ -15,7 +15,7 @@ bool trace_light_vis(
     light_transmittance = 1.0f;
 
     vec3 to_fragment = rt_pos - light_rt_pos;
-    float fragment_dist = dot(to_fragment, to_fragment);
+    float fragment_dist = length(to_fragment);
     if (fragment_dist <= 0.0001f) return true;
 
     vec3 trace_direction = ph_signed_nudge(to_fragment);
@@ -44,8 +44,8 @@ bool trace_light_vis(
         if (all(equal(result_block, fragment_block)) || all(equal(result_block, fragment_inner_block)))
             break;
 
-        float result_dist = dot(result_pos - light_rt_pos, result_pos - light_rt_pos);
-        if (result_dist - fragment_dist > -0.1f)
+        float result_dist = length(result_pos - light_rt_pos);
+        if (result_dist >= fragment_dist - 0.15f)
             break;
 
         if (ray_result_is_transparent(result)) {
