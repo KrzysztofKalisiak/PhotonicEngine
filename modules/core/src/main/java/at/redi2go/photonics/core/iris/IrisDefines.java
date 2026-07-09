@@ -27,6 +27,8 @@ public class IrisDefines {
         if (phProperties.isBlockLightEnabled())
             defines.stringDefine("PH_ENABLE_BLOCKLIGHT", "");
 
+        defines.stringDefine("PH_DIAGNOSTIC_CONSTANT_DIRECT_SAMPLE", "");
+
         if (phProperties.isGiEnabled())
             defines.stringDefine("PH_ENABLE_GI", "");
 

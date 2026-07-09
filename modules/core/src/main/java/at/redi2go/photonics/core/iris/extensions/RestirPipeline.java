@@ -37,7 +37,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         if (DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS) {
             if (ENABLE_DIRECT_DIFFUSE_PASS_FOR_DIAGNOSTICS)
-                Photonics.LOGGER.info("Photonics diagnostic: brute-force direct traced light sum with reverse visibility tracing and linear target-surface tolerance; Photon radiosity preserved; remaining ReSTIR passes disabled");
+                Photonics.LOGGER.info("Photonics diagnostic: constant green direct sampler override; tests whether dark geometry is outside Photonics lighting buffer");
             else if (ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS)
                 Photonics.LOGGER.info("Photonics diagnostic: initial direct pass only; remaining ReSTIR lighting passes disabled");
             else if (ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)

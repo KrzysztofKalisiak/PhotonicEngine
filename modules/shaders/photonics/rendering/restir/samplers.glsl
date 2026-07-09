@@ -9,12 +9,16 @@
 #endif
 
 vec3 sample_photonics_direct(vec2 tex_coord) {
+#ifdef PH_DIAGNOSTIC_CONSTANT_DIRECT_SAMPLE
+    return vec3(0.0f, 0.7f, 0.0f);
+#else
     #if PH_RESTIR_DENOISER_PASSES != 0
     return texture(denoise_result, tex_coord).rgb;
     #else
     vec4 lighting = texture(restir_lighting, tex_coord);
     return (lighting.rgb / max(lighting.a, 1.0f));
     #endif
+#endif
 }
 
 vec3 sample_photonics_handheld(vec2 tex_coord) {
