@@ -7,7 +7,9 @@
 #include "/photonics/rendering/frag/common.glsl"
 #include "/photonics/rendering/restir/restir.glsl"
 
-const int PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT = 64;
+const int PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT = 128;
+const int PH_DIAGNOSTIC_TRACE_ITERATIONS = 96;
+const float PH_DIAGNOSTIC_RADIUS_PADDING = 3.0f;
 
 #if defined PH_ENABLE_BLOCKLIGHT
 layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
@@ -23,14 +25,14 @@ vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_norm
     for (int i = 0; i < light_count; i++) {
         Light light = light_list_get(i);
         vec3 to_light = light.position - sample_pos;
-        float radius = max(light.block_radius + 1.0f, 1.0f);
+        float radius = max(light.block_radius + PH_DIAGNOSTIC_RADIUS_PADDING, 1.0f);
 
         if (dot(to_light, to_light) > radius * radius)
             continue;
 
         vec3 tint_color;
         float light_transmittance;
-        if (!trace_light_vis(sample_pos, to_light, light.position, 40, tint_color, light_transmittance))
+        if (!trace_light_vis(sample_pos, to_light, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
             continue;
 
         result += light_sample_at(
