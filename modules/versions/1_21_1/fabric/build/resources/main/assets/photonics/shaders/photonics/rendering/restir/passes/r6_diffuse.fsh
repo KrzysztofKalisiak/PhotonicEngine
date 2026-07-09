@@ -158,12 +158,28 @@ vec3 diagnostic_ray_classification_mask(vec3 sample_pos, vec3 geo_normal, vec3 t
     return vec3(0.0f, 1.0f, 0.0f);
 }
 
+vec3 diagnostic_safe_ray_direction(vec3 direction) {
+    vec3 result = direction;
+
+    if (abs(result.x) < 0.0001f)
+        result.x = result.x < 0.0f ? -0.0009765625f : 0.0009765625f;
+
+    if (abs(result.y) < 0.0001f)
+        result.y = result.y < 0.0f ? -0.0009765625f : 0.0009765625f;
+
+    if (abs(result.z) < 0.0001f)
+        result.z = result.z < 0.0f ? -0.0009765625f : 0.0009765625f;
+
+    return normalize(result);
+}
+
 vec3 diagnostic_surface_self_hit_mask(vec3 sample_pos, vec3 geo_normal) {
     vec3 normal = normalize(geo_normal);
-    vec3 trace_origin = sample_pos + normal * 0.08f;
+    vec3 trace_direction = diagnostic_safe_ray_direction(-normal);
+    vec3 trace_origin = sample_pos - trace_direction * 0.08f;
 
     RayIterator ray;
-    ray_iter_begin(ray, trace_origin, -normal);
+    ray_iter_begin(ray, trace_origin, trace_direction);
     ray.iterations = 24;
 
     while (ray_iter_has_next(ray)) {
@@ -239,7 +255,7 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_cardinal_occluder_mask(
+    lighting.rgb += diagnostic_surface_self_hit_mask(
         frag_rt_pos,
         frag_geo_normal
     );
