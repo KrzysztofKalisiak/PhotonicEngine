@@ -14,36 +14,33 @@ bool trace_light_vis(
     tint_color = vec3(1.0f);
     light_transmittance = 1.0f;
 
-    float light_dist = dot(light_rt_pos - rt_pos, light_rt_pos - rt_pos);
-    if (light_dist <= 0.0001f) return true;
+    vec3 to_fragment = rt_pos - light_rt_pos;
+    float fragment_dist = dot(to_fragment, to_fragment);
+    if (fragment_dist <= 0.0001f) return true;
 
-    vec3 trace_origin = rt_pos + normalize(direction) * 0.02f;
+    vec3 trace_direction = ph_signed_nudge(to_fragment);
 
     RayIterator ray;
-    ray_iter_begin(ray, trace_origin, direction);
+    ray_iter_begin(ray, light_rt_pos, trace_direction);
     ray.iterations = max(max_iterations, 1);
 
     vec4 running_tint_color = vec4(0.0f);
-    vec3 start_block = floor(rt_pos);
     vec3 light_block = floor(light_rt_pos);
 
-    while (ray_iter_has_next_block(ray, light_rt_pos)) {
-        RayResult result = ray_iter_next_block(ray, light_rt_pos);
+    while (ray_iter_has_next(ray)) {
+        RayResult result = ray_iter_next(ray);
         if (!ray_result_is_hit(result)) break;
 
         vec3 result_pos = ray_result_position(result);
         vec3 result_block = floor(result_pos);
 
-        if (all(equal(result_block, start_block))) {
+        if (all(equal(result_block, light_block))) {
             ray_iter_skip_block(ray);
             continue;
         }
 
-        if (all(equal(result_block, light_block)))
-            break;
-
-        float result_dist = dot(result_pos - rt_pos, result_pos - rt_pos);
-        if (result_dist >= light_dist - 0.01f)
+        float result_dist = dot(result_pos - light_rt_pos, result_pos - light_rt_pos);
+        if (result_dist - fragment_dist > -0.1f)
             break;
 
         if (ray_result_is_transparent(result)) {
