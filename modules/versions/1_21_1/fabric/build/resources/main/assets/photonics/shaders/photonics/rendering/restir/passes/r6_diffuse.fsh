@@ -33,7 +33,7 @@ vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_norm
 
         vec3 tint_color;
         float light_transmittance;
-        if (!trace_light_vis(sample_pos, to_light, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
+        if (!trace_light_vis(sample_pos, geo_normal, to_light, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
             continue;
 
         result += light_sample_at(
@@ -83,7 +83,7 @@ vec3 diagnostic_visibility_mask(vec3 sample_pos, vec3 geo_normal, vec3 tex_norma
     vec3 tint_color;
     float light_transmittance;
 
-    if (trace_light_vis(sample_pos, light.position - sample_pos, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
+    if (trace_light_vis(sample_pos, geo_normal, light.position - sample_pos, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
         return vec3(0.0f, 1.0f, 0.0f);
 
     return vec3(1.0f, 0.0f, 0.0f);
@@ -313,7 +313,7 @@ vec3 diagnostic_nearest_light_visibility_mask(vec3 sample_pos) {
     vec3 tint_color;
     float light_transmittance;
 
-    if (trace_light_vis(sample_pos, light.position - sample_pos, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
+    if (trace_light_vis(sample_pos, vec3(0.0f, 1.0f, 0.0f), light.position - sample_pos, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
         return vec3(0.0f, 1.0f, 0.0f);
 
     return vec3(1.0f, 0.0f, 0.0f);

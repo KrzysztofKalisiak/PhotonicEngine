@@ -1,5 +1,6 @@
 bool trace_light_vis(
     vec3 rt_pos,
+    vec3 surface_normal,
     vec3 direction,
     vec3 light_rt_pos,
     int max_iterations,
@@ -19,7 +20,10 @@ bool trace_light_vis(
     if (light_dist <= 0.0001f) return true;
 
     vec3 trace_direction = ph_signed_nudge(direction);
-    vec3 trace_origin = rt_pos + normalize(trace_direction) * 0.03f;
+    vec3 unit_direction = normalize(trace_direction);
+    vec3 unit_normal = normalize(surface_normal);
+    vec3 normal_bias = unit_normal * (dot(unit_normal, unit_direction) >= 0.0f ? 0.09f : -0.09f);
+    vec3 trace_origin = rt_pos + normal_bias + unit_direction * 0.03f;
 
     RayIterator ray;
     ray_iter_begin(ray, trace_origin, trace_direction);
@@ -27,22 +31,23 @@ bool trace_light_vis(
 
     vec4 running_tint_color = vec4(0.0f);
     vec3 start_block = floor(rt_pos);
+    vec3 origin_block = floor(trace_origin);
     vec3 light_block = floor(light_rt_pos);
 
-    while (ray_iter_has_next(ray)) {
-        RayResult result = ray_iter_next(ray);
+    while (ray_iter_has_next_block(ray, light_rt_pos)) {
+        RayResult result = ray_iter_next_block(ray, light_rt_pos);
         if (!ray_result_is_hit(result)) break;
 
         vec3 result_pos = ray_result_position(result);
         vec3 result_block = floor(result_pos);
         float result_dist = length(result_pos - rt_pos);
 
-        if (all(equal(result_block, start_block))) {
+        if (all(equal(result_block, start_block)) || all(equal(result_block, origin_block))) {
             ray_iter_skip_block(ray);
             continue;
         }
 
-        if (all(equal(result_block, light_block)) || result_dist >= light_dist - 0.05f)
+        if (all(equal(result_block, light_block)) || result_dist >= light_dist - 0.2f)
             break;
 
         if (ray_result_is_transparent(result)) {
