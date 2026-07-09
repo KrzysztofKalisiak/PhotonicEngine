@@ -17,16 +17,18 @@ bool trace_light_vis(
     float light_dist = dot(light_rt_pos - rt_pos, light_rt_pos - rt_pos);
     if (light_dist <= 0.0001f) return true;
 
+    vec3 trace_origin = rt_pos + normalize(direction) * 0.02f;
+
     RayIterator ray;
-    ray_iter_begin(ray, rt_pos, direction);
+    ray_iter_begin(ray, trace_origin, direction);
     ray.iterations = max(max_iterations, 1);
 
     vec4 running_tint_color = vec4(0.0f);
     vec3 start_block = floor(rt_pos);
     vec3 light_block = floor(light_rt_pos);
 
-    while (ray_iter_has_next_block(ray, light_rt_pos)) {
-        RayResult result = ray_iter_next_block(ray, light_rt_pos);
+    while (ray_iter_has_next(ray)) {
+        RayResult result = ray_iter_next(ray);
         if (!ray_result_is_hit(result)) break;
 
         vec3 result_pos = ray_result_position(result);
