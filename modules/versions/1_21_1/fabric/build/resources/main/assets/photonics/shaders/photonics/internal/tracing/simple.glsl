@@ -19,11 +19,12 @@ bool trace_light_vis(
     float light_dist = length(to_light);
     if (light_dist <= 0.0001f) return true;
 
+    const float start_bias_distance = 0.25f;
+    const float near_surface_skip_distance = 0.45f;
+
     vec3 trace_direction = ph_signed_nudge(direction);
     vec3 unit_direction = normalize(trace_direction);
-    vec3 unit_normal = normalize(surface_normal);
-    vec3 normal_bias = unit_normal * (dot(unit_normal, unit_direction) >= 0.0f ? 0.09f : -0.09f);
-    vec3 trace_origin = rt_pos + normal_bias + unit_direction * 0.03f;
+    vec3 trace_origin = rt_pos + unit_direction * min(start_bias_distance, light_dist * 0.45f);
 
     RayIterator ray;
     ray_iter_begin(ray, trace_origin, trace_direction);
@@ -41,6 +42,11 @@ bool trace_light_vis(
         vec3 result_pos = ray_result_position(result);
         vec3 result_block = floor(result_pos);
         float result_dist = length(result_pos - rt_pos);
+
+        if (result_dist < near_surface_skip_distance) {
+            ray_iter_skip_block(ray);
+            continue;
+        }
 
         if (all(equal(result_block, start_block)) || all(equal(result_block, origin_block))) {
             ray_iter_skip_block(ray);
