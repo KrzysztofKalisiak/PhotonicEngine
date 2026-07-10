@@ -9,7 +9,8 @@
 
 const int PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT = 128;
 const int PH_DIAGNOSTIC_TRACE_ITERATIONS = 96;
-const float PH_DIAGNOSTIC_RADIUS_PADDING = 0.0f;
+const float PH_DIAGNOSTIC_FORCED_LIGHT_RANGE = 16.0f;
+const float PH_DIAGNOSTIC_MIN_SURFACE_FACING = 0.15f;
 const float PH_DIAGNOSTIC_MIN_LIGHT_SCORE = 0.0001f;
 
 #if defined PH_ENABLE_BLOCKLIGHT
@@ -19,6 +20,22 @@ layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
 layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting;
 
 #if defined PH_ENABLE_BLOCKLIGHT
+vec3 diagnostic_forced_range_light_sample(Light light, vec3 sample_pos, vec3 geo_normal) {
+    vec3 to_light = light.position - sample_pos;
+    float dist_sq = dot(to_light, to_light);
+    float dist = sqrt(max(dist_sq, 0.000001f));
+
+    if (dist > PH_DIAGNOSTIC_FORCED_LIGHT_RANGE)
+        return vec3(0.0f);
+
+    vec3 light_dir = to_light / dist;
+    float surface_facing = max(dot(normalize(geo_normal), light_dir), PH_DIAGNOSTIC_MIN_SURFACE_FACING);
+    float range_weight = 1.0f - clamp(dist / PH_DIAGNOSTIC_FORCED_LIGHT_RANGE, 0.0f, 1.0f);
+    float attenuation = range_weight * range_weight / (1.0f + dist_sq * 0.08f);
+
+    return light.color * surface_facing * attenuation * 5.0f;
+}
+
 vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_normal) {
     vec3 result = vec3(0.0f);
     int light_count = min(light_list_size, PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT);
@@ -26,9 +43,8 @@ vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_norm
     for (int i = 0; i < light_count; i++) {
         Light light = light_list_get(i);
         vec3 to_light = light.position - sample_pos;
-        float radius = max(light.block_radius + PH_DIAGNOSTIC_RADIUS_PADDING, 1.0f);
 
-        if (dot(to_light, to_light) > radius * radius)
+        if (dot(to_light, to_light) > PH_DIAGNOSTIC_FORCED_LIGHT_RANGE * PH_DIAGNOSTIC_FORCED_LIGHT_RANGE)
             continue;
 
         vec3 tint_color;
@@ -36,13 +52,7 @@ vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_norm
         if (!trace_light_vis(sample_pos, geo_normal, to_light, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
             continue;
 
-        result += light_sample_at(
-            light,
-            sample_pos,
-            light.position,
-            geo_normal,
-            tex_normal
-        ) * tint_color * light_transmittance;
+        result += diagnostic_forced_range_light_sample(light, sample_pos, geo_normal) * tint_color * light_transmittance;
     }
 
     return result;
@@ -56,7 +66,7 @@ vec3 diagnostic_visibility_mask(vec3 sample_pos, vec3 geo_normal, vec3 tex_norma
     for (int i = 0; i < light_count; i++) {
         Light light = light_list_get(i);
         vec3 to_light = light.position - sample_pos;
-        float radius = max(light.block_radius + PH_DIAGNOSTIC_RADIUS_PADDING, 1.0f);
+        float radius = PH_DIAGNOSTIC_FORCED_LIGHT_RANGE;
 
         if (dot(to_light, to_light) > radius * radius)
             continue;
@@ -97,7 +107,7 @@ vec3 diagnostic_ray_classification_mask(vec3 sample_pos, vec3 geo_normal, vec3 t
     for (int i = 0; i < light_count; i++) {
         Light light = light_list_get(i);
         vec3 to_light = light.position - sample_pos;
-        float radius = max(light.block_radius + PH_DIAGNOSTIC_RADIUS_PADDING, 1.0f);
+        float radius = PH_DIAGNOSTIC_FORCED_LIGHT_RANGE;
 
         if (dot(to_light, to_light) > radius * radius)
             continue;
