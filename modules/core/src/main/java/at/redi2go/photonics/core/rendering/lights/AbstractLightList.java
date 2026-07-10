@@ -207,18 +207,16 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
             var neighborBlockPos = blockPos.ph$offset(offset);
             var blockSectionPos = SectionCopy.getSectionCoord(neighborBlockPos);
 
-            if (!blockSectionPos.equals(sectionPos)) {
-                if (blockSectionPos.equals(blockOwner.pos())) {
-                    section = blockOwner;
-                } else {
-                    var chunkAccess = level.ph$getChunkOrNull(sectionPos.x, sectionPos.z);
-                    if (chunkAccess == null) continue;
+            if (blockSectionPos.equals(sectionPos)) {
+                section = blockOwner;
+            } else {
+                var chunkAccess = level.ph$getChunkOrNull(blockSectionPos.x, blockSectionPos.z);
+                if (chunkAccess == null) continue;
 
-                    var newSection = chunkAccess.ph$sections()[level.ph$getSectionIndexFromSectionY(sectionPos.y)];
-                    if (newSection == null) continue;
+                var newSection = chunkAccess.ph$sections()[level.ph$getSectionIndexFromSectionY(blockSectionPos.y)];
+                if (newSection == null) continue;
 
-                    section = newSection;
-                }
+                section = newSection;
             }
 
             if (section.ph$hasOnlyAir()) continue;

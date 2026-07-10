@@ -54,6 +54,15 @@ subprojects {
     }
 
     repositories {
+        providers.environmentVariable("PHOTONICS_LOCAL_MOJANG").orNull
+            ?.takeIf { it.isNotBlank() }
+            ?.let {
+                maven {
+                    name = "PhotonicsLocalMojang"
+                    url = uri(it)
+                }
+            }
+
         mavenCentral()
 
         mojang()
