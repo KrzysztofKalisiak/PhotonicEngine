@@ -357,50 +357,11 @@ public class BlockBakeryImpl implements BlockBakery {
 
                         textureData = textureData.withTint(tint);
 
-                        int alpha = VoxelColor.a(textureData.color());
-                        if (alpha == 0) continue;
-
-                        consumer.acceptVoxel(x, y, z, normalIndex, textureData);
-
-                        if (alpha == 255)
-                            acceptConservativeOpaqueVoxel(consumer, x, y, z, normal, normalIndex, textureData);
+                        if (VoxelColor.a(textureData.color()) != 0)
+                            consumer.acceptVoxel(x, y, z, normalIndex, textureData);
                     }
                 }
             }
-        }
-
-        private void acceptConservativeOpaqueVoxel(
-                VoxelConsumer consumer,
-                int x,
-                int y,
-                int z,
-                Vector3f normal,
-                int normalIndex,
-                TextureData textureData
-        ) throws InterruptedException {
-            int dx = 0;
-            int dy = 0;
-            int dz = 0;
-
-            float ax = Math.abs(normal.x());
-            float ay = Math.abs(normal.y());
-            float az = Math.abs(normal.z());
-
-            if (ax >= ay && ax >= az)
-                dx = normal.x() >= 0.0f ? -1 : 1;
-            else if (ay >= az)
-                dy = normal.y() >= 0.0f ? -1 : 1;
-            else
-                dz = normal.z() >= 0.0f ? -1 : 1;
-
-            int thickX = x + dx;
-            int thickY = y + dy;
-            int thickZ = z + dz;
-
-            if (thickX < 0 || thickX > 15 || thickY < 0 || thickY > 15 || thickZ < 0 || thickZ > 15)
-                return;
-
-            consumer.acceptVoxel(thickX, thickY, thickZ, normalIndex, textureData);
         }
 
         @Override

@@ -69,10 +69,11 @@ public class MinecraftBlockMesher implements BlockMesher<McMeshState> {
         BlockPos mcPos = (BlockPos) pos;
         BlockAndTintGetter level = (BlockAndTintGetter) blockAndTintGetter;
 
+        // BakedQuad positions are block-local; WorldCompiler applies the block position later.
         blockBuilder
                 .useAtlas(BLOCK_ATLAS)
                 .useBlockId(meshState.blockId())
-                .useOffset(blockChunkOffset.x, blockChunkOffset.y, blockChunkOffset.z);
+                .useOffset(0.0f, 0.0f, 0.0f);
 
         for (BakedQuad quad : meshState.quads()) {
             int tint = 0xFFFFFFFF;
