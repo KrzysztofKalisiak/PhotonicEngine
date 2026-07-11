@@ -12,6 +12,8 @@ const int PH_DIAGNOSTIC_TRACE_ITERATIONS = 96;
 const float PH_DIAGNOSTIC_FORCED_LIGHT_RANGE = 16.0f;
 const float PH_DIAGNOSTIC_MIN_SURFACE_FACING = 0.15f;
 const float PH_DIAGNOSTIC_MIN_LIGHT_SCORE = 0.0001f;
+const float PH_DIAGNOSTIC_NO_VISUAL_BOOST = 1.5f;
+const float PH_DIAGNOSTIC_VISUAL_BOOST = 2.0f;
 
 #if defined PH_ENABLE_BLOCKLIGHT
 layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
@@ -36,7 +38,7 @@ vec3 diagnostic_forced_range_light_sample(Light light, vec3 sample_pos, vec3 geo
     return light.color * surface_facing * attenuation * 5.0f;
 }
 
-vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_normal) {
+vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_normal, bool use_visibility) {
     vec3 result = vec3(0.0f);
     int light_count = min(light_list_size, PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT);
 
@@ -47,15 +49,110 @@ vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_norm
         if (dot(to_light, to_light) > PH_DIAGNOSTIC_FORCED_LIGHT_RANGE * PH_DIAGNOSTIC_FORCED_LIGHT_RANGE)
             continue;
 
-        vec3 tint_color;
-        float light_transmittance;
-        if (!trace_light_vis(sample_pos, geo_normal, to_light, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
-            continue;
+        vec3 tint_color = vec3(1.0f);
+        float light_transmittance = 1.0f;
+        if (use_visibility) {
+            if (!trace_light_vis(sample_pos, geo_normal, to_light, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
+                continue;
+        }
 
         result += diagnostic_forced_range_light_sample(light, sample_pos, geo_normal) * tint_color * light_transmittance;
     }
 
     return result;
+}
+
+int diagnostic_nearest_light(vec3 sample_pos, out float best_dist_sq) {
+    int light_count = min(light_list_size, PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT);
+    int best_light_index = -1;
+    best_dist_sq = 340282346638528859811704183484516925440.0f;
+
+    for (int i = 0; i < light_count; i++) {
+        Light light = light_list_get(i);
+        vec3 to_light = light.position - sample_pos;
+        float dist_sq = dot(to_light, to_light);
+
+        if (dist_sq < best_dist_sq) {
+            best_dist_sq = dist_sq;
+            best_light_index = i;
+        }
+    }
+
+    return best_light_index;
+}
+
+vec3 diagnostic_nearest_light_distance_heatmap(vec3 sample_pos) {
+    float best_dist_sq;
+    int light_index = diagnostic_nearest_light(sample_pos, best_dist_sq);
+
+    if (light_index < 0)
+        return vec3(1.0f, 0.0f, 1.0f);
+
+    float dist = sqrt(best_dist_sq);
+
+    if (dist < 1.0f)
+        return vec3(1.0f, 0.0f, 0.0f);
+
+    if (dist < 2.0f)
+        return vec3(1.0f, 0.6f, 0.0f);
+
+    if (dist < 4.0f)
+        return vec3(1.0f, 1.0f, 0.0f);
+
+    if (dist < 8.0f)
+        return vec3(0.0f, 1.0f, 0.0f);
+
+    if (dist <= PH_DIAGNOSTIC_FORCED_LIGHT_RANGE)
+        return vec3(0.0f, 0.7f, 1.0f);
+
+    return vec3(0.0f, 0.0f, 1.0f);
+}
+
+vec3 diagnostic_nearest_light_trace_mask(vec3 sample_pos, vec3 geo_normal) {
+    float best_dist_sq;
+    int light_index = diagnostic_nearest_light(sample_pos, best_dist_sq);
+
+    if (light_index < 0)
+        return vec3(1.0f, 0.0f, 1.0f);
+
+    float dist = sqrt(best_dist_sq);
+    if (dist > PH_DIAGNOSTIC_FORCED_LIGHT_RANGE)
+        return vec3(0.0f, 0.0f, 1.0f);
+
+    if (dist < 1.5f)
+        return vec3(1.0f, 1.0f, 0.0f);
+
+    Light light = light_list_get(light_index);
+    vec3 tint_color;
+    float light_transmittance;
+
+    if (!trace_light_vis(sample_pos, geo_normal, light.position - sample_pos, light.position, PH_DIAGNOSTIC_TRACE_ITERATIONS, tint_color, light_transmittance))
+        return vec3(1.0f, 0.0f, 0.0f);
+
+    if (light_transmittance < 0.95f)
+        return vec3(0.0f, 1.0f, 1.0f);
+
+    return vec3(0.0f, 1.0f, 0.0f);
+}
+
+vec3 diagnostic_quadrant_result(vec3 sample_pos, vec3 geo_normal, vec3 tex_normal) {
+    vec2 quadrant_pos = gl_FragCoord.xy / PH_VIEW_SIZE;
+    bool right = quadrant_pos.x >= 0.5f;
+    bool top = quadrant_pos.y >= 0.5f;
+    bool separator = abs(quadrant_pos.x - 0.5f) < 0.0025f || abs(quadrant_pos.y - 0.5f) < 0.0025f;
+    vec3 result;
+
+    if (!top && !right) {
+        result = diagnostic_direct_light_sum(sample_pos, geo_normal, tex_normal, false) * PH_DIAGNOSTIC_NO_VISUAL_BOOST;
+    } else if (!top && right) {
+        result = diagnostic_direct_light_sum(sample_pos, geo_normal, tex_normal, true) * PH_DIAGNOSTIC_VISUAL_BOOST;
+    } else if (top && !right) {
+        result = diagnostic_nearest_light_distance_heatmap(sample_pos);
+    } else {
+        result = diagnostic_nearest_light_trace_mask(sample_pos, geo_normal);
+    }
+
+    return separator ? vec3(1.0f) : result;
 }
 
 vec3 diagnostic_visibility_mask(vec3 sample_pos, vec3 geo_normal, vec3 tex_normal) {
@@ -405,7 +502,7 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
 
-    lighting.rgb += diagnostic_direct_light_sum(
+    lighting.rgb += diagnostic_quadrant_result(
         frag_rt_pos,
         frag_geo_normal,
         frag_is_hand ? frag_geo_normal : frag_tex_normal
