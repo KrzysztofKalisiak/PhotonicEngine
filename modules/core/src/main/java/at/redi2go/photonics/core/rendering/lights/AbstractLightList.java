@@ -7,6 +7,7 @@ import at.redi2go.photonics.api.mc.world.level.IBlock;
 import at.redi2go.photonics.api.mc.world.level.ILevel;
 import at.redi2go.photonics.api.mc.world.level.chunk.IChunkSection;
 import at.redi2go.photonics.api.shaders.IShaderPack;
+import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.config.PhConfig;
 import at.redi2go.photonics.core.config.PhConfigWatcher;
 import at.redi2go.photonics.core.config.lights.LightRegistry;
@@ -97,18 +98,15 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
             if (Thread.interrupted() && !needsReload) return;
 
             try {
-                sectionQueue.awaitTask();
-
-                boolean needsUpload = false;
+                boolean needsUpload = reloadLights();
+                if (!needsUpload)
+                    sectionQueue.awaitTask();
 
                 var unloadedSections = sectionQueue.drainUnloadQueue();
                 if (!unloadedSections.isEmpty()) {
                     needsUpload = true;
                     unloadSections(unloadedSections);
                 }
-
-
-                needsUpload |= reloadLights();
 
                 var loadedSections = sectionQueue.drain(MAX_SECTIONS_PER_RUN);
                 if (!loadedSections.isEmpty() && addNewSections(loadedSections))
@@ -137,7 +135,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         if (!needsReload) return false;
         needsReload = false;
 
-        for (var section : tracedLightPositions.keySet()) {
+        for (var section : List.copyOf(tracedLightPositions.keySet())) {
             var lights = tracedLightPositions.get(section);
 
             for (var itr = lights.listIterator(); itr.hasNext(); ) {
@@ -229,7 +227,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
             if (blockState.ph$is(BLOCK_LAVA)) continue;
 
-            if (blockState.ph$isAir() || !blockState.ph$isSuffocating(level, blockPos) || !blockState.ph$isCollisionShapeFullBlock(level, blockPos))
+            if (blockState.ph$isAir() || !blockState.ph$isSuffocating(level, neighborBlockPos) || !blockState.ph$isCollisionShapeFullBlock(level, neighborBlockPos))
                 return false;
         }
 
@@ -265,13 +263,17 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     protected abstract void prepareUpload();
 
     private void storeLights(LightList lights) throws InterruptedException {
-        if (Objects.equals(mostRecentLights, lights)) return;
-
         lock.lockInterruptibly();
 
         try {
+            if (Objects.equals(this.lights, lights)) return;
+
+            int previousSize = this.lights == null ? 0 : this.lights.size();
             this.lights = lights;
             var worldOrigin = lights.origin();
+
+            if (previousSize != lights.size())
+                Photonics.LOGGER.info("Photonics light list pending: {} -> {}", previousSize, lights.size());
 
             for (int i = 0; i < lights.size(); i++) {
                 var light = lights.get(i);

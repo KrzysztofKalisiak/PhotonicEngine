@@ -7,6 +7,7 @@
 
 const float max_direct_temporal_samples = 20.0f * PH_RESTIR_INITIAL_SAMPLES;
 const float max_direct_reservoir_samples = 128.0f;
+const int PH_DIRECT_VISIBILITY_ITERATIONS = 100;
 
 struct DirectReservoir {
     DirectSample smple;
@@ -83,7 +84,7 @@ void direct_reservoir_validate_visiblity(inout DirectReservoir reservoir, vec3 s
     vec3 unused0;
     float unused1;
 
-    if (!trace_light_vis(sample_pos, geo_normal, to_light, light.position, 40, unused0, unused1))
+    if (!trace_light_vis(sample_pos, geo_normal, to_light, light.position, PH_DIRECT_VISIBILITY_ITERATIONS, unused0, unused1))
         reservoir.weight = 0.0f;
 }
 
@@ -138,7 +139,7 @@ vec3 direct_reservoir_get_final_color(
     vec3 tint_color;
     float light_transmittance;
 
-    if (!trace_light_vis(sample_pos, geo_normal, to_light, trace_position, 40, tint_color, light_transmittance)) {
+    if (!trace_light_vis(sample_pos, geo_normal, to_light, trace_position, PH_DIRECT_VISIBILITY_ITERATIONS, tint_color, light_transmittance)) {
         reservoir.weight = 0.0f;
         return vec3(0.0f);
     }

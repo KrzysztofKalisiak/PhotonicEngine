@@ -80,7 +80,8 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
             int blockHash = (block.hashCode() ^ block.ph$block().hashCode());
             int skylight = level == null ? 0 : compileSkylight(level, blockPos);
 
-            hash[0] = hash[0] * 31 + (((long) skylight) << 32) | blockHash;
+            long packedBlock = (((long) skylight) << 32) | Integer.toUnsignedLong(blockHash);
+            hash[0] = hash[0] * 31 + packedBlock;
         });
 
         return hash[0];
