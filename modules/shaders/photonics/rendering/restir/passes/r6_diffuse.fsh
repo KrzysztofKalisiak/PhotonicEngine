@@ -4,6 +4,10 @@
 #define FRAG_USE_GEO_NORMAL
 #define FRAG_USE_TEX_NORMAL
 
+#ifdef PH_DISABLE_RESTIR_VISIBILITY
+#undef PH_DISABLE_RESTIR_VISIBILITY
+#endif
+
 #include "/photonics/rendering/frag/common.glsl"
 #include "/photonics/rendering/restir/restir.glsl"
 
