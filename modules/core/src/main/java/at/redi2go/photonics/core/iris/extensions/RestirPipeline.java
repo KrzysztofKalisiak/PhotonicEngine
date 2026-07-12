@@ -37,7 +37,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         if (DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS) {
             if (ENABLE_DIRECT_DIFFUSE_PASS_FOR_DIAGNOSTICS)
-                Photonics.LOGGER.info("Photonics diagnostic: direct-light-v11 bounded empty-target visibility, accumulation");
+                Photonics.LOGGER.info("Photonics diagnostic: direct-light-v12 reciprocal visibility, fp32 reservoir, accumulation");
             else if (ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS)
                 Photonics.LOGGER.info("Photonics diagnostic: initial direct pass only; remaining ReSTIR lighting passes disabled");
             else if (ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)
@@ -52,7 +52,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         var restirFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment("restir_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateRestirLighting)
                 .addAttachment("restir_lighting_variance", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateRestirLighting)
-                .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateDirectReservoir)
+                .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateDirectReservoir)
                 .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateIndirectReservoir)
                 .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateIndirectReservoir)
                 .addAttachment("restir_indirect_reservoirs2", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::shouldCreateIndirectReservoir)

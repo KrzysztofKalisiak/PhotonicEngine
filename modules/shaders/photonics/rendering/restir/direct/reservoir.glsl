@@ -16,6 +16,11 @@ struct DirectReservoir {
     float total_samples;
 };
 
+bool direct_reservoir_is_nan(DirectReservoir reservoir) {
+    return isnan(reservoir.weight) || isinf(reservoir.weight) ||
+        isnan(reservoir.total_samples) || isinf(reservoir.total_samples);
+}
+
 DirectReservoir direct_reservoir_empty() {
     return DirectReservoir(
         direct_sample_empty(),
@@ -92,12 +97,23 @@ void direct_reservoir_finalize_weight(
     inout DirectReservoir reservoir,
     float sample_weight
 ) {
-    if (sample_weight <= 0.0f) {
-        reservoir.weight = 0.0f;
+    if (sample_weight <= 0.0f || isnan(sample_weight) || isinf(sample_weight) ||
+        reservoir.total_samples <= 0.0f || direct_reservoir_is_nan(reservoir)) {
+        reservoir = direct_reservoir_empty();
         return;
     }
 
-    reservoir.weight = (1.0f / sample_weight) * (reservoir.weight / reservoir.total_samples);
+    float final_weight = (1.0f / sample_weight) * (reservoir.weight / reservoir.total_samples);
+    if (isnan(final_weight) || isinf(final_weight)) {
+        reservoir = direct_reservoir_empty();
+        return;
+    }
+
+    reservoir.weight = final_weight;
+}
+
+bool direct_color_is_finite(vec3 color) {
+    return !any(isnan(color)) && !any(isinf(color));
 }
 
 vec3 direct_reservoir_get_unshadowed_color(
@@ -125,7 +141,12 @@ vec3 direct_reservoir_get_final_color(
     Light light = direct_sample_get_light(reservoir.smple);
 
 #ifdef PH_DISABLE_RESTIR_VISIBILITY
-    return direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal) * reservoir.weight;
+    vec3 result = direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal) * reservoir.weight;
+    if (!direct_color_is_finite(result)) {
+        reservoir = direct_reservoir_empty();
+        return vec3(0.0f);
+    }
+    return result;
 #else
 #ifdef PH_RESTIR_SOFT_SHADOWS
     vec3 trace_position = light.position;
@@ -147,24 +168,33 @@ vec3 direct_reservoir_get_final_color(
     vec3 sampled_color = direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal);
     vec3 final_color = sampled_color * tint_color.rgb * light_transmittance;
 
-    return final_color * reservoir.weight;
+    vec3 result = final_color * reservoir.weight;
+    if (!direct_color_is_finite(result)) {
+        reservoir = direct_reservoir_empty();
+        return vec3(0.0f);
+    }
+    return result;
 #endif
 }
 
 void direct_reservoir_encode(DirectReservoir reservoir, out vec3 data0) {
+    if (direct_reservoir_is_nan(reservoir))
+        reservoir = direct_reservoir_empty();
+
     data0[0] = float(reservoir.smple.light_index);
     data0[1] = max(reservoir.weight, MINIMUM_RESERVOIR_WEIGHT);
     data0[2] = reservoir.total_samples;
 }
 
 void direct_reservoir_decode(out DirectReservoir reservoir, vec3 data0) {
+    if (any(isnan(data0)) || any(isinf(data0))) {
+        reservoir = direct_reservoir_empty();
+        return;
+    }
+
     reservoir.smple.light_index = int(data0[0]);
     reservoir.weight            = data0[1];
     reservoir.total_samples     = data0[2];
-}
-
-bool direct_reservoir_is_nan(DirectReservoir reservoir) {
-    return isnan(reservoir.weight) || isnan(reservoir.total_samples);
 }
 
 bool direct_reservoir_load(out DirectReservoir reservoir, ivec2 tex_coord) {
@@ -173,7 +203,12 @@ bool direct_reservoir_load(out DirectReservoir reservoir, ivec2 tex_coord) {
         texelFetch(restir_direct_reservoirs0, tex_coord, 0).rgb
     );
 
-    return !direct_reservoir_is_nan(reservoir);
+    if (direct_reservoir_is_nan(reservoir)) {
+        reservoir = direct_reservoir_empty();
+        return false;
+    }
+
+    return true;
 }
 
 bool direct_reservoir_load_flipped(out DirectReservoir reservoir, ivec2 tex_coord) {
@@ -182,7 +217,12 @@ bool direct_reservoir_load_flipped(out DirectReservoir reservoir, ivec2 tex_coor
         texelFetch(prev_restir_direct_reservoirs0, tex_coord, 0).rgb
     );
 
-    return !direct_reservoir_is_nan(reservoir);
+    if (direct_reservoir_is_nan(reservoir)) {
+        reservoir = direct_reservoir_empty();
+        return false;
+    }
+
+    return true;
 }
 
 bool direct_reservoir_load_previous(out DirectReservoir reservoir, ivec2 tex_coord) {
@@ -191,5 +231,10 @@ bool direct_reservoir_load_previous(out DirectReservoir reservoir, ivec2 tex_coo
         texelFetch(prev_restir_direct_reservoirs0, tex_coord, 0).rgb
     );
 
-    return !direct_reservoir_is_nan(reservoir) && direct_sample_reproject(reservoir.smple);
+    if (direct_reservoir_is_nan(reservoir) || !direct_sample_reproject(reservoir.smple)) {
+        reservoir = direct_reservoir_empty();
+        return false;
+    }
+
+    return true;
 }
