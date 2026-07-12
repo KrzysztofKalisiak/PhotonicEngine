@@ -54,35 +54,9 @@ void ray_iter_set_direction(inout RayIterator ray, vec3 direction) {
 }
 
 const vec3 ph_ray_no_target = vec3(-1.0f);
-
-void _ray_iter_reach_target(inout RayIterator ray, vec3 target) {
-    ray.position = target;
-    ray.hit = new_ray_result(
-        target,
-        ph_encode_voxel_normal(-ray.direction),
-        0u,
-        0u,
-        0u,
-        false
-    );
-    ray.state = PH_RAY_STATE_HAS_HIT;
-}
-
 void _ray_iter_trace_next(inout RayIterator ray, vec3 target) {
     if (ray.state != PH_RAY_STATE_READY) return;
     if (ray.iterations == 0) return;
-
-    bool has_target = target != ph_ray_no_target;
-    vec3 target_position = target;
-    vec3 trace_start = ray.position;
-    float target_progress = has_target
-        ? dot(target_position - trace_start, ray.direction)
-        : 0.0f;
-
-    if (has_target && target_progress <= 0.0001f) {
-        _ray_iter_reach_target(ray, target_position);
-        return;
-    }
 
     uint[11] stack;
     int scale_exp = 21;
@@ -100,12 +74,14 @@ void _ray_iter_trace_next(inout RayIterator ray, vec3 target) {
     vec3 pos = origin;
     vec3 dir_inv = 1.0f / -abs(ray.direction);
 
-    if (has_target) {
+    if (target != ph_ray_no_target) {
         target = ph_to_norm_pos(target, ray.direction);
         target = ph_floor_scale(target, world_block_scale_exp);
     }
 
-    int tmin;
+    vec3 abs_direction = abs(ray.direction);
+    int tmin = abs_direction.x > abs_direction.y ? 0 : 1;
+    tmin = abs_direction.z > abs_direction[tmin] ? 2 : tmin;
     uint child_index;
 
     ray.state = PH_RAY_STATE_HAS_MISS;
@@ -156,15 +132,6 @@ void _ray_iter_trace_next(inout RayIterator ray, vec3 target) {
         );
 
         pos = min(origin - (abs(ray.direction) * side_dist[tmin]), intBitsToFloat(neighbor_max));
-
-        if (has_target) {
-            vec3 world_pos = (ph_get_mirrored_pos(pos, ray.direction, false) - 1.0f) * world_tree_size;
-            float ray_progress = dot(world_pos - trace_start, ray.direction);
-            if (ray_progress >= target_progress - 0.0001f) {
-                _ray_iter_reach_target(ray, target_position);
-                return;
-            }
-        }
 
         uvec3 diff_pos = floatBitsToUint(pos) ^ floatBitsToUint(cell_min);
         int diff_exp = findMSB((diff_pos.x | diff_pos.y | diff_pos.z) & 0xFFAAAAAAu);

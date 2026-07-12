@@ -28,64 +28,45 @@ bool trace_light_vis(
 
     const float half_voxel = 0.5f / 16.0f;
 
-    // The world representation is voxelized at 1/16-block resolution. Move half
-    // a voxel off the receiver without allowing the bias to pass a nearby light.
+    // Move the receiver endpoint toward the light so its own surface is not
+    // mistaken for an occluder when the reciprocal ray reaches it.
     float normal_bias_distance = min(half_voxel, light_dist * 0.25f);
     float forward_bias_distance = min(0.001f, light_dist * 0.05f);
-    vec3 trace_origin = rt_pos + unit_normal * normal_side * normal_bias_distance
+    vec3 receiver_endpoint = rt_pos + unit_normal * normal_side * normal_bias_distance
         + receiver_to_light_direction * forward_bias_distance;
 
-    // The normal bias changes the segment origin, so aim at the target again.
-    // Keeping the pre-bias direction makes grazing rays pass beside air targets.
-    vec3 biased_to_light = light_rt_pos - trace_origin;
-    float trace_dist = length(biased_to_light);
+    // Air-based lights (handheld and moving/Sable sources) are not represented
+    // by an occupied target voxel. Trace reciprocally from the light toward the
+    // occupied receiver, as the upstream handheld path does.
+    vec3 light_to_receiver = receiver_endpoint - light_rt_pos;
+    float trace_dist = length(light_to_receiver);
     if (trace_dist <= 0.0001f) return true;
 
-    vec3 trace_direction = normalize(ph_signed_nudge(biased_to_light));
-    vec3 unit_direction = trace_direction;
+    vec3 trace_direction = normalize(ph_signed_nudge(light_to_receiver));
 
     RayIterator ray;
-    ray_iter_begin(ray, trace_origin, trace_direction);
-
-    // Empty targets cannot use the occupied-block early exit. Budget enough
-    // iterations for every 1/16-grid boundary along this finite segment.
-    float segment_voxel_crossings = dot(abs(biased_to_light), vec3(16.0f));
-    int segment_iteration_budget = int(ceil(segment_voxel_crossings)) + 16;
-    ray.iterations = max(max_iterations, segment_iteration_budget);
+    ray_iter_begin(ray, light_rt_pos, trace_direction);
+    ray.iterations = max(max_iterations, 1);
 
     vec4 running_tint_color = vec4(0.0f);
-    vec3 light_block = floor(light_rt_pos);
-    bool reached_light = false;
-    bool first_hit = true;
-    ivec3 origin_voxel = ivec3(floor((trace_origin + unit_direction * 0.001f) * 16.0f));
+    vec3 trace_start = ray.position;
+    float endpoint_progress = dot(receiver_endpoint - trace_start, trace_direction);
+    bool reached_receiver = endpoint_progress <= 0.0001f;
 
-    while (ray_iter_has_next_block(ray, light_rt_pos)) {
-        RayResult result = ray_iter_next_block(ray, light_rt_pos);
+    while (!reached_receiver && ray_iter_has_next(ray)) {
+        RayResult result = ray_iter_next(ray);
         if (!ray_result_is_hit(result)) break;
 
         vec3 result_pos = ray_result_position(result);
-        vec3 result_block = floor(result_pos);
-        float result_progress = dot(result_pos - trace_origin, unit_direction);
+        float result_progress = dot(result_pos - trace_start, trace_direction);
 
-        if (all(equal(result_block, light_block)) || result_progress >= trace_dist - 0.01f) {
-            reached_light = true;
+        if (result_progress >= endpoint_progress - 0.01f) {
+            reached_receiver = true;
             break;
         }
 
-        // A reconstructed receiver can sit just inside its occupied 1/16 voxel.
-        // Escape only that first voxel; skipping its whole block erases nearby
-        // fence and trapdoor occluders.
-        if (first_hit) {
-            first_hit = false;
-            ivec3 hit_voxel = ivec3(floor((result_pos + unit_direction * 0.001f) * 16.0f));
-            if (all(equal(hit_voxel, origin_voxel))) {
-                ray_iter_skip_voxel(ray);
-                continue;
-            }
-        }
-
-        // Point lights live at block centers. Let active emitters share direct
-        // visibility so adjacent lights behave as one luminous cluster.
+        // The ray starts inside placed light blocks. Traced emitters must not
+        // occlude themselves or adjacent members of an emissive cluster.
         Light hit_light = ray_result_light_data(result);
         if (hit_light.type == LIGHT_TYPE_TRACED) {
             ray_iter_skip_block(ray);
@@ -106,13 +87,12 @@ bool trace_light_vis(
         return false;
     }
 
-    if (!reached_light) {
-        float target_progress = dot(light_rt_pos - trace_origin, unit_direction);
-        float ray_progress = dot(ray.position - trace_origin, unit_direction);
-        reached_light = ray_progress >= target_progress - 0.01f;
+    if (!reached_receiver) {
+        float ray_progress = dot(ray.position - trace_start, trace_direction);
+        reached_receiver = ray_progress >= endpoint_progress - 0.01f;
     }
 
     tint_color = running_tint_color.a == 0.0f ? vec3(1.0f) : running_tint_color.rgb;
-    return reached_light;
+    return reached_receiver;
 #endif
 }

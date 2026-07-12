@@ -67,10 +67,10 @@ SampleHistory sample_history_reproject_single(ivec2 texel, vec3 previous_player_
     if (dot(n, frag_geo_normal) < 0.99f) return INVALID_HISTORY;
 
     vec4 lighting = texelFetch(prev_restir_lighting, ivec2(texel), 0);
-    if (any(isnan(lighting))) return INVALID_HISTORY;
+    if (any(isnan(lighting)) || any(isinf(lighting))) return INVALID_HISTORY;
 
     vec4 variance = texelFetch(prev_restir_lighting_variance, ivec2(texel), 0);
-    if (any(isnan(variance))) return INVALID_HISTORY;
+    if (any(isnan(variance)) || any(isinf(variance))) return INVALID_HISTORY;
 
     return SampleHistory(lighting, variance);
 }
