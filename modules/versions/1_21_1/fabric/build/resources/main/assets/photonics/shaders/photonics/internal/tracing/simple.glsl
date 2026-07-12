@@ -55,6 +55,14 @@ bool trace_light_vis(
             break;
         }
 
+        // Point lights live at block centers. Let active emitters share direct
+        // visibility so adjacent lights behave as one luminous cluster.
+        Light hit_light = ray_result_light_data(result);
+        if (hit_light.type == LIGHT_TYPE_TRACED) {
+            ray_iter_skip_block(ray);
+            continue;
+        }
+
         if (ray_result_is_transparent(result)) {
             VoxelData voxel_data = ray_result_voxel_data(result);
             vec4 albedo = voxel_data_albedo(voxel_data);
