@@ -27,9 +27,11 @@ bool trace_light_vis(
         : unit_direction;
     float normal_side = dot(unit_normal, unit_direction) >= 0.0f ? 1.0f : -1.0f;
 
+    const float half_voxel = 0.5f / 16.0f;
+
     // The world representation is voxelized at 1/16-block resolution. Move half
     // a voxel off the receiver without allowing the bias to pass a nearby light.
-    float normal_bias_distance = min(0.5f / 16.0f, light_dist * 0.25f);
+    float normal_bias_distance = min(half_voxel, light_dist * 0.25f);
     float forward_bias_distance = min(0.001f, light_dist * 0.05f);
     vec3 trace_origin = rt_pos + unit_normal * normal_side * normal_bias_distance
         + unit_direction * forward_bias_distance;
@@ -41,6 +43,8 @@ bool trace_light_vis(
     vec4 running_tint_color = vec4(0.0f);
     vec3 light_block = floor(light_rt_pos);
     bool reached_light = false;
+    bool first_hit = true;
+    ivec3 origin_voxel = ivec3(floor((trace_origin + unit_direction * 0.001f) * 16.0f));
 
     while (ray_iter_has_next_block(ray, light_rt_pos)) {
         RayResult result = ray_iter_next_block(ray, light_rt_pos);
@@ -53,6 +57,18 @@ bool trace_light_vis(
         if (all(equal(result_block, light_block)) || result_dist >= light_dist - 0.01f) {
             reached_light = true;
             break;
+        }
+
+        // A reconstructed receiver can sit just inside its occupied 1/16 voxel.
+        // Escape only that first voxel; skipping its whole block erases nearby
+        // fence and trapdoor occluders.
+        if (first_hit) {
+            first_hit = false;
+            ivec3 hit_voxel = ivec3(floor((result_pos + unit_direction * 0.001f) * 16.0f));
+            if (all(equal(hit_voxel, origin_voxel))) {
+                ray_iter_skip_voxel(ray);
+                continue;
+            }
         }
 
         // Point lights live at block centers. Let active emitters share direct
