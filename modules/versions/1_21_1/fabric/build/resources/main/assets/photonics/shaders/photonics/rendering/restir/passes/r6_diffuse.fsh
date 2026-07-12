@@ -10,10 +10,7 @@
 const int PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT = 128;
 const int PH_DIAGNOSTIC_TRACE_ITERATIONS = 96;
 const float PH_DIAGNOSTIC_FORCED_LIGHT_RANGE = 16.0f;
-const float PH_DIAGNOSTIC_MIN_SURFACE_FACING = 0.15f;
 const float PH_DIAGNOSTIC_MIN_LIGHT_SCORE = 0.0001f;
-const float PH_DIAGNOSTIC_NO_VISUAL_BOOST = 1.5f;
-const float PH_DIAGNOSTIC_VISUAL_BOOST = 2.0f;
 
 #if defined PH_ENABLE_BLOCKLIGHT
 layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
@@ -22,20 +19,15 @@ layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
 layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting;
 
 #if defined PH_ENABLE_BLOCKLIGHT
-vec3 diagnostic_forced_range_light_sample(Light light, vec3 sample_pos, vec3 geo_normal) {
+vec3 diagnostic_configured_light_sample(Light light, vec3 sample_pos, vec3 geo_normal, vec3 tex_normal) {
     vec3 to_light = light.position - sample_pos;
     float dist_sq = dot(to_light, to_light);
-    float dist = sqrt(max(dist_sq, 0.000001f));
+    float light_range = max(light.block_radius, 1.0f);
 
-    if (dist > PH_DIAGNOSTIC_FORCED_LIGHT_RANGE)
+    if (dist_sq > light_range * light_range)
         return vec3(0.0f);
 
-    vec3 light_dir = to_light / dist;
-    float surface_facing = max(dot(normalize(geo_normal), light_dir), PH_DIAGNOSTIC_MIN_SURFACE_FACING);
-    float range_weight = 1.0f - clamp(dist / PH_DIAGNOSTIC_FORCED_LIGHT_RANGE, 0.0f, 1.0f);
-    float attenuation = range_weight * range_weight / (1.0f + dist_sq * 0.08f);
-
-    return light.color * surface_facing * attenuation * 5.0f;
+    return light_sample_at(light, sample_pos, light.position, geo_normal, tex_normal);
 }
 
 vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_normal, bool use_visibility) {
@@ -45,8 +37,9 @@ vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_norm
     for (int i = 0; i < light_count; i++) {
         Light light = light_list_get(i);
         vec3 to_light = light.position - sample_pos;
+        vec3 light_sample = diagnostic_configured_light_sample(light, sample_pos, geo_normal, tex_normal);
 
-        if (dot(to_light, to_light) > PH_DIAGNOSTIC_FORCED_LIGHT_RANGE * PH_DIAGNOSTIC_FORCED_LIGHT_RANGE)
+        if (ph_luminance(light_sample) <= PH_DIAGNOSTIC_MIN_LIGHT_SCORE)
             continue;
 
         vec3 tint_color = vec3(1.0f);
@@ -56,7 +49,7 @@ vec3 diagnostic_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_norm
                 continue;
         }
 
-        result += diagnostic_forced_range_light_sample(light, sample_pos, geo_normal) * tint_color * light_transmittance;
+        result += light_sample * tint_color * light_transmittance;
     }
 
     return result;
@@ -119,9 +112,6 @@ vec3 diagnostic_nearest_light_trace_mask(vec3 sample_pos, vec3 geo_normal) {
     if (dist > PH_DIAGNOSTIC_FORCED_LIGHT_RANGE)
         return vec3(0.0f, 0.0f, 1.0f);
 
-    if (dist < 1.5f)
-        return vec3(1.0f, 1.0f, 0.0f);
-
     Light light = light_list_get(light_index);
     vec3 tint_color;
     float light_transmittance;
@@ -143,9 +133,9 @@ vec3 diagnostic_quadrant_result(vec3 sample_pos, vec3 geo_normal, vec3 tex_norma
     vec3 result;
 
     if (!top && !right) {
-        result = diagnostic_direct_light_sum(sample_pos, geo_normal, tex_normal, false) * PH_DIAGNOSTIC_NO_VISUAL_BOOST;
+        result = diagnostic_direct_light_sum(sample_pos, geo_normal, tex_normal, false);
     } else if (!top && right) {
-        result = diagnostic_direct_light_sum(sample_pos, geo_normal, tex_normal, true) * PH_DIAGNOSTIC_VISUAL_BOOST;
+        result = diagnostic_direct_light_sum(sample_pos, geo_normal, tex_normal, true);
     } else if (top && !right) {
         result = diagnostic_nearest_light_distance_heatmap(sample_pos);
     } else {
