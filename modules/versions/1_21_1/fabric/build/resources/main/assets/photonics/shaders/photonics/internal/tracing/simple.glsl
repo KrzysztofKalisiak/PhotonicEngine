@@ -19,13 +19,12 @@ bool trace_light_vis(
     float light_dist = length(to_light);
     if (light_dist <= 0.0001f) return true;
 
-    vec3 trace_direction = normalize(ph_signed_nudge(direction));
-    vec3 unit_direction = trace_direction;
+    vec3 receiver_to_light_direction = normalize(ph_signed_nudge(direction));
     float normal_length_sq = dot(surface_normal, surface_normal);
     vec3 unit_normal = normal_length_sq > 0.000001f
         ? surface_normal * inversesqrt(normal_length_sq)
-        : unit_direction;
-    float normal_side = dot(unit_normal, unit_direction) >= 0.0f ? 1.0f : -1.0f;
+        : receiver_to_light_direction;
+    float normal_side = dot(unit_normal, receiver_to_light_direction) >= 0.0f ? 1.0f : -1.0f;
 
     const float half_voxel = 0.5f / 16.0f;
 
@@ -34,11 +33,25 @@ bool trace_light_vis(
     float normal_bias_distance = min(half_voxel, light_dist * 0.25f);
     float forward_bias_distance = min(0.001f, light_dist * 0.05f);
     vec3 trace_origin = rt_pos + unit_normal * normal_side * normal_bias_distance
-        + unit_direction * forward_bias_distance;
+        + receiver_to_light_direction * forward_bias_distance;
+
+    // The normal bias changes the segment origin, so aim at the target again.
+    // Keeping the pre-bias direction makes grazing rays pass beside air targets.
+    vec3 biased_to_light = light_rt_pos - trace_origin;
+    float trace_dist = length(biased_to_light);
+    if (trace_dist <= 0.0001f) return true;
+
+    vec3 trace_direction = normalize(ph_signed_nudge(biased_to_light));
+    vec3 unit_direction = trace_direction;
 
     RayIterator ray;
     ray_iter_begin(ray, trace_origin, trace_direction);
-    ray.iterations = max(max_iterations, 1);
+
+    // Empty targets cannot use the occupied-block early exit. Budget enough
+    // iterations for every 1/16-grid boundary along this finite segment.
+    float segment_voxel_crossings = dot(abs(biased_to_light), vec3(16.0f));
+    int segment_iteration_budget = int(ceil(segment_voxel_crossings)) + 16;
+    ray.iterations = max(max_iterations, segment_iteration_budget);
 
     vec4 running_tint_color = vec4(0.0f);
     vec3 light_block = floor(light_rt_pos);
@@ -52,9 +65,9 @@ bool trace_light_vis(
 
         vec3 result_pos = ray_result_position(result);
         vec3 result_block = floor(result_pos);
-        float result_dist = length(result_pos - rt_pos);
+        float result_progress = dot(result_pos - trace_origin, unit_direction);
 
-        if (all(equal(result_block, light_block)) || result_dist >= light_dist - 0.01f) {
+        if (all(equal(result_block, light_block)) || result_progress >= trace_dist - 0.01f) {
             reached_light = true;
             break;
         }
