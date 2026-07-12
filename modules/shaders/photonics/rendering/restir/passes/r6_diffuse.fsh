@@ -4,60 +4,26 @@
 #define FRAG_USE_GEO_NORMAL
 #define FRAG_USE_TEX_NORMAL
 
+#include "/photonics/rendering/frag/common.glsl"
+
 #ifdef PH_DISABLE_RESTIR_VISIBILITY
 #undef PH_DISABLE_RESTIR_VISIBILITY
 #endif
 
-#include "/photonics/rendering/frag/common.glsl"
 #include "/photonics/rendering/restir/restir.glsl"
-
-const int PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT = 128;
-const int PH_DIAGNOSTIC_TRACE_ITERATIONS = 128;
-const float PH_DIAGNOSTIC_MIN_LIGHT_SCORE = 0.0001f;
+#include "/photonics/modifiers/restir_gi_modifier.glsl"
 
 #if defined PH_ENABLE_BLOCKLIGHT
 layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
 #endif
 
-layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting;
-
-#if defined PH_ENABLE_BLOCKLIGHT
-vec3 diagnostic_visible_direct_light_sum(vec3 sample_pos, vec3 geo_normal, vec3 tex_normal) {
-    vec3 result = vec3(0.0f);
-    int light_count = min(light_list_size, PH_DIAGNOSTIC_DIRECT_LIGHT_LIMIT);
-
-    for (int i = 0; i < light_count; i++) {
-        Light light = light_list_get(i);
-        vec3 to_light = light.position - sample_pos;
-        vec3 light_sample = light_sample_at(
-            light,
-            sample_pos,
-            light.position,
-            geo_normal,
-            tex_normal
-        );
-
-        if (ph_luminance(light_sample) <= PH_DIAGNOSTIC_MIN_LIGHT_SCORE)
-            continue;
-
-        vec3 tint_color;
-        float light_transmittance;
-        if (!trace_light_vis(
-            sample_pos,
-            geo_normal,
-            to_light,
-            light.position,
-            PH_DIAGNOSTIC_TRACE_ITERATIONS,
-            tint_color,
-            light_transmittance
-        )) continue;
-
-        result += light_sample * tint_color * light_transmittance;
-    }
-
-    return result;
-}
+#if defined PH_ENABLE_RESTIR_GI
+layout(location = INDIRECT_RESERVOIR_0) out vec4 gi_reservoir_0;
+layout(location = INDIRECT_RESERVOIR_1) out vec4 gi_reservoir_1;
+layout(location = INDIRECT_RESERVOIR_2) out vec4 gi_reservoir_2;
 #endif
+
+layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting;
 
 void main() {
     lighting = vec4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -65,16 +31,28 @@ void main() {
     setup_frag_data(0);
     if (!frag_is_in_world) return;
 
+#if defined PH_ENABLE_RESTIR_GI
+    IndirectReservoir indirect_reservoir = indirect_reservoir_empty();
+    indirect_reservoir_load(indirect_reservoir, frag_tex_coord);
+
+    lighting.rgb = indirect_reservoir_get_final_color(indirect_reservoir);
+
+#ifndef PH_RESTIR_GI_MODIFIER_DISABLED
+    modify_restir_gi(lighting.rgb);
+#endif
+
+    indirect_reservoir_encode(indirect_reservoir, gi_reservoir_0, gi_reservoir_1, gi_reservoir_2);
+#endif
+
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir direct_reservoir = direct_reservoir_empty();
-
-    if (light_list_size > 0) {
-        lighting.rgb = diagnostic_visible_direct_light_sum(
-            frag_rt_pos,
-            frag_geo_normal,
-            frag_is_hand ? frag_geo_normal : frag_tex_normal
-        );
-    }
+    direct_reservoir_load(direct_reservoir, frag_tex_coord);
+    lighting.rgb += direct_reservoir_get_final_color(
+        direct_reservoir,
+        frag_rt_pos,
+        frag_geo_normal,
+        frag_is_hand ? frag_geo_normal : frag_tex_normal
+    );
 
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
 #endif

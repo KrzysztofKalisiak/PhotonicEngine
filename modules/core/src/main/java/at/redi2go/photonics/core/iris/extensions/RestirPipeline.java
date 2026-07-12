@@ -18,7 +18,7 @@ import static at.redi2go.photonics.core.iris.pipeline.texture.AttachmentUsage.FL
 public class RestirPipeline extends AbstractPhotonicsExtension {
     private static final boolean DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS = true;
     private static final boolean ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS = true;
-    private static final boolean ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS = false;
+    private static final boolean ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS = true;
     private static final boolean ENABLE_DIRECT_DIFFUSE_PASS_FOR_DIAGNOSTICS = true;
     private static final boolean ENABLE_HANDHELD_PASS_FOR_DIAGNOSTICS = true;
 
@@ -37,7 +37,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         if (DISABLE_RESTIR_LIGHTING_PASSES_FOR_DIAGNOSTICS) {
             if (ENABLE_DIRECT_DIFFUSE_PASS_FOR_DIAGNOSTICS)
-                Photonics.LOGGER.info("Photonics diagnostic: direct-light-v5 visibility enabled, ambient restored");
+                Photonics.LOGGER.info("Photonics diagnostic: direct-light-v6 ReSTIR reservoir baseline, no reuse");
             else if (ENABLE_INITIAL_DIRECT_PASS_FOR_DIAGNOSTICS)
                 Photonics.LOGGER.info("Photonics diagnostic: initial direct pass only; remaining ReSTIR lighting passes disabled");
             else if (ENABLE_FRAG_DATA_PASS_FOR_DIAGNOSTICS)
@@ -74,7 +74,6 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .withFramebuffer(restirFramebuffer)
                 .thenFlip(restirFramebuffer)
                 .deferredPass("initial direct", "/photonics/rendering/restir/passes/r1_initial_direct.fsh", null, this::isInitialDirectPassEnabled)
-                .thenFlip(restirFramebuffer)
                 .deferredPass("validate initial direct", "/photonics/rendering/restir/passes/r2_validate_initial_direct.fsh", null, this::isReservoirValidationEnabled)
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
                 .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isTemporalReuseEnabled)

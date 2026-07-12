@@ -281,10 +281,23 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
             int depth = treeManager.depth();
             mostRecentBlockContainerScale = depth == 0 ? 0 : 21 - (depth - (VoxelTreeEntry.BLOCK_CONTAINER_DEPTH) << 1);
-            mostRecentWorldReady = depth > 0
+            boolean worldReady = depth > 0
                     && mostRecentMaxBounds.x > mostRecentMinBounds.x
                     && mostRecentMaxBounds.y > mostRecentMinBounds.y
                     && mostRecentMaxBounds.z > mostRecentMinBounds.z;
+
+            if (worldReady != mostRecentWorldReady) {
+                Photonics.LOGGER.info(
+                        "Photonics world tracing: ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}",
+                        worldReady,
+                        depth,
+                        mostRecentMinBlock,
+                        mostRecentMaxBlock,
+                        mostRecentMinBounds,
+                        mostRecentMaxBounds
+                );
+            }
+            mostRecentWorldReady = worldReady;
 
             uploadDone.signalAll();
         } finally {
