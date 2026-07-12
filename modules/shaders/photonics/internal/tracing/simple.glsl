@@ -19,8 +19,8 @@ bool trace_light_vis(
     float light_dist = length(to_light);
     if (light_dist <= 0.0001f) return true;
 
-    vec3 trace_direction = ph_signed_nudge(direction);
-    vec3 unit_direction = normalize(trace_direction);
+    vec3 trace_direction = normalize(ph_signed_nudge(direction));
+    vec3 unit_direction = trace_direction;
     float normal_length_sq = dot(surface_normal, surface_normal);
     vec3 unit_normal = normal_length_sq > 0.000001f
         ? surface_normal * inversesqrt(normal_length_sq)
@@ -37,7 +37,6 @@ bool trace_light_vis(
     ray.iterations = max(max_iterations, 1);
 
     vec4 running_tint_color = vec4(0.0f);
-    vec3 start_block = floor(rt_pos);
     vec3 light_block = floor(light_rt_pos);
 
     while (ray_iter_has_next_block(ray, light_rt_pos)) {
@@ -47,11 +46,6 @@ bool trace_light_vis(
         vec3 result_pos = ray_result_position(result);
         vec3 result_block = floor(result_pos);
         float result_dist = length(result_pos - rt_pos);
-
-        if (all(equal(result_block, start_block))) {
-            ray_iter_skip_block(ray);
-            continue;
-        }
 
         if (all(equal(result_block, light_block)) || result_dist >= light_dist - 0.01f)
             break;

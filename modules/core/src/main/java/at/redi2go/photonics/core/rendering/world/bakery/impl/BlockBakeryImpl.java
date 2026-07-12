@@ -4,6 +4,7 @@ import at.redi2go.photonics.api.mc.Id;
 import at.redi2go.photonics.api.mc.core.IBlockPos;
 import at.redi2go.photonics.api.mc.world.level.IBlockAndTintGetter;
 import at.redi2go.photonics.api.mc.world.level.IBlockState;
+import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.rendering.world.bakery.BaryPos;
 import at.redi2go.photonics.core.rendering.world.bakery.BlockBakery;
 import at.redi2go.photonics.core.rendering.world.bakery.BlockBuilder;
@@ -23,6 +24,10 @@ import org.joml.Vector3i;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.BitSet;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -52,7 +57,7 @@ public class BlockBakeryImpl implements BlockBakery {
             IBlockState blockState,
             IBlockAndTintGetter blockAndTintGetter
     ) {
-        var builder = new MeshResultImpl(pollMeshArray());
+        var builder = new MeshResultImpl(pollMeshArray(), diagnosticModelName(blockState));
 
         mesher.meshBlock(
                 meshState,
@@ -67,6 +72,15 @@ public class BlockBakeryImpl implements BlockBakery {
             builder.close();
             return null;
         } else return builder;
+    }
+
+    private static @Nullable String diagnosticModelName(IBlockState blockState) {
+        String description = String.valueOf(blockState);
+        String normalized = description.toLowerCase(Locale.ROOT);
+
+        return normalized.contains("trapdoor") || normalized.contains("fence")
+                ? description
+                : null;
     }
 
     public class MeshResultImpl implements BlockBuilder, MeshResult {
@@ -85,16 +99,21 @@ public class BlockBakeryImpl implements BlockBakery {
         private long vertexHash = 0;
         private int vertexIndex = -1;
 
+        private final @Nullable String diagnosticName;
+        private @Nullable VoxelDiagnostic activeDiagnostic;
+
         private boolean open = true;
 
         private final ArrayDeque<StateChange> stateChanges = new ArrayDeque<>();
 
-        public MeshResultImpl(int[] meshData) {
+        public MeshResultImpl(int[] meshData, @Nullable String diagnosticName) {
             this.meshData = meshData;
+            this.diagnosticName = diagnosticName;
         }
 
         @Override
         public long vertexHash() {
+            hashLastVertex();
             return vertexHash;
         }
 
@@ -165,6 +184,8 @@ public class BlockBakeryImpl implements BlockBakery {
         public BlockBuilder useTexture(AtlasTexture texture) {
             if (currentTexture == texture) return this;
 
+            hashLastVertex();
+
             currentTexture = texture;
             currentTextureHash = texture.hashCode();
             submitState(new TextureChange(texture));
@@ -175,6 +196,8 @@ public class BlockBakeryImpl implements BlockBakery {
         @Override
         public BlockBuilder useBlockId(int blockId) {
             if (currentBlockId == blockId) return this;
+
+            hashLastVertex();
 
             currentBlockId = blockId;
             submitState(new BlockIdChange(blockId));
@@ -198,6 +221,7 @@ public class BlockBakeryImpl implements BlockBakery {
             long hash = vertexHash;
 
             hash = hash * 31 + currentTextureHash;
+            hash = hash * 31 + currentBlockId;
 
             hash = hash * 31 + intAt(index);
             hash = hash * 31 + intAt(index + 1);
@@ -209,6 +233,7 @@ public class BlockBakeryImpl implements BlockBakery {
             hash = hash * 31 + intAt(index + 5);
 
             vertexHash = hash;
+            vertexIndex = -1;
         }
 
         private static final int FP_ZERO = Float.floatToRawIntBits(0);
@@ -263,9 +288,20 @@ public class BlockBakeryImpl implements BlockBakery {
         public void bake(VoxelConsumer voxelConsumer) throws InterruptedException {
             RasterState rasterState = new RasterState();
             Vertex[] tri = new Vertex[3];
+            VoxelDiagnostic diagnostic = diagnosticName == null ? null : new VoxelDiagnostic(diagnosticName);
+            boolean complete = false;
 
-            while (hasNext())
-                bakeQuad(rasterState, tri, voxelConsumer);
+            activeDiagnostic = diagnostic;
+            try {
+                while (hasNext())
+                    bakeQuad(rasterState, tri, voxelConsumer);
+
+                complete = true;
+            } finally {
+                activeDiagnostic = null;
+                if (diagnostic != null)
+                    diagnostic.log(vertexHash(), complete);
+            }
         }
 
         private void bakeQuad(
@@ -357,6 +393,9 @@ public class BlockBakeryImpl implements BlockBakery {
 
                         textureData = textureData.withTint(tint);
 
+                        if (activeDiagnostic != null)
+                            activeDiagnostic.record(x, y, z, textureData);
+
                         if (VoxelColor.a(textureData.color()) != 0)
                             consumer.acceptVoxel(x, y, z, normalIndex, textureData);
                     }
@@ -423,6 +462,117 @@ public class BlockBakeryImpl implements BlockBakery {
             float v = Math.fma(w1, tri[2].v(), Math.fma(w2, tri[1].v(), w3 * tri[0].v()));
 
             return texture.sample(blockId, u, v);
+        }
+    }
+
+    private static final class VoxelDiagnostic {
+        private final String label;
+        private final Map<Vector3i, BitSet> occupancyByPart = new HashMap<>();
+
+        private int samples;
+        private int alphaZero;
+        private int alphaPartial;
+        private int alphaOpaque;
+        private int minX = Integer.MAX_VALUE;
+        private int minY = Integer.MAX_VALUE;
+        private int minZ = Integer.MAX_VALUE;
+        private int maxX = Integer.MIN_VALUE;
+        private int maxY = Integer.MIN_VALUE;
+        private int maxZ = Integer.MIN_VALUE;
+
+        private VoxelDiagnostic(String label) {
+            this.label = label;
+        }
+
+        private void record(int x, int y, int z, TextureData textureData) {
+            samples++;
+
+            int alpha = VoxelColor.a(textureData.color());
+            if (alpha == 0) {
+                alphaZero++;
+                return;
+            }
+
+            if (alpha == 255)
+                alphaOpaque++;
+            else
+                alphaPartial++;
+
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            minZ = Math.min(minZ, z);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+            maxZ = Math.max(maxZ, z);
+
+            Vector3i part = new Vector3i(
+                    Math.floorDiv(x, 16),
+                    Math.floorDiv(y, 16),
+                    Math.floorDiv(z, 16)
+            );
+            BitSet occupancy = occupancyByPart.computeIfAbsent(part, ignored -> new BitSet(4096));
+            int localX = Math.floorMod(x, 16);
+            int localY = Math.floorMod(y, 16);
+            int localZ = Math.floorMod(z, 16);
+            occupancy.set(localX | (localZ << 4) | (localY << 8));
+        }
+
+        private void log(long vertexHash, boolean complete) {
+            int voxelCount = occupancyByPart.values().stream().mapToInt(BitSet::cardinality).sum();
+            String aabb = voxelCount == 0
+                    ? "empty"
+                    : "[" + minX + "," + minY + "," + minZ + "]-[" + maxX + "," + maxY + "," + maxZ + "]";
+
+            Photonics.LOGGER.info(
+                    "Photonics voxel diagnostic: state={} vertexHash={} complete={} samples={} alphaZero={} alphaPartial={} alphaOpaque={} voxels={} aabb={} parts={}",
+                    label,
+                    Long.toUnsignedString(vertexHash, 16),
+                    complete,
+                    samples,
+                    alphaZero,
+                    alphaPartial,
+                    alphaOpaque,
+                    voxelCount,
+                    aabb,
+                    occupancyByPart.keySet()
+            );
+
+            for (var entry : occupancyByPart.entrySet()) {
+                Photonics.LOGGER.info(
+                        "Photonics voxel occupancy: state={} part={} slices={}",
+                        label,
+                        entry.getKey(),
+                        slices(entry.getValue())
+                );
+            }
+        }
+
+        private static String slices(BitSet occupancy) {
+            StringBuilder result = new StringBuilder();
+
+            for (int y = 0; y < 16; y++) {
+                StringBuilder layer = new StringBuilder();
+                boolean occupied = false;
+
+                for (int z = 0; z < 16; z++) {
+                    int row = 0;
+                    for (int x = 0; x < 16; x++) {
+                        if (occupancy.get(x | (z << 4) | (y << 8)))
+                            row |= 1 << x;
+                    }
+
+                    occupied |= row != 0;
+                    if (z > 0) layer.append('/');
+                    layer.append(String.format(Locale.ROOT, "%04x", row));
+                }
+
+                if (occupied) {
+                    if (!result.isEmpty()) result.append(';');
+                    result.append('y').append(y).append('=').append(layer);
+                }
+            }
+
+            return result.toString();
         }
     }
 }
