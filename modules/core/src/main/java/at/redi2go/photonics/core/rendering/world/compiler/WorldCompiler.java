@@ -77,6 +77,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
     private int mostRecentBlockContainerScale = 0;
     private boolean mostRecentWorldReady = false;
+    private boolean mostRecentBlockBoundsFallback = false;
 
     private final Thread compilerThread;
 
@@ -271,33 +272,44 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             paletteTexture.upload();
             uniformUpdater.updateAll();
 
-            mostRecentMinBounds = new Vector3f(treeManager.minBounds());
-            mostRecentMaxBounds = new Vector3f(treeManager.maxBounds());
+            var treeMinBounds = treeManager.minBounds();
+            var treeMaxBounds = treeManager.maxBounds();
+            mostRecentMinBounds = new Vector3f(treeMinBounds);
+            mostRecentMaxBounds = new Vector3f(treeMaxBounds);
 
             mostRecentOrigin = offset == null ? new WorldOrigin(0, 0, 0) : offset;
 
-            mostRecentMinBlock = new Vector3f(minBlock);
-            mostRecentMaxBlock = new Vector3f(maxBlock);
+            boolean compiledBlockBoundsValid = maxBlock.x > minBlock.x
+                    && maxBlock.y > minBlock.y
+                    && maxBlock.z > minBlock.z;
+            boolean blockBoundsFallback = !compiledBlockBoundsValid;
+            mostRecentMinBlock = new Vector3f(blockBoundsFallback ? treeMinBounds : minBlock);
+            mostRecentMaxBlock = new Vector3f(blockBoundsFallback ? treeMaxBounds : maxBlock);
 
             int depth = treeManager.depth();
             mostRecentBlockContainerScale = depth == 0 ? 0 : 21 - (depth - (VoxelTreeEntry.BLOCK_CONTAINER_DEPTH) << 1);
             boolean worldReady = depth > 0
+                    && mostRecentMaxBlock.x > mostRecentMinBlock.x
+                    && mostRecentMaxBlock.y > mostRecentMinBlock.y
+                    && mostRecentMaxBlock.z > mostRecentMinBlock.z
                     && mostRecentMaxBounds.x > mostRecentMinBounds.x
                     && mostRecentMaxBounds.y > mostRecentMinBounds.y
                     && mostRecentMaxBounds.z > mostRecentMinBounds.z;
 
-            if (worldReady != mostRecentWorldReady) {
+            if (worldReady != mostRecentWorldReady || blockBoundsFallback != mostRecentBlockBoundsFallback) {
                 Photonics.LOGGER.info(
-                        "Photonics world tracing: ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}",
+                        "Photonics world tracing: ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, boundsSource={}",
                         worldReady,
                         depth,
                         mostRecentMinBlock,
                         mostRecentMaxBlock,
                         mostRecentMinBounds,
-                        mostRecentMaxBounds
+                        mostRecentMaxBounds,
+                        blockBoundsFallback ? "tree" : "compiled"
                 );
             }
             mostRecentWorldReady = worldReady;
+            mostRecentBlockBoundsFallback = blockBoundsFallback;
 
             uploadDone.signalAll();
         } finally {
