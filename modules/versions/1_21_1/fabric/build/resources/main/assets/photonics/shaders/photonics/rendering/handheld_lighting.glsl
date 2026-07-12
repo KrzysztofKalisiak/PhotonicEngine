@@ -2,7 +2,8 @@
 #include "/photonics/light.glsl"
 #include "/photonics/tracing.glsl"
 
-#define PH_HANDHELD_RAY_ITERATIONS 40
+// Match placed-light visibility so long outdoor rays do not fail closed early.
+#define PH_HANDHELD_RAY_ITERATIONS 100
 
 //ph_required: uniform vec3 relativeEyePosition;
 
