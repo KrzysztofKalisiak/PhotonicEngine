@@ -8,11 +8,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.state.BlockState;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class IrisBlockMaterialBridge {
-    private static final AtomicBoolean BRIDGE_LOGGED = new AtomicBoolean();
-    private static final AtomicBoolean EMISSIVE_LOGGED = new AtomicBoolean();
+    private static final Set<String> BRIDGE_LOGGED = ConcurrentHashMap.newKeySet();
+    private static final Set<String> EMISSIVE_LOGGED = ConcurrentHashMap.newKeySet();
 
     private IrisBlockMaterialBridge() {
     }
@@ -43,9 +44,9 @@ public final class IrisBlockMaterialBridge {
                 blockPos.getZ()
         );
 
-        if (BRIDGE_LOGGED.compareAndSet(false, true)) {
+        if (BRIDGE_LOGGED.add(renderPath)) {
             Photonics.LOGGER.info(
-                    "Photonics v19 Iris material bridge active: path={}, block={}, shaderPackId={}, emission={}",
+                    "Photonics v20 Iris material bridge active: path={}, block={}, shaderPackId={}, emission={}",
                     renderPath,
                     BuiltInRegistries.BLOCK.getKey(blockState.getBlock()),
                     shaderPackId,
@@ -53,9 +54,9 @@ public final class IrisBlockMaterialBridge {
             );
         }
 
-        if (lightEmission > 0 && EMISSIVE_LOGGED.compareAndSet(false, true)) {
+        if (lightEmission > 0 && EMISSIVE_LOGGED.add(renderPath)) {
             Photonics.LOGGER.info(
-                    "Photonics v19 emissive material captured: path={}, block={}, shaderPackId={}, emission={}",
+                    "Photonics v20 emissive material captured: path={}, block={}, shaderPackId={}, emission={}",
                     renderPath,
                     BuiltInRegistries.BLOCK.getKey(blockState.getBlock()),
                     shaderPackId,

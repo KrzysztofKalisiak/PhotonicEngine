@@ -31,8 +31,10 @@ import org.joml.Vector4f;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -59,6 +61,8 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     protected LightList lights;
     protected LightList mostRecentLights;
+    private LightList sectionLights;
+    private long externalLightsRevision = -1L;
 
     private int lastDiagnosticEligibleLights = -1;
     private int lastDiagnosticSelectedLights = -1;
@@ -118,7 +122,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
                 if (needsUpload) {
                     var newLights = trimLights();
-                    storeLights(newLights);
+                    storeSectionLights(newLights);
                 }
             } catch (InterruptedException e) {
                 if (!needsReload) return;
@@ -289,40 +293,96 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     protected abstract void prepareUpload();
 
-    private void storeLights(LightList lights) throws InterruptedException {
+    private void storeSectionLights(LightList sectionLights) throws InterruptedException {
         lock.lockInterruptibly();
 
         try {
-            if (Objects.equals(this.lights, lights)) return;
-
-            int previousSize = this.lights == null ? 0 : this.lights.size();
-            this.lights = lights;
-            var worldOrigin = lights.origin();
-
-            if (previousSize != lights.size())
-                Photonics.LOGGER.info("Photonics light list pending: {} -> {}", previousSize, lights.size());
-
-            for (int i = 0; i < lights.size(); i++) {
-                var light = lights.get(i);
-
-                storeLight(
-                        i,
-                        light.lightInfo().toVector4Array(
-                                toVector3f(worldOrigin.applyOffset(light.pos())),
-                                light.blockId()
-                        )
-                );
-            }
-
-            if (mostRecentLights != null)
-                lights.createMapping(mostRecentLights)
-                        .forEachIndex(this::storeMapping);
-
-            prepareUpload();
-            uniformUpdater.updateNextFrame();
+            this.sectionLights = sectionLights;
+            var externalSnapshot = ExternalLightList.snapshot();
+            externalLightsRevision = externalSnapshot.revision();
+            storeLightsLocked(combineLights(sectionLights, externalSnapshot));
         } finally {
             lock.unlock();
         }
+    }
+
+    private LightList combineLights(LightList sectionLights, ExternalLightList.Snapshot externalSnapshot) {
+        var externalLights = externalSnapshot.lights();
+        var replacedBlockPositions = externalSnapshot.replacedBlockPositions();
+
+        if (externalLights.isEmpty() && replacedBlockPositions.isEmpty())
+            return sectionLights == null
+                    ? new LightList(new TracedLightPosition[0], WorldOrigin.get())
+                    : sectionLights;
+
+        var combined = new TracedLightPosition[
+                (sectionLights == null ? 0 : sectionLights.size()) + externalLights.size()
+        ];
+        int size = 0;
+        Set<TracedLightPosition> knownLights = new HashSet<>();
+
+        if (sectionLights != null) {
+            for (var light : sectionLights) {
+                if (replacedBlockPositions.contains(light.blockPos()))
+                    continue;
+
+                combined[size++] = light;
+                knownLights.add(light);
+            }
+        }
+
+        for (var light : externalLights) {
+            if (knownLights.add(light))
+                combined[size++] = light;
+        }
+
+        if (size != combined.length)
+            combined = Arrays.copyOf(combined, size);
+
+        Vector3d cameraPosition = Minecraft.getCameraPos();
+        int mod = (int) System.nanoTime();
+        Arrays.sort(
+                combined,
+                Comparator.comparingDouble(light -> -light.getLuminance(cameraPosition, mod))
+        );
+
+        if (combined.length > maxLights)
+            combined = Arrays.copyOf(combined, maxLights);
+
+        return new LightList(
+                combined,
+                sectionLights == null ? WorldOrigin.get() : sectionLights.origin()
+        );
+    }
+
+    private void storeLightsLocked(LightList lights) {
+        if (Objects.equals(this.lights, lights)) return;
+
+        int previousSize = this.lights == null ? 0 : this.lights.size();
+        this.lights = lights;
+        var worldOrigin = lights.origin();
+
+        if (previousSize != lights.size())
+            Photonics.LOGGER.info("Photonics light list pending: {} -> {}", previousSize, lights.size());
+
+        for (int i = 0; i < lights.size(); i++) {
+            var light = lights.get(i);
+
+            storeLight(
+                    i,
+                    light.lightInfo().toVector4Array(
+                            toVector3f(worldOrigin.applyOffset(light.pos())),
+                            light.blockId()
+                    )
+            );
+        }
+
+        if (mostRecentLights != null)
+            lights.createMapping(mostRecentLights)
+                    .forEachIndex(this::storeMapping);
+
+        prepareUpload();
+        uniformUpdater.updateNextFrame();
     }
 
     // Upload
@@ -334,6 +394,12 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         lock.lock();
 
         try {
+            var externalSnapshot = ExternalLightList.snapshot();
+            if (externalSnapshot.revision() != externalLightsRevision) {
+                externalLightsRevision = externalSnapshot.revision();
+                storeLightsLocked(combineLights(sectionLights, externalSnapshot));
+            }
+
             upload();
             uniformUpdater.updateAll();
 
@@ -386,4 +452,5 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     private static Vector3f toVector3f(Vector3dc vector) {
         return new Vector3f((float) vector.x(), (float) vector.y(), (float) vector.z());
     }
+
 }

@@ -1,7 +1,6 @@
 package at.redi2go.photonics.core.rendering.lights;
 
 import at.redi2go.photonics.core.rendering.WorldOrigin;
-import org.joml.Vector3i;
 
 import java.util.AbstractList;
 import java.util.Arrays;
@@ -71,24 +70,27 @@ public class LightList extends AbstractList<TracedLightPosition> {
     }
 
     public static class Mapping {
-        private final Map<Vector3i, LightInvalidation> mapping = new HashMap<>();
+        private final Map<TracedLightPosition, LightInvalidation> mapping = new HashMap<>();
 
         private Mapping() {
 
         }
 
-        private LightInvalidation createInvalidation(Vector3i blockPos) {
-            return mapping.computeIfAbsent(blockPos, LightInvalidation::new);
+        private LightInvalidation createInvalidation(TracedLightPosition light) {
+            return mapping.computeIfAbsent(
+                    light,
+                    ignored -> new LightInvalidation(light.blockPos())
+            );
         }
 
         private void addBefore(TracedLightPosition light, int index) {
-            var invalidation = createInvalidation(light.blockPos());
+            var invalidation = createInvalidation(light);
             invalidation.before = light.lightInfo();
             invalidation.beforeIndex = index;
         }
 
         private void addAfter(TracedLightPosition light, int index) {
-            var invalidation = createInvalidation(light.blockPos());
+            var invalidation = createInvalidation(light);
             invalidation.after = light.lightInfo();
             invalidation.afterIndex = index;
         }

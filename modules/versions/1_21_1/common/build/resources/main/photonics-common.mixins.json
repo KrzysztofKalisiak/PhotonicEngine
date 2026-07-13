@@ -11,6 +11,7 @@
     "iris.ShaderPropertiesMixin",
     "iris.extension.LevelRendererMixin",
     "iris.extension.RenderSectionManagerMixin",
+    "iris.compat.ContraptionLightsSubLevelVeilLightingMixin",
     "iris.compat.SectionCompilerMixin",
     "iris.compat.SableSingleSubLevelRenderDataMixin",
 
