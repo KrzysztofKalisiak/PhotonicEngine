@@ -42,7 +42,7 @@ vec3 ph_get_mirrored_pos(vec3 pos, vec3 dir, bool range_check) {
 
 vec3 ph_to_norm_pos(vec3 position, vec3 ray_direction) {
     return ph_get_mirrored_pos(
-        (position / world_tree_size) + 1.0f
+        ((position - world_tree_min) / world_tree_size) + 1.0f
         , ray_direction,
         true
     );

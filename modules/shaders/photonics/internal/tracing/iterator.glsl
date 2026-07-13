@@ -28,7 +28,9 @@ void _ray_iter_setup(inout RayIterator ray) {
         return;
     }
     
-    ray.position+= t0 * ray.direction;
+    // Enter just inside the half-open tree bounds. An exact high-face entry
+    // normalizes to 2.0 and violates the float-bit traversal's [1, 2) range.
+    ray.position+= (max(t0, 0.0f) + 0.00001f) * ray.direction;
     ray.state = PH_RAY_STATE_READY;
 }
 
@@ -149,7 +151,7 @@ void _ray_iter_trace_next(inout RayIterator ray, vec3 target) {
     }
 
     pos = ph_get_mirrored_pos(pos, ray.direction, false);
-    ray.position = (pos - 1.0f) * world_tree_size;
+    ray.position = (pos - 1.0f) * world_tree_size + world_tree_min;
 
     if (ray.state == PH_RAY_STATE_HAS_HIT) {
         uint palette_entry;
