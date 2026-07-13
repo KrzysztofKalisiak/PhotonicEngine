@@ -6,7 +6,9 @@ import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 
 public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     private static final boolean DISABLE_ACTIVE_PIPELINE_FOR_DIAGNOSTICS = false;
-    private static final int MAX_RESTIR_INITIAL_SAMPLES = 4;
+    private static final int MIN_RESTIR_INITIAL_SAMPLES = 8;
+    private static final int MAX_RESTIR_INITIAL_SAMPLES = 32;
+    private static final int MIN_RESTIR_DENOISER_PASSES = 5;
 
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
     public float renderScale = PhotonicsProperties.DEFAULT_RENDER_SCALE;
@@ -107,7 +109,10 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public int getRestirInitialSamples() {
-        return Math.min(restirInitialSamples, MAX_RESTIR_INITIAL_SAMPLES);
+        return Math.max(
+                MIN_RESTIR_INITIAL_SAMPLES,
+                Math.min(restirInitialSamples, MAX_RESTIR_INITIAL_SAMPLES)
+        );
     }
 
     @Override
@@ -137,6 +142,6 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public int getRestirDenoiserPasses() {
-        return 0;
+        return Math.max(restirDenoiserPasses, MIN_RESTIR_DENOISER_PASSES);
     }
 }

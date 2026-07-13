@@ -4,7 +4,7 @@
 
 //ph_required: uniform int atrous_iteration;
 //ph_required: uniform sampler2D depthtex0;
-//ph_Required: uniform float near, far;
+//ph_required: uniform float near, far;
 
 #include "/photonics/rendering/frag/common.glsl"
 #include "/photonics/rendering/restir/restir.glsl"
@@ -21,6 +21,14 @@ vec3 ph_get_normal_for_denoise(ivec2 texel) {
     return frag_is_hand ? frag_data_geo_normal(frag) : frag_data_tex_normal(frag);
 }
 
+ivec2 ph_get_denoise_depth_texel(ivec2 texel) {
+    return clamp(
+        SVGF_DEPTH_MODIFIER(texel),
+        ivec2(0),
+        textureSize(depthtex0, 0) - ivec2(1)
+    );
+}
+
 void main() {
     denoise_out = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -31,7 +39,8 @@ void main() {
     if (!frag_is_hand && atrous_iteration >= PH_RESTIR_DENOISER_PASSES) return;
 
     int step_width = 1 << atrous_iteration;
-    float depth = texelFetch(depthtex0, SVGF_DEPTH_MODIFIER(frag_tex_coord), 0).r;
+    float depth = texelFetch(depthtex0, ph_get_denoise_depth_texel(frag_tex_coord), 0).r;
+    ivec2 max_texel = textureSize(prev_denoise_result, 0) - ivec2(1);
 
     // Center fetches
     #define C0 denoise_out.rgb
@@ -51,7 +60,11 @@ void main() {
     float V_sum = 0.0f;
 
     for (int i = 0; i < 9; ++i) {
-        ivec2 p = frag_tex_coord + step_width * offset[i];
+        ivec2 p = clamp(
+            frag_tex_coord + step_width * offset[i],
+            ivec2(0),
+            max_texel
+        );
 
         vec4 sample_data = texelFetch(prev_denoise_result, p, 0);
         #define Ci sample_data.rgb
@@ -59,7 +72,7 @@ void main() {
 
         float Li = ph_luminance(Ci);
         vec3  Ni = ph_get_normal_for_denoise(p);
-        float Di = svgf_linearize_depth(texelFetch(depthtex0, SVGF_DEPTH_MODIFIER(p), 0).x);
+        float Di = svgf_linearize_depth(texelFetch(depthtex0, ph_get_denoise_depth_texel(p), 0).x);
         const float k = kernel[i];
 
         // Color (luminance) weight

@@ -9,6 +9,8 @@
 layout(location = 0) out vec4 denoise_out;
 
 void main() {
+    ivec2 max_texel = textureSize(restir_lighting, 0) - ivec2(1);
+
     // Firefly rejection
     vec4 center = texelFetch(restir_lighting, frag_tex_coord, 0);
     vec3 maxNeighbour = vec3(0.0f);
@@ -16,7 +18,7 @@ void main() {
         for (int y = -1; y <= 1; y++) {
             if (x == 0 && y == 0) continue;
 
-            ivec2 pos = frag_tex_coord + ivec2(x, y);
+            ivec2 pos = clamp(frag_tex_coord + ivec2(x, y), ivec2(0), max_texel);
             vec3 color = texelFetch(restir_lighting, pos, 0).rgb;
             maxNeighbour = max(maxNeighbour, color);
         }
@@ -31,7 +33,7 @@ void main() {
     float weight_sum = 0.0f;
 
     for (int i = 0; i < 9; i++) {
-        ivec2 p = frag_tex_coord + offset[i];
+        ivec2 p = clamp(frag_tex_coord + offset[i], ivec2(0), max_texel);
 
         float variance = texelFetch(restir_lighting_variance, p, 0).z;
         float kernel_weight = kernel[i];
