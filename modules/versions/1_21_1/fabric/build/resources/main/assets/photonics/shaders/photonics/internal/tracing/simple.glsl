@@ -53,7 +53,15 @@ bool trace_light_vis(
     float endpoint_progress = dot(receiver_endpoint - trace_start, trace_direction);
     bool reached_receiver = endpoint_progress <= 0.0001f;
 
-    while (!reached_receiver && ray_iter_has_next(ray)) {
+    while (!reached_receiver) {
+        if (!ray_iter_has_next(ray)) {
+            // A moving source or a transformed receiver can be absent from the
+            // static world octree. No hit means that no represented occluder
+            // remains on this ray, so incomplete endpoint data must fail open.
+            reached_receiver = true;
+            break;
+        }
+
         RayResult result = ray_iter_next(ray);
         if (!ray_result_is_hit(result)) break;
 
