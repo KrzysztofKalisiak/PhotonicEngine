@@ -33,4 +33,8 @@ public class RegionIdManager {
 
         unusedRegions.add(result);
     }
+
+    public int size() {
+        return regions.size();
+    }
 }

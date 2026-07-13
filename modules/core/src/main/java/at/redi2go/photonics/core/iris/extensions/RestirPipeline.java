@@ -29,11 +29,22 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     ) {
         super(properties, atlasDownloader, handheldItemSupplier);
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v17 finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v18 diagnostics baseline; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
         this.denoiserPasses = requestedDenoiserPasses != 0 ? Math.max(requestedDenoiserPasses, 7) : 0;
+
+        Photonics.LOGGER.info(
+                "Photonics ReSTIR configuration v18: directCandidatesPerPixel={}, directTemporalSampleCap={}, spatialCandidates={}, requestedDenoiserPasses={}, effectiveDenoiserPasses={}, softShadows={}, combinedGi={}",
+                properties.getRestirInitialSamples(),
+                20 * properties.getRestirInitialSamples(),
+                properties.getRestirSpatialReuseSamples(),
+                requestedDenoiserPasses,
+                denoiserPasses,
+                properties.useRestirSoftShadows(),
+                properties.useRestirCombinedGi()
+        );
 
         var restirFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment("restir_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirEnabled)

@@ -1,5 +1,6 @@
 package at.redi2go.photonics.common.iris.pipeline.framebuffer;
 
+import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.iris.pipeline.texture.ISamplerHolder;
 import at.redi2go.photonics.impl.mc.blaze3d.opengl.textures.IGlTexture;
 import com.google.common.collect.ImmutableList;
@@ -22,14 +23,17 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
     private List<FramebufferAttachment> attachments;
 
     private final FramebufferSize sizeSupplier;
+    private final String diagnosticRole;
     private final Vector2i currentSize = new Vector2i(-1, -1);
 
     public SingleFramebuffer(
             List<FramebufferAttachment> attachments,
-            FramebufferSize sizeSupplier
+            FramebufferSize sizeSupplier,
+            String diagnosticRole
     ) {
         this.attachments = ImmutableList.copyOf(attachments);
         this.sizeSupplier = sizeSupplier;
+        this.diagnosticRole = diagnosticRole;
 
         setDrawBuffers();
     }
@@ -80,6 +84,18 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
         return attachments;
     }
 
+    FramebufferAttachment attachment(String name) {
+        for (var attachment : attachments) {
+            if (attachment.name().equals(name)) return attachment;
+        }
+
+        return null;
+    }
+
+    Vector2ic currentSize() {
+        return currentSize;
+    }
+
     @Override
     public Vector2ic viewportSize() {
         recalculateSizes();
@@ -118,12 +134,30 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
         var newSize = sizeSupplier.get();
         if (currentSize.equals(newSize)) return;
 
+        var previousSize = new Vector2i(currentSize);
         currentSize.set(newSize);
         for (FramebufferAttachment attachment : attachments)
             attachment.resize(newSize);
 
         setDrawBuffers();
         clearAttachments();
+
+        var historyAttachments = attachments.stream()
+                .filter(FramebufferAttachment::createPrevSampler)
+                .map(FramebufferAttachment::name)
+                .toList();
+        if (!historyAttachments.isEmpty()) {
+            Photonics.LOGGER.info(
+                    "Photonics history reset v18: reason={}, buffer={}, attachments={}, size={}x{} -> {}x{}",
+                    previousSize.x < 0 ? "initial-clear" : "viewport-resize",
+                    diagnosticRole,
+                    historyAttachments,
+                    previousSize.x,
+                    previousSize.y,
+                    newSize.x(),
+                    newSize.y()
+            );
+        }
     }
 
     @Override

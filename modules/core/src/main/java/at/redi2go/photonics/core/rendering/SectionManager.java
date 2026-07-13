@@ -363,6 +363,30 @@ public class SectionManager implements RenderingComponent {
             }
         }
 
+        public int pendingCount() {
+            lock.lock();
+
+            try {
+                return size;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public int pendingUnloadCount() {
+            lock.lock();
+
+            try {
+                return unloadedQueue.size();
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public int trackedSectionCount() {
+            return notEmptySections.size();
+        }
+
 
         public void offer(Vector3i sectionCoord, V element) throws InterruptedException {
             lock.lockInterruptibly();

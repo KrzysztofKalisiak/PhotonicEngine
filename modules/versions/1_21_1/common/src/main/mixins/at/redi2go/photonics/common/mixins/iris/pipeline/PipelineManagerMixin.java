@@ -50,6 +50,9 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
     @Unique
     private final List<DeferredIrisRenderer> renderers = new ArrayList<>();
 
+    @Unique
+    private long photonicsGeneration = 0;
+
     @Inject(method = "preparePipeline", at = @At("HEAD"))
     private void preparePipeline(NamespacedId currentDimension, CallbackInfoReturnable<WorldRenderingPipeline> cir) {
         if (photonics != null) return;
@@ -88,6 +91,12 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
                 AtlasDownloaderImpl::new,
                 HandheldLightSupplierImpl::new,
                 new IrisFactoryImpl(renderers)
+        );
+        photonicsGeneration++;
+        Photonics.LOGGER.info(
+                "Photonics history reset v18: reason=pipeline-created, generation={}, dimension={}",
+                photonicsGeneration,
+                currentDimension
         );
     }
 
@@ -157,6 +166,10 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
     @Inject(method = "destroyPipeline", at = @At("HEAD"))
     private void destroyEverything(CallbackInfo ci) {
         if (photonics != null) {
+            Photonics.LOGGER.info(
+                    "Photonics history reset v18: reason=pipeline-destroyed, generation={}",
+                    photonicsGeneration
+            );
             photonics.close();
             photonics = null;
 

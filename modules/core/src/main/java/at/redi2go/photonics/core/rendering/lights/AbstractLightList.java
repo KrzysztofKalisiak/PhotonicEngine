@@ -60,6 +60,10 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     protected LightList lights;
     protected LightList mostRecentLights;
 
+    private int lastDiagnosticEligibleLights = -1;
+    private int lastDiagnosticSelectedLights = -1;
+    private int lastDiagnosticSections = -1;
+
     @SuppressWarnings("UnstableApiUsage")
     public AbstractLightList(
             SectionManager sectionManager,
@@ -244,13 +248,36 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                 Comparator.comparingDouble(light -> -light.getLuminance(cameraPosition, mod))
         );
 
-        if (loadedLights.length < maxLights) {
+        int selectedLights = Math.min(loadedLights.length, maxLights);
+        int sectionCount = tracedLightPositions.keySet().size();
+        logCandidateDiagnostics(loadedLights.length, selectedLights, sectionCount);
+
+        if (loadedLights.length < maxLights)
             return new LightList(loadedLights, WorldOrigin.get());
-        }
 
         return new LightList(
                 Arrays.copyOf(loadedLights, maxLights),
                 WorldOrigin.get()
+        );
+    }
+
+    private void logCandidateDiagnostics(int eligibleLights, int selectedLights, int sectionCount) {
+        if (eligibleLights == lastDiagnosticEligibleLights
+                && selectedLights == lastDiagnosticSelectedLights
+                && sectionCount == lastDiagnosticSections)
+            return;
+
+        lastDiagnosticEligibleLights = eligibleLights;
+        lastDiagnosticSelectedLights = selectedLights;
+        lastDiagnosticSections = sectionCount;
+
+        Photonics.LOGGER.info(
+                "Photonics light candidates v18: eligible={}, selected={}, maxLights={}, lightSections={}, capped={}",
+                eligibleLights,
+                selectedLights,
+                maxLights,
+                sectionCount,
+                eligibleLights > selectedLights
         );
     }
 

@@ -41,6 +41,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     public static final int MAX_SECTIONS_PER_RUN = 48;
 
     private static final int THREAD_POOL_SIZE = 3;
+    private static final long SETTLED_DIAGNOSTIC_DELAY_NANOS = 2_000_000_000L;
     private static final ExecutorService THREAD_POOL;
 
     private final SectionManager.TaskQueue<ChunkCompiler.BuildResult> taskQueue;
@@ -79,6 +80,20 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     private boolean mostRecentWorldReady = false;
     private boolean mostRecentBlockBoundsFallback = false;
 
+    private long compilationRevision = 0;
+    private long mostRecentCompilationRevision = 0;
+    private long lastObservedCompilationRevision = -1;
+    private long lastCompilationChangeNanos = 0;
+    private boolean settledDiagnosticLogged = false;
+
+    private int mostRecentCompiledSections = 0;
+    private int mostRecentTrackedSections = 0;
+    private int mostRecentBuiltBatch = 0;
+    private int mostRecentUnloadedBatch = 0;
+    private int mostRecentPendingBuilds = 0;
+    private int mostRecentPendingUnloads = 0;
+    private double mostRecentCompilationMillis = 0.0;
+
     private final Thread compilerThread;
 
     public WorldCompiler(
@@ -114,6 +129,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         try {
             while (!Thread.interrupted()) {
                 taskQueue.awaitTask();
+                long compilationStart = System.nanoTime();
 
                 var unloadedSections = taskQueue.drainUnloadQueue();
                 if (!unloadedSections.isEmpty())
@@ -131,6 +147,17 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                 if (!unloadedSections.isEmpty() || !builtSections.isEmpty()) {
                     stopUpload();
                     writeSections();
+
+                    compilationRevision++;
+                    mostRecentCompilationRevision = compilationRevision;
+                    mostRecentCompiledSections = regionIds.size();
+                    mostRecentTrackedSections = taskQueue.trackedSectionCount();
+                    mostRecentBuiltBatch = builtSections.size();
+                    mostRecentUnloadedBatch = unloadedSections.size();
+                    mostRecentPendingBuilds = taskQueue.pendingCount();
+                    mostRecentPendingUnloads = taskQueue.pendingUnloadCount();
+                    mostRecentCompilationMillis = (System.nanoTime() - compilationStart) / 1_000_000.0;
+
                     awaitUpload();
 
                     registry.freeUnusedObjects();
@@ -296,17 +323,17 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     && mostRecentMaxBounds.y > mostRecentMinBounds.y
                     && mostRecentMaxBounds.z > mostRecentMinBounds.z;
 
-            if (worldReady != mostRecentWorldReady || blockBoundsFallback != mostRecentBlockBoundsFallback) {
-                Photonics.LOGGER.info(
-                        "Photonics world tracing: ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, boundsSource={}",
-                        worldReady,
-                        depth,
-                        mostRecentMinBlock,
-                        mostRecentMaxBlock,
-                        mostRecentMinBounds,
-                        mostRecentMaxBounds,
-                        blockBoundsFallback ? "tree" : "compiled"
-                );
+            long now = System.nanoTime();
+            if (mostRecentCompilationRevision != lastObservedCompilationRevision) {
+                lastObservedCompilationRevision = mostRecentCompilationRevision;
+                lastCompilationChangeNanos = now;
+                settledDiagnosticLogged = false;
+                logWorldTracingDiagnostic(false, depth, worldReady, blockBoundsFallback);
+            } else if (!settledDiagnosticLogged
+                    && lastObservedCompilationRevision > 0
+                    && now - lastCompilationChangeNanos >= SETTLED_DIAGNOSTIC_DELAY_NANOS) {
+                settledDiagnosticLogged = true;
+                logWorldTracingDiagnostic(true, depth, worldReady, blockBoundsFallback);
             }
             mostRecentWorldReady = worldReady;
             mostRecentBlockBoundsFallback = blockBoundsFallback;
@@ -315,6 +342,34 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         } finally {
             uploadLock.unlock();
         }
+    }
+
+    private void logWorldTracingDiagnostic(
+            boolean settled,
+            int depth,
+            boolean worldReady,
+            boolean blockBoundsFallback
+    ) {
+        Photonics.LOGGER.info(
+                "Photonics world tracing v18: revision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, boundsSource={}, compileMs={}",
+                mostRecentCompilationRevision,
+                settled,
+                mostRecentCompiledSections,
+                mostRecentTrackedSections,
+                mostRecentBuiltBatch,
+                mostRecentUnloadedBatch,
+                mostRecentPendingBuilds,
+                mostRecentPendingUnloads,
+                worldReady,
+                depth,
+                mostRecentMinBlock,
+                mostRecentMaxBlock,
+                mostRecentMinBounds,
+                mostRecentMaxBounds,
+                mostRecentOrigin,
+                blockBoundsFallback ? "tree" : "compiled",
+                String.format(java.util.Locale.ROOT, "%.3f", mostRecentCompilationMillis)
+        );
     }
 
     @Override

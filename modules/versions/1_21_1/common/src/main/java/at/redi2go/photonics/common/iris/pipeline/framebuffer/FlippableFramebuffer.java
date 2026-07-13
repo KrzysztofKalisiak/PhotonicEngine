@@ -6,6 +6,7 @@ import org.joml.Vector2ic;
 public class FlippableFramebuffer implements InternalIrisFramebuffer {
     private SingleFramebuffer write;
     private SingleFramebuffer read;
+    private final ReservoirDiagnostics reservoirDiagnostics = new ReservoirDiagnostics();
 
     public FlippableFramebuffer(SingleFramebuffer write, SingleFramebuffer read) {
         if (write.attachments().size() != read.attachments().size())
@@ -17,6 +18,8 @@ public class FlippableFramebuffer implements InternalIrisFramebuffer {
 
     @Override
     public void flip() {
+        reservoirDiagnostics.sampleCompletedFrame(write);
+
         var tmp = write;
         write = read;
         read = tmp;
@@ -74,6 +77,7 @@ public class FlippableFramebuffer implements InternalIrisFramebuffer {
 
     @Override
     public void close() {
+        reservoirDiagnostics.close();
         write.close();
         read.close();
     }
