@@ -32,8 +32,6 @@ int ph_rand_next_int(inout uint rand_state, float min, float max) {
 const float ph_light_jitter_radius = 1.0f / 16.0f;
 
 void ph_rand_sample_position(inout uint rand_state, inout vec3 light_position, vec3 sample_pos) {
-    light_position = floor(light_position) + 0.5f;
-
     // Fetch a blue noise value for this frame.
     vec2 rnd_sample      = vec2(ph_rand_next_float(rand_state), ph_rand_next_float(rand_state));
 
