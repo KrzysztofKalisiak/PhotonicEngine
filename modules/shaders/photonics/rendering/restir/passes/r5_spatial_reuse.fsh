@@ -1,10 +1,10 @@
 #version 430
 
+#define FRAG_USE_RT_POS
+#define FRAG_USE_GEO_NORMAL
+
 #include "/photonics/rendering/frag/common.glsl"
 #include "/photonics/rendering/restir/restir.glsl"
-
-#define USE_FRAG_RT_POS
-#define USE_FRAG_GEO_NORMAL
 
 #if defined PH_ENABLE_BLOCKLIGHT
 layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
@@ -45,6 +45,8 @@ void main() {
     for (int i = 0; i < reuse_samples; i++) {
         vec2 offset = 2.0 * vec2(ph_rand_next_float(frag_rnd_state), ph_rand_next_float(frag_rnd_state)) - 1.0f;
         ivec2 sample_texel = ivec2(frag_tex_coord + offset * reuse_radius);
+        if (any(lessThan(sample_texel, ivec2(0))) || any(greaterThanEqual(sample_texel, ivec2(PH_VIEW_SIZE))))
+            continue;
 
         FragData sample_frag;
         frag_data_load(sample_frag, sample_texel);

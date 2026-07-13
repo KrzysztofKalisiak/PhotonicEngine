@@ -13,6 +13,10 @@ public interface IrisFramebuffer extends RenderingComponent, Disposable {
 
     void recalculateSizes();
 
+    default IrisFramebuffer withDrawBuffers(String... attachmentNames) {
+        return this;
+    }
+
     interface Builder {
         Builder addAttachment(String name, ITextureFormat format, @AttachmentUsage int usage);
 

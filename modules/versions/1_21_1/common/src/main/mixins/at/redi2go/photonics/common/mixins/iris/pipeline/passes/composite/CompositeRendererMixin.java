@@ -92,13 +92,13 @@ public abstract class CompositeRendererMixin {
     )
     private void bindFramebuffer(
             GlFramebuffer instance,
-            Operation<Void> original
+            Operation<Void> original,
+            @Local(name = "i") int passIndex
     ) {
-        for (CompositeRendererPassExt passExt : passes) {
-            if (passExt.usesIrisFramebuffer(instance) && passExt.getFramebuffer().isPresent()) {
-                ((InternalIrisFramebuffer) passExt.getFramebuffer().orElseThrow()).bind();
-                return;
-            }
+        CompositeRendererPassExt pass = passes.get(passIndex);
+        if (pass.usesIrisFramebuffer(instance) && pass.getFramebuffer().isPresent()) {
+            ((InternalIrisFramebuffer) pass.getFramebuffer().orElseThrow()).bind();
+            return;
         }
 
         original.call(instance);

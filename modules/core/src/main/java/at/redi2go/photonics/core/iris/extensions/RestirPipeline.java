@@ -29,7 +29,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     ) {
         super(properties, atlasDownloader, handheldItemSupplier);
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v14 validation, temporal reuse, spatial reuse, accumulation, denoising, handheld; combined GI compatibility gate active");
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v15 masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
@@ -44,6 +44,32 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_indirect_reservoirs2", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .build(this::registerComponent);
 
+        var directReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
+                "restir_direct_reservoirs0"
+        );
+        var indirectReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
+                "restir_indirect_reservoirs0",
+                "restir_indirect_reservoirs1",
+                "restir_indirect_reservoirs2"
+        );
+        var reusedReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
+                "restir_direct_reservoirs0",
+                "restir_indirect_reservoirs0",
+                "restir_indirect_reservoirs1",
+                "restir_indirect_reservoirs2"
+        );
+        var diffuseFramebuffer = restirFramebuffer.withDrawBuffers(
+                "restir_lighting",
+                "restir_direct_reservoirs0",
+                "restir_indirect_reservoirs0",
+                "restir_indirect_reservoirs1",
+                "restir_indirect_reservoirs2"
+        );
+        var accumulationFramebuffer = restirFramebuffer.withDrawBuffers(
+                "restir_lighting",
+                "restir_lighting_variance"
+        );
+
         var denoiseFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment("denoise_result", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isDenoisingEnabled)
                 .build(this::registerComponent);
@@ -56,14 +82,18 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         irisFactory.newPipeline()
                 .debugGroup("restir")
-                .withFramebuffer(restirFramebuffer)
                 .thenFlip(restirFramebuffer)
+                .withFramebuffer(directReservoirFramebuffer)
                 .deferredPass("initial direct", "/photonics/rendering/restir/passes/r1_initial_direct.fsh", null, this::isBlockLightEnabled)
                 .deferredPass("validate initial direct", "/photonics/rendering/restir/passes/r2_validate_initial_direct.fsh", null, this::isBlockLightEnabled)
+                .withFramebuffer(indirectReservoirFramebuffer)
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
+                .withFramebuffer(reusedReservoirFramebuffer)
                 .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isRestirEnabled)
                 .deferredPass("spatial reuse", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isSpatialReuseEnabled)
+                .withFramebuffer(diffuseFramebuffer)
                 .deferredPass("diffuse", "/photonics/rendering/restir/passes/r6_diffuse.fsh", null, this::isRestirEnabled)
+                .withFramebuffer(accumulationFramebuffer)
                 .deferredPass("accumulation", "/photonics/rendering/restir/passes/r7_accumulation.fsh", null, this::isRestirEnabled)
                 .when(this::isDenoisingEnabled, b0 -> {
                     b0.withFramebuffer(denoiseFramebuffer);

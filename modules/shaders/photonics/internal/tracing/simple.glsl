@@ -54,13 +54,7 @@ bool trace_light_vis(
     bool reached_receiver = endpoint_progress <= 0.0001f;
 
     while (!reached_receiver) {
-        if (!ray_iter_has_next(ray)) {
-            // A moving source or a transformed receiver can be absent from the
-            // static world octree. No hit means that no represented occluder
-            // remains on this ray, so incomplete endpoint data must fail open.
-            reached_receiver = true;
-            break;
-        }
+        if (!ray_iter_has_next(ray)) break;
 
         RayResult result = ray_iter_next(ray);
         if (!ray_result_is_hit(result)) break;
@@ -97,6 +91,8 @@ bool trace_light_vis(
 
     if (!reached_receiver) {
         float ray_progress = dot(ray.position - trace_start, trace_direction);
+        // Missing world data must not turn into unfiltered white light. A miss
+        // is visible only if traversal actually advanced beyond the receiver.
         reached_receiver = ray_progress >= endpoint_progress - 0.01f;
     }
 

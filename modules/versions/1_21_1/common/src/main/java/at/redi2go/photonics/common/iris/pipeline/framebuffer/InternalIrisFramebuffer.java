@@ -8,5 +8,14 @@ public interface InternalIrisFramebuffer extends IrisFramebuffer {
 
     void bind();
 
+    default void bind(String... attachmentNames) {
+        bind();
+    }
+
     void unbind();
+
+    @Override
+    default IrisFramebuffer withDrawBuffers(String... attachmentNames) {
+        return new DrawBufferFramebuffer(this, attachmentNames);
+    }
 }

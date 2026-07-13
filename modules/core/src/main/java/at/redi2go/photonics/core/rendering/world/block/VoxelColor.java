@@ -24,7 +24,11 @@ public class VoxelColor {
     }
 
     public static boolean gt(int packedColor1, int packedColor2) {
-        return a(packedColor1) > a(packedColor2) || (packedColor1 & 16777215) > (packedColor2 & 16777215);
+        int alpha1 = a(packedColor1);
+        int alpha2 = a(packedColor2);
+
+        return alpha1 > alpha2
+                || alpha1 == alpha2 && (packedColor1 & 0x00ffffff) > (packedColor2 & 0x00ffffff);
     }
 
     public static Vector4f toVector(int packedColor, Vector4f result) {

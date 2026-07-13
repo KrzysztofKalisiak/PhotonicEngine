@@ -10,8 +10,13 @@ import org.joml.Vector2i;
 import org.joml.Vector2ic;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL45;
+import org.lwjgl.system.MemoryStack;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFramebuffer {
     private List<FramebufferAttachment> attachments;
@@ -30,13 +35,45 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
     }
 
     private void setDrawBuffers() {
+        setDrawBuffers(null);
+    }
+
+    private void setDrawBuffers(String[] attachmentNames) {
+        Set<String> selectedAttachments = attachmentNames == null
+                ? null
+                : new HashSet<>(Arrays.asList(attachmentNames));
         int[] drawBuffers = new int[attachments.size()];
         for (int i = 0; i < attachments.size(); i++) {
             addColorAttachment(i, ((IGlTexture) attachments.get(i).texture()).handle());
-            drawBuffers[i] = GL30.GL_COLOR_ATTACHMENT0 + i;
+            drawBuffers[i] = selectedAttachments == null || selectedAttachments.contains(attachments.get(i).name())
+                    ? GL30.GL_COLOR_ATTACHMENT0 + i
+                    : GL11.GL_NONE;
         }
 
         IrisRenderSystem.drawBuffers(getGlId(), drawBuffers);
+    }
+
+    private void clearAttachments() {
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, getGlId());
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            for (int i = 0; i < attachments.size(); i++) {
+                String name = attachments.get(i).name();
+                float invalidComponent = name.equals("restir_lighting") || name.equals("restir_lighting_variance")
+                        ? -999.0f
+                        : 0.0f;
+                float directLightIndex = name.equals("restir_direct_reservoirs0") ? -1.0f : invalidComponent;
+
+                GL30.glClearBufferfv(
+                        GL11.GL_COLOR,
+                        i,
+                        stack.floats(directLightIndex, invalidComponent, invalidComponent, invalidComponent)
+                );
+            }
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousFramebuffer);
+        }
     }
 
     public List<FramebufferAttachment> attachments() {
@@ -51,8 +88,15 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
 
     @Override
     public void bind() {
+        bind((String[]) null);
+    }
+
+    @Override
+    public void bind(String... attachmentNames) {
         recalculateSizes();
+        GL45.glTextureBarrier();
         super.bind();
+        setDrawBuffers(attachmentNames);
         GL11.glViewport(0, 0, currentSize.x(), currentSize.y());
     }
 
@@ -79,6 +123,7 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
             attachment.resize(newSize);
 
         setDrawBuffers();
+        clearAttachments();
     }
 
     @Override

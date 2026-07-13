@@ -24,12 +24,20 @@ public class FlippableFramebuffer implements InternalIrisFramebuffer {
 
     @Override
     public Vector2ic viewportSize() {
+        recalculateSizes();
         return write.viewportSize();
     }
 
     @Override
     public void bind() {
+        recalculateSizes();
         write.bind();
+    }
+
+    @Override
+    public void bind(String... attachmentNames) {
+        recalculateSizes();
+        write.bind(attachmentNames);
     }
 
     @Override

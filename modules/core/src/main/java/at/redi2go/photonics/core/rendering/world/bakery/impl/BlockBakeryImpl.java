@@ -78,7 +78,10 @@ public class BlockBakeryImpl implements BlockBakery {
         String description = String.valueOf(blockState);
         String normalized = description.toLowerCase(Locale.ROOT);
 
-        return normalized.contains("trapdoor") || normalized.contains("fence")
+        return normalized.contains("trapdoor")
+                || normalized.contains("fence")
+                || normalized.contains("stained_glass")
+                || normalized.contains("froglight")
                 ? description
                 : null;
     }
@@ -473,6 +476,15 @@ public class BlockBakeryImpl implements BlockBakery {
         private int alphaZero;
         private int alphaPartial;
         private int alphaOpaque;
+        private long redSum;
+        private long greenSum;
+        private long blueSum;
+        private int redMin = 255;
+        private int greenMin = 255;
+        private int blueMin = 255;
+        private int redMax;
+        private int greenMax;
+        private int blueMax;
         private int minX = Integer.MAX_VALUE;
         private int minY = Integer.MAX_VALUE;
         private int minZ = Integer.MAX_VALUE;
@@ -487,7 +499,22 @@ public class BlockBakeryImpl implements BlockBakery {
         private void record(int x, int y, int z, TextureData textureData) {
             samples++;
 
-            int alpha = VoxelColor.a(textureData.color());
+            int color = textureData.color();
+            int red = VoxelColor.r(color);
+            int green = VoxelColor.g(color);
+            int blue = VoxelColor.b(color);
+            int alpha = VoxelColor.a(color);
+
+            redSum += red;
+            greenSum += green;
+            blueSum += blue;
+            redMin = Math.min(redMin, red);
+            greenMin = Math.min(greenMin, green);
+            blueMin = Math.min(blueMin, blue);
+            redMax = Math.max(redMax, red);
+            greenMax = Math.max(greenMax, green);
+            blueMax = Math.max(blueMax, blue);
+
             if (alpha == 0) {
                 alphaZero++;
                 return;
@@ -522,9 +549,21 @@ public class BlockBakeryImpl implements BlockBakery {
             String aabb = voxelCount == 0
                     ? "empty"
                     : "[" + minX + "," + minY + "," + minZ + "]-[" + maxX + "," + maxY + "," + maxZ + "]";
+            String rgbMean = samples == 0
+                    ? "empty"
+                    : String.format(
+                            Locale.ROOT,
+                            "[%.1f,%.1f,%.1f]",
+                            (double) redSum / samples,
+                            (double) greenSum / samples,
+                            (double) blueSum / samples
+                    );
+            String rgbRange = samples == 0
+                    ? "empty"
+                    : "[" + redMin + "-" + redMax + "," + greenMin + "-" + greenMax + "," + blueMin + "-" + blueMax + "]";
 
             Photonics.LOGGER.info(
-                    "Photonics voxel diagnostic: state={} vertexHash={} complete={} samples={} alphaZero={} alphaPartial={} alphaOpaque={} voxels={} aabb={} parts={}",
+                    "Photonics voxel diagnostic: state={} vertexHash={} complete={} samples={} alphaZero={} alphaPartial={} alphaOpaque={} rgbMean={} rgbRange={} voxels={} aabb={} parts={}",
                     label,
                     Long.toUnsignedString(vertexHash, 16),
                     complete,
@@ -532,6 +571,8 @@ public class BlockBakeryImpl implements BlockBakery {
                     alphaZero,
                     alphaPartial,
                     alphaOpaque,
+                    rgbMean,
+                    rgbRange,
                     voxelCount,
                     aabb,
                     occupancyByPart.keySet()

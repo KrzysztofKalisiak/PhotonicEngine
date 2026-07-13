@@ -12,12 +12,18 @@ import com.google.common.collect.ImmutableList;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -37,6 +43,7 @@ public class ShaderPatcher {
     );
     private static final Path PATCHED_DEBUG_PATH = ModLoader.getGameDir().resolve(".ph-patched-shaders");
     private static final Path PHOTONICS_SHADERS_PATH = getPhotonicsShadersPath();
+    private static final ConcurrentMap<String, String> LOGGED_SHADER_SOURCES = new ConcurrentHashMap<>();
 
     private final IShaderPack pack;
     private final @Nullable Patch patch;
@@ -102,25 +109,37 @@ public class ShaderPatcher {
         Path realPath = packPath.ph$resolved(PHOTONICS_SHADERS_PATH);
         Path relativePath = PHOTONICS_SHADERS_PATH.resolve("photonics")
                 .relativize(realPath);
+        String relativeName = relativePath.toString().replace('\\', '/');
 
         @Nullable String source = null;
+        String sourceOrigin = "missing";
 
         readFile:
         {
-            // If no patch is applied check if the shader has a replacement
-            if (patch == null && !AUTO_REPLACED_FILES.contains(relativePath.toString())) {
+            // Packs may customize the stable modifier hooks. Internal pipeline
+            // files must come from this mod so their Java and GLSL APIs match.
+            if (patch == null && relativeName.startsWith("modifiers/") && !AUTO_REPLACED_FILES.contains(relativeName)) {
                 source = shaderSourceSupplier.apply(packPath);
-                if (source != null) break readFile;
+                if (source != null) {
+                    sourceOrigin = "shader-pack";
+                    break readFile;
+                }
             }
 
             // Try loading shader from assets in jar
             if (Files.exists(realPath)) {
                 source = Fs.tryReadString(realPath).orElse(null);
-                if (source != null) break readFile;
+                if (source != null) {
+                    sourceOrigin = "photonics-jar";
+                    break readFile;
+                }
             }
         }
 
-        if (patch == null) return source;
+        if (patch == null) {
+            logShaderSource(packPath, sourceOrigin, source);
+            return source;
+        }
         @Nullable String loadedSource = source;
 
         source = patch.applyPatches(
@@ -134,7 +153,34 @@ public class ShaderPatcher {
                 pack.properties().isPhotonicsEnabled()
         );
 
+        logShaderSource(packPath, "photonics-patch", source);
+
         return source;
+    }
+
+    private static void logShaderSource(IPackPath path, String origin, @Nullable String source) {
+        if (source == null) return;
+
+        String hash = sha256(source);
+        String signature = origin + ':' + hash;
+        if (signature.equals(LOGGED_SHADER_SOURCES.put(path.ph$pathString(), signature))) return;
+
+        Photonics.LOGGER.info(
+                "Photonics shader source: path={} origin={} sha256={}",
+                path.ph$pathString(),
+                origin,
+                hash
+        );
+    }
+
+    private static String sha256(String source) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(source.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new AssertionError("SHA-256 is unavailable", e);
+        }
     }
 
     /**
