@@ -41,6 +41,9 @@ public class ShaderPatcher {
             "photonics.glsl",
             "ph_samplers.glsl"
     );
+    private static final Set<String> SHADER_PACK_INTERFACE_FILES = Set.of(
+            "shader_interface.glsl"
+    );
     private static final Path PATCHED_DEBUG_PATH = ModLoader.getGameDir().resolve(".ph-patched-shaders");
     private static final Path PHOTONICS_SHADERS_PATH = getPhotonicsShadersPath();
     private static final ConcurrentMap<String, String> LOGGED_SHADER_SOURCES = new ConcurrentHashMap<>();
@@ -116,9 +119,14 @@ public class ShaderPatcher {
 
         readFile:
         {
-            // Packs may customize the stable modifier hooks. Internal pipeline
-            // files must come from this mod so their Java and GLSL APIs match.
-            if (patch == null && relativeName.startsWith("modifiers/") && !AUTO_REPLACED_FILES.contains(relativeName)) {
+            boolean bundledFileExists = Files.exists(realPath);
+            boolean shaderPackOwnsFile = !bundledFileExists
+                    || relativeName.startsWith("modifiers/")
+                    || SHADER_PACK_INTERFACE_FILES.contains(relativeName);
+
+            // Keep the render pipeline in lockstep with this build, while
+            // preserving the pack-specific G-buffer interface and modifiers.
+            if (patch == null && shaderPackOwnsFile && !AUTO_REPLACED_FILES.contains(relativeName)) {
                 source = shaderSourceSupplier.apply(packPath);
                 if (source != null) {
                     sourceOrigin = "shader-pack";
@@ -127,7 +135,7 @@ public class ShaderPatcher {
             }
 
             // Try loading shader from assets in jar
-            if (Files.exists(realPath)) {
+            if (bundledFileExists) {
                 source = Fs.tryReadString(realPath).orElse(null);
                 if (source != null) {
                     sourceOrigin = "photonics-jar";
