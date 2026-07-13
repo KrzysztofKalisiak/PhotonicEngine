@@ -61,7 +61,13 @@ bool trace_light_vis(
     bool reached_receiver = endpoint_progress <= 0.0001f;
 
     while (!reached_receiver) {
-        if (!ray_iter_has_next(ray)) break;
+        if (!ray_iter_has_next(ray)) {
+            // Leaving or never entering the static tree means no represented
+            // occluder exists on the remaining segment. Keep iteration-budget
+            // exhaustion fail-closed so incomplete traversal cannot leak light.
+            if (!ray_iter_is_in_bounds(ray)) reached_receiver = true;
+            break;
+        }
 
         RayResult result = ray_iter_next(ray);
         if (!ray_result_is_hit(result)) break;
