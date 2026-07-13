@@ -11,6 +11,8 @@
     "iris.ShaderPropertiesMixin",
     "iris.extension.LevelRendererMixin",
     "iris.extension.RenderSectionManagerMixin",
+    "iris.compat.SectionCompilerMixin",
+    "iris.compat.SableSingleSubLevelRenderDataMixin",
 
     "iris.pipeline.uniforms.DynamicUniformHolderMixin",
     "iris.pipeline.uniforms.IUniformUpdateFrequencyImpl",
