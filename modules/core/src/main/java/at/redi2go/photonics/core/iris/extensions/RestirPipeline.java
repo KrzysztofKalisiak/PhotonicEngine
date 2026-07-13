@@ -29,7 +29,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     ) {
         super(properties, atlasDownloader, handheldItemSupplier);
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v15 masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v16 finite-segment visibility, masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();

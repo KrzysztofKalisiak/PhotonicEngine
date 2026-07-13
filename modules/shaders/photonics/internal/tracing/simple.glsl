@@ -46,7 +46,14 @@ bool trace_light_vis(
 
     RayIterator ray;
     ray_iter_begin(ray, light_rt_pos, trace_direction);
-    ray.iterations = max(max_iterations, 1);
+
+    // A Sable/transformed receiver may not exist in the static voxel tree, so
+    // there is no occupied target node to terminate traversal. Budget enough
+    // steps to cross every 1/16-grid boundary along this finite segment. The
+    // progress check below still rejects a traversal that stops prematurely.
+    float segment_voxel_crossings = dot(abs(light_to_receiver), vec3(16.0f));
+    int segment_iteration_budget = int(ceil(segment_voxel_crossings)) + 16;
+    ray.iterations = max(max_iterations, segment_iteration_budget);
 
     vec4 running_tint_color = vec4(0.0f);
     vec3 trace_start = ray.position;
