@@ -21,7 +21,17 @@ void main() {
 
     // REPROJECTION
     vec3 previous_player_pos;
-    vec2 uv = ph_reproject_player_pos(frag_player_pos, frag_is_hand, get_taa_jitter(), previous_player_pos).xy;
+    vec3 expected_previous_normal;
+    uint sublevel_token;
+    vec2 uv = ph_reproject_frag_data(
+        _frag_data,
+        frag_tex_coord,
+        frag_is_hand,
+        get_taa_jitter(),
+        previous_player_pos,
+        expected_previous_normal,
+        sublevel_token
+    ).xy;
 
     if (clamp(uv, 0, 1) != uv) discard;
 
@@ -30,6 +40,8 @@ void main() {
     FragData prev_frag;
     frag_data_load_previous(prev_frag, prev_texel);
 
+    if (frag_data_sublevel_token(prev_frag) != sublevel_token) discard;
+
     if (!frag_is_bad_angle) {
         vec3 projected_player_pos = frag_data_player_pos(prev_frag);
         vec3 d = projected_player_pos - previous_player_pos;
@@ -37,7 +49,7 @@ void main() {
     }
 
     vec3 n = frag_data_geo_normal(prev_frag);
-    if (dot(n, frag_geo_normal) < 0.99f) discard;
+    if (dot(n, expected_previous_normal) < 0.99f) discard;
 
 #if defined PH_ENABLE_BLOCKLIGHT
     // DIRECT TEMPORAL REUSE

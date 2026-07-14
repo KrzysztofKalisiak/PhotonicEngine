@@ -16,6 +16,7 @@ public class Pipelines {
         var framebuffer = irisFactory.newFramebuffer(renderScale)
                 .addAttachment("ph_frag_data0", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("ph_frag_data1", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
+                .addAttachment("ph_frag_motion", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER)
                 .build(ext::registerComponent);
 
         irisFactory.newPipeline()

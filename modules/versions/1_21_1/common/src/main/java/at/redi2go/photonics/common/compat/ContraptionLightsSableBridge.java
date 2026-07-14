@@ -6,9 +6,11 @@ import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.config.PhConfig;
 import at.redi2go.photonics.core.rendering.lights.ExternalLightList;
 import at.redi2go.photonics.core.rendering.lights.TracedLightPosition;
+import at.redi2go.photonics.core.rendering.sublevel.ExternalSubLevelMotion;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.joml.Vector3i;
@@ -17,9 +19,11 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public final class ContraptionLightsSableBridge {
     private static Access access;
@@ -27,6 +31,14 @@ public final class ContraptionLightsSableBridge {
     private static boolean activeLogged;
     private static boolean transientFailureLogged;
     private static int lastUploadedLights = -1;
+    private static MotionAccess motionAccess;
+    private static boolean motionUnavailable;
+    private static boolean motionTransientFailureLogged;
+    private static boolean motionActiveLogged;
+    private static int lastMotionSubLevels = -1;
+    private static int nextMotionToken = 1;
+    private static final Map<UUID, Matrix4f> previousWorldToGrid = new HashMap<>();
+    private static final Map<UUID, Integer> motionTokens = new HashMap<>();
 
     private ContraptionLightsSableBridge() {
     }
@@ -114,9 +126,149 @@ public final class ContraptionLightsSableBridge {
 
     public static void clear() {
         ExternalLightList.clear();
+        ExternalSubLevelMotion.clear();
+        previousWorldToGrid.clear();
+        motionTokens.clear();
+        nextMotionToken = 1;
         if (lastUploadedLights > 0)
             Photonics.LOGGER.info("Photonics v20 Sable moving lights: {} -> 0", lastUploadedLights);
+        if (lastMotionSubLevels > 0)
+            Photonics.LOGGER.info("Photonics v22 Sable receiver motion: {} -> 0", lastMotionSubLevels);
         lastUploadedLights = 0;
+        lastMotionSubLevels = 0;
+    }
+
+    public static void captureReceiverMotion() {
+        if (motionUnavailable || unavailable)
+            return;
+
+        try {
+            var lightAccess = access();
+            Map<?, ?> states = (Map<?, ?>) lightAccess.states.get(null);
+            var bridgeAccess = motionAccess();
+            var subLevels = new ArrayList<ExternalSubLevelMotion.SubLevel>();
+            var currentWorldToGrid = new HashMap<UUID, Matrix4f>();
+
+            for (var mapEntry : states.entrySet()) {
+                if (subLevels.size() >= ExternalSubLevelMotion.MAX_SUBLEVELS)
+                    break;
+                if (!(mapEntry.getKey() instanceof UUID uniqueId))
+                    continue;
+
+                Object state = mapEntry.getValue();
+                Object subLevel = bridgeAccess.subLevel.get(state);
+                if (subLevel == null)
+                    continue;
+
+                int sizeX = bridgeAccess.sizeX.getInt(state);
+                int sizeY = bridgeAccess.sizeY.getInt(state);
+                int sizeZ = bridgeAccess.sizeZ.getInt(state);
+                if (sizeX <= 0 || sizeY <= 0 || sizeZ <= 0)
+                    continue;
+
+                int minX = bridgeAccess.minX.getInt(state);
+                int minY = bridgeAccess.minY.getInt(state);
+                int minZ = bridgeAccess.minZ.getInt(state);
+                Object pose = bridgeAccess.renderPose.invoke(subLevel);
+                Matrix4f current = new Matrix4f((Matrix4f) bridgeAccess.buildWorldToLocal.invoke(
+                        null,
+                        pose,
+                        minX,
+                        minY,
+                        minZ
+                ));
+                if (!current.isFinite() || Math.abs(current.determinant()) < 0.000001f)
+                    continue;
+
+                Matrix4f previous = previousWorldToGrid.get(uniqueId);
+                if (previous == null || !previous.isFinite() || Math.abs(previous.determinant()) < 0.000001f)
+                    previous = current;
+
+                Matrix4f currentToPrevious = new Matrix4f(previous)
+                        .invert()
+                        .mul(current);
+                if (!currentToPrevious.isFinite())
+                    continue;
+
+                int atlasIndex = bridgeAccess.atlasIndex.getInt(state);
+                int atlasZOffset = atlasIndex < 0
+                        ? -1
+                        : (int) bridgeAccess.atlasZOffset.invoke(null, atlasIndex);
+                var emissiveCells = bridgeAccess.emissiveCells(
+                        state,
+                        minX,
+                        minY,
+                        minZ,
+                        sizeX,
+                        sizeY,
+                        sizeZ
+                );
+
+                subLevels.add(new ExternalSubLevelMotion.SubLevel(
+                        motionToken(uniqueId),
+                        current,
+                        currentToPrevious,
+                        new Vector3i(sizeX, sizeY, sizeZ),
+                        atlasZOffset,
+                        emissiveCells
+                ));
+                currentWorldToGrid.put(uniqueId, current);
+            }
+
+            int occupancyTexture = (int) bridgeAccess.atlasTexture.invoke(null);
+            ExternalSubLevelMotion.submit(occupancyTexture, subLevels);
+            previousWorldToGrid.keySet().retainAll(currentWorldToGrid.keySet());
+            previousWorldToGrid.putAll(currentWorldToGrid);
+            motionTokens.keySet().retainAll(currentWorldToGrid.keySet());
+            logMotionCapture(subLevels.size());
+            motionTransientFailureLogged = false;
+        } catch (InvocationTargetException | RuntimeException exception) {
+            ExternalSubLevelMotion.clear();
+            previousWorldToGrid.clear();
+            if (!motionTransientFailureLogged) {
+                motionTransientFailureLogged = true;
+                Photonics.LOGGER.warn(
+                        "Photonics v22 temporarily skipped Sable receiver-motion capture",
+                        exception
+                );
+            }
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            motionUnavailable = true;
+            ExternalSubLevelMotion.clear();
+            previousWorldToGrid.clear();
+            Photonics.LOGGER.warn(
+                    "Photonics v22 disabled the optional Sable receiver-motion bridge",
+                    exception
+            );
+        }
+    }
+
+    private static int motionToken(UUID uniqueId) {
+        return motionTokens.computeIfAbsent(uniqueId, ignored -> {
+            int token = nextMotionToken++;
+            if (nextMotionToken > 0xffff)
+                nextMotionToken = 1;
+            return token;
+        });
+    }
+
+    private static void logMotionCapture(int subLevels) {
+        if (!motionActiveLogged && subLevels > 0) {
+            motionActiveLogged = true;
+            Photonics.LOGGER.info(
+                    "Photonics v22 Sable receiver motion active: subLevels={}, classifier=occluder-atlas+emissive-cells",
+                    subLevels
+            );
+        }
+
+        if (subLevels != lastMotionSubLevels) {
+            Photonics.LOGGER.info(
+                    "Photonics v22 Sable receiver motion: {} -> {}",
+                    Math.max(lastMotionSubLevels, 0),
+                    subLevels
+            );
+            lastMotionSubLevels = subLevels;
+        }
     }
 
     private static List<?> selectHandles(Access bridgeAccess, Object state, int lightCount)
@@ -156,6 +308,12 @@ public final class ContraptionLightsSableBridge {
         if (access == null)
             access = new Access();
         return access;
+    }
+
+    private static MotionAccess motionAccess() throws ReflectiveOperationException {
+        if (motionAccess == null)
+            motionAccess = new MotionAccess();
+        return motionAccess;
     }
 
     private static final class Access {
@@ -207,6 +365,97 @@ public final class ContraptionLightsSableBridge {
         private static Field accessible(Field field) {
             field.setAccessible(true);
             return field;
+        }
+    }
+
+    private static final class MotionAccess {
+        private final Field subLevel;
+        private final Field atlasIndex;
+        private final Field minX;
+        private final Field minY;
+        private final Field minZ;
+        private final Field sizeX;
+        private final Field sizeY;
+        private final Field sizeZ;
+        private final Field lightX;
+        private final Field lightY;
+        private final Field lightZ;
+        private final Method renderPose;
+        private final Method buildWorldToLocal;
+        private final Method atlasTexture;
+        private final Method atlasZOffset;
+
+        private MotionAccess() throws ReflectiveOperationException {
+            var lightingClass = Class.forName(
+                    "xyz.atmerek.contraptionlights.veil.sublevel.SubLevelVeilLighting"
+            );
+            var stateClass = Class.forName(
+                    "xyz.atmerek.contraptionlights.veil.sublevel.SubLevelVeilLighting$State"
+            );
+            var subLevelClass = Class.forName("dev.ryanhcode.sable.sublevel.ClientSubLevel");
+            var poseClass = Class.forName("dev.ryanhcode.sable.companion.math.Pose3dc");
+            var atlasClass = Class.forName(
+                    "xyz.atmerek.contraptionlights.veil.sublevel.SubLevelOccluderAtlas"
+            );
+
+            subLevel = accessible(stateClass.getDeclaredField("subLevel"));
+            atlasIndex = accessible(stateClass.getDeclaredField("atlasIndex"));
+            minX = accessible(stateClass.getDeclaredField("minX"));
+            minY = accessible(stateClass.getDeclaredField("minY"));
+            minZ = accessible(stateClass.getDeclaredField("minZ"));
+            sizeX = accessible(stateClass.getDeclaredField("sizeX"));
+            sizeY = accessible(stateClass.getDeclaredField("sizeY"));
+            sizeZ = accessible(stateClass.getDeclaredField("sizeZ"));
+            lightX = accessible(stateClass.getDeclaredField("lightX"));
+            lightY = accessible(stateClass.getDeclaredField("lightY"));
+            lightZ = accessible(stateClass.getDeclaredField("lightZ"));
+            renderPose = subLevelClass.getMethod("renderPose");
+            buildWorldToLocal = accessible(lightingClass.getDeclaredMethod(
+                    "buildWorldToLocal",
+                    poseClass,
+                    int.class,
+                    int.class,
+                    int.class
+            ));
+            atlasTexture = atlasClass.getMethod("textureId");
+            atlasZOffset = atlasClass.getMethod("zOffset", int.class);
+        }
+
+        private List<Vector3i> emissiveCells(
+                Object state,
+                int minX,
+                int minY,
+                int minZ,
+                int sizeX,
+                int sizeY,
+                int sizeZ
+        ) throws IllegalAccessException {
+            int[] xs = (int[]) lightX.get(state);
+            int[] ys = (int[]) lightY.get(state);
+            int[] zs = (int[]) lightZ.get(state);
+            if (xs == null || ys == null || zs == null)
+                return List.of();
+
+            int count = Math.min(xs.length, Math.min(ys.length, zs.length));
+            var result = new ArrayList<Vector3i>(count);
+            for (int i = 0; i < count; i++) {
+                int x = xs[i] - minX;
+                int y = ys[i] - minY;
+                int z = zs[i] - minZ;
+                if (x >= 0 && y >= 0 && z >= 0 && x < sizeX && y < sizeY && z < sizeZ)
+                    result.add(new Vector3i(x, y, z));
+            }
+            return result;
+        }
+
+        private static Field accessible(Field field) {
+            field.setAccessible(true);
+            return field;
+        }
+
+        private static Method accessible(Method method) {
+            method.setAccessible(true);
+            return method;
         }
     }
 }

@@ -3,9 +3,11 @@
 #include "/photonics/rendering/frag/world_interface.glsl"
 #include "/photonics/utility/normal_encoding.glsl"
 #include "/photonics/rendering/frag/frag_data.glsl"
+#include "/photonics/rendering/frag/sable_motion.glsl"
 
 layout(location = 0) out vec4 frag_data0_out;
 layout(location = 1) out vec4 frag_data1_out;
+layout(location = 2) out vec4 frag_motion_out;
 
 void load_frag_data(
     out vec3 frag_geo_normal,
@@ -31,9 +33,10 @@ void load_frag_data(
     // their own start offsets when they need to avoid self-intersection.
 }
 
-void ph_encode_frag(out vec4 data0, out uvec4 data1) {
+void ph_encode_frag(out vec4 data0, out uvec4 data1, out vec4 motion_data) {
     data0 = vec4(0.0f);
     data1 = uvec4(0u);
+    motion_data = vec4(0.0f);
 
     if (!is_in_world()) return;
 
@@ -73,6 +76,23 @@ void ph_encode_frag(out vec4 data0, out uvec4 data1) {
     data1.y = packSnorm2x16(ph_encode_normal(frag_geo_normal));
     data1.z = packSnorm2x16(ph_encode_normal(frag_tex_normal));
 
+    vec3 previous_world_pos;
+    vec3 previous_world_normal;
+    int sublevel_slot;
+    uint sublevel_token;
+    if (!frag_is_hand && ph_sable_receiver_motion(
+            frag_rt_pos + world_offset,
+            frag_geo_normal,
+            previous_world_pos,
+            previous_world_normal,
+            sublevel_slot,
+            sublevel_token
+    )) {
+        frag_data_encode_sublevel(data1, sublevel_slot, sublevel_token);
+        motion_data.xyz = previous_world_pos - previousCameraPosition;
+        motion_data.w = uintBitsToFloat(packSnorm2x16(ph_encode_normal(previous_world_normal)));
+    }
+
     data1.w |= frag_is_in_world_bit;
     data1.w |= frag_is_bad_angle ? frag_bad_angle_bit : 0;
     data1.w |= frag_is_hand ? frag_is_hand_bit : 0;
@@ -81,9 +101,11 @@ void ph_encode_frag(out vec4 data0, out uvec4 data1) {
 void main() {
     vec4 data0;
     uvec4 data1;
-    ph_encode_frag(data0, data1);
+    vec4 motion_data;
+    ph_encode_frag(data0, data1, motion_data);
 
     frag_data0_out = data0;
     frag_data1_out = uintBitsToFloat(data1);
+    frag_motion_out = motion_data;
 }
 

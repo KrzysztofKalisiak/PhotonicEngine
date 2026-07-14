@@ -9,6 +9,7 @@ import at.redi2go.photonics.core.iris.pipeline.rendering.IrisFactory;
 import at.redi2go.photonics.core.iris.pipeline.uniform.IDynamicUniformHolder;
 import at.redi2go.photonics.core.rendering.UniformUpdater;
 import at.redi2go.photonics.core.rendering.lights.HandheldItemSupplier;
+import at.redi2go.photonics.core.rendering.sublevel.ExternalSubLevelMotion;
 import at.redi2go.photonics.core.rendering.world.bakery.texture.AtlasDownloader;
 
 import static at.redi2go.photonics.core.iris.pipeline.texture.AttachmentUsage.CREATE_PREV_SAMPLER;
@@ -29,7 +30,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     ) {
         super(properties, atlasDownloader, handheldItemSupplier);
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v21 SVGF quality floor, Sable moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
+        registerComponent(ExternalSubLevelMotion.instance());
+
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v22 Sable receiver motion reprojection, SVGF quality floor, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();

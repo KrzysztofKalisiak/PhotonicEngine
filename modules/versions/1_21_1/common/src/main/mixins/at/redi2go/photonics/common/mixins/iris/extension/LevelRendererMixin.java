@@ -1,7 +1,7 @@
 package at.redi2go.photonics.common.mixins.iris.extension;
 
+import at.redi2go.photonics.common.compat.ContraptionLightsSableBridge;
 import at.redi2go.photonics.common.iris.IrisUtil;
-import at.redi2go.photonics.core.iris.PhotonicsExtension;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.GameRenderer;
@@ -30,6 +30,9 @@ public abstract class LevelRendererMixin {
             Matrix4f matrix4f2,
             CallbackInfo ci
     ) {
-        IrisUtil.getPhotonics().ifPresent(PhotonicsExtension::onFrameBegin);
+        IrisUtil.getPhotonics().ifPresent(extension -> {
+            ContraptionLightsSableBridge.captureReceiverMotion();
+            extension.onFrameBegin();
+        });
     }
 }
