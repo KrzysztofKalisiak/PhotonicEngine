@@ -501,7 +501,7 @@ public final class ContraptionLightsSableBridge {
         if (!activeLogged && structures > 0) {
             activeLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v24 frame-aligned Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}, proposalShare=25%",
+                    "Photonics v25 frame-aligned Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}, proposalBudget=one-expected-candidate-per-pixel",
                     structures,
                     sourceLights,
                     uploadedLights

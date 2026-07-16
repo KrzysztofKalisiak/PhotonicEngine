@@ -67,6 +67,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     private int lastDiagnosticEligibleLights = -1;
     private int lastDiagnosticSelectedLights = -1;
     private int lastDiagnosticSections = -1;
+    private int lastDiagnosticPriorityLights = -1;
 
     @SuppressWarnings("UnstableApiUsage")
     public AbstractLightList(
@@ -371,6 +372,16 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
         if (previousSize != lights.size())
             Photonics.LOGGER.info("Photonics light list pending: {} -> {}", previousSize, lights.size());
+
+        int priorityLightCount = lights.priorityLightCount();
+        if (lastDiagnosticPriorityLights != priorityLightCount) {
+            Photonics.LOGGER.info(
+                    "Photonics v25 direct-light priority prefix: movingLights={}, totalLights={}, expectedPriorityProposalsPerPixel=1",
+                    priorityLightCount,
+                    lights.size()
+            );
+            lastDiagnosticPriorityLights = priorityLightCount;
+        }
 
         for (int i = 0; i < lights.size(); i++) {
             var light = lights.get(i);

@@ -19,15 +19,19 @@ void main() {
     if (light_list_size > 0) {
         for (int i = 0; i < PH_RESTIR_INITIAL_SAMPLES; i++) {
             DirectSample smple = direct_sample_random(frag_rnd_state);
-            float weight = direct_sample_get_weight(
+            float target_weight = direct_sample_get_weight(
                 smple,
                 frag_rt_pos,
                 frag_geo_normal,
                 frag_is_hand ? frag_geo_normal : frag_tex_normal
             );
+            float proposal_probability = direct_sample_probability(smple);
+            float resampling_weight = proposal_probability > 0.0f
+                ? target_weight / proposal_probability
+                : 0.0f;
 
-            if (direct_reservoir_update(reservoir, smple, weight, 1.0f))
-                sample_weight = weight;
+            if (direct_reservoir_update(reservoir, smple, resampling_weight, 1.0f))
+                sample_weight = target_weight;
         }
     }
 

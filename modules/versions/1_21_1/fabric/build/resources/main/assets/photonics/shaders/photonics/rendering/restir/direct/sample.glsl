@@ -7,7 +7,9 @@ struct DirectSample {
     int light_index; // The index of the sampled light, will be -1 when empty
 };
 
-const float PH_PRIORITY_LIGHT_PROPOSAL_SHARE = 0.25f;
+// Spend one initial candidate on the moving-light prefix on average. This keeps
+// the other candidates available for the much larger world-light population.
+const float PH_PRIORITY_LIGHT_PROPOSAL_SHARE = 1.0f / float(PH_RESTIR_INITIAL_SAMPLES);
 
 DirectSample direct_sample_empty() {
     return DirectSample(-1);
@@ -44,8 +46,9 @@ bool direct_sample_is_empty(DirectSample smple) {
 }
 
 float direct_sample_weight(vec3 color) {
-    const float min_weight = 0.0001f;
     float weight = ph_luminance(color);
+    // Match the old uniform sampler's numerical cutoff in physical-light space.
+    float min_weight = 0.0001f / float(max(light_list_size, 1));
 
     return weight < min_weight ? 0.0f : weight;
 }
@@ -67,17 +70,13 @@ vec3 direct_sample_get_color(
     if (!light_is_valid(light))
         return vec3(0.0f);
 
-    float proposal_probability = direct_sample_probability(smple);
-    if (proposal_probability <= 0.0f)
-        return vec3(0.0f);
-
     return light_sample_at(
         light,
         sample_pos,
         light.position,
         geo_normal,
         tex_normal
-    ) / proposal_probability;
+    );
 }
 
 float direct_sample_get_weight(
