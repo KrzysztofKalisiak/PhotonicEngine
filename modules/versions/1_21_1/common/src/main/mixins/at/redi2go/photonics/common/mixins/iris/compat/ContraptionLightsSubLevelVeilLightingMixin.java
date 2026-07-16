@@ -10,11 +10,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Pseudo
 @Mixin(targets = "xyz.atmerek.contraptionlights.veil.sublevel.SubLevelVeilLighting", remap = false)
 public abstract class ContraptionLightsSubLevelVeilLightingMixin {
-    @Inject(method = "updateForRender", at = @At("RETURN"), require = 0, remap = false)
-    private static void photonics$captureMovingLights(CallbackInfo ci) {
-        ContraptionLightsSableBridge.capture();
-    }
-
     @Inject(method = "clear", at = @At("RETURN"), require = 0, remap = false)
     private static void photonics$clearMovingLights(CallbackInfo ci) {
         ContraptionLightsSableBridge.clear();

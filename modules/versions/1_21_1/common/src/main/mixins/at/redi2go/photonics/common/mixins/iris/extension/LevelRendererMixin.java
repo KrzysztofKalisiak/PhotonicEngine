@@ -31,6 +31,7 @@ public abstract class LevelRendererMixin {
             CallbackInfo ci
     ) {
         IrisUtil.getPhotonics().ifPresent(extension -> {
+            ContraptionLightsSableBridge.capture();
             ContraptionLightsSableBridge.captureReceiverMotion();
             extension.onFrameBegin();
         });

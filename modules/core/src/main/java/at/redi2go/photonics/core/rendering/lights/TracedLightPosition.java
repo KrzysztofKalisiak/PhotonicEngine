@@ -14,6 +14,7 @@ public final class TracedLightPosition {
     private final Vector3d pos;
     private final IBlockState blockState;
     private final BlockLightInfo lightInfo;
+    private final Object temporalIdentity;
 
     private int luminanceMod = 0;
     private double luminance = 0f;
@@ -24,10 +25,21 @@ public final class TracedLightPosition {
             IBlockState blockState,
             BlockLightInfo lightInfo
     ) {
+        this(blockId, pos, blockState, lightInfo, null);
+    }
+
+    public TracedLightPosition(
+            int blockId,
+            Vector3d pos,
+            IBlockState blockState,
+            BlockLightInfo lightInfo,
+            Object temporalIdentity
+    ) {
         this.blockId = blockId;
         this.pos = pos;
         this.blockState = blockState;
         this.lightInfo = lightInfo;
+        this.temporalIdentity = temporalIdentity;
     }
 
     public int blockId() {
@@ -50,6 +62,18 @@ public final class TracedLightPosition {
         return lightInfo;
     }
 
+    Object temporalMappingKey() {
+        if (temporalIdentity == null)
+            return this;
+
+        return new TemporalMappingKey(
+                temporalIdentity,
+                blockId,
+                blockState,
+                lightInfo
+        );
+    }
+
     public double getLuminance(Vector3d cameraPosition, int mod) {
         if (this.luminanceMod != mod) {
             luminance = lightInfo.luminanceFrom(pos, cameraPosition);
@@ -67,12 +91,13 @@ public final class TracedLightPosition {
         return this.blockId == that.blockId &&
                 Objects.equals(this.pos, that.pos) &&
                 Objects.equals(this.blockState, that.blockState) &&
-                Objects.equals(this.lightInfo, that.lightInfo);
+                Objects.equals(this.lightInfo, that.lightInfo) &&
+                Objects.equals(this.temporalIdentity, that.temporalIdentity);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(blockId, pos, blockState, lightInfo);
+        return Objects.hash(blockId, pos, blockState, lightInfo, temporalIdentity);
     }
 
     @Override
@@ -81,7 +106,16 @@ public final class TracedLightPosition {
                 "blockId=" + blockId + ", " +
                 "pos=" + pos + ", " +
                 "blockState=" + blockState + ", " +
-                "lightInfo=" + lightInfo + ']';
+                "lightInfo=" + lightInfo + ", " +
+                "temporalIdentity=" + temporalIdentity + ']';
+    }
+
+    private record TemporalMappingKey(
+            Object temporalIdentity,
+            int blockId,
+            IBlockState blockState,
+            BlockLightInfo lightInfo
+    ) {
     }
 
 }

@@ -9,10 +9,9 @@ import at.redi2go.photonics.core.rendering.lights.TracedLightPosition;
 import at.redi2go.photonics.core.rendering.sublevel.ExternalSubLevelMotion;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
-import org.joml.Vector3dc;
 import org.joml.Vector3i;
 
 import java.lang.reflect.Field;
@@ -55,6 +54,7 @@ public final class ContraptionLightsSableBridge {
 
         try {
             var bridgeAccess = access();
+            var transformAccess = motionAccess();
             Map<?, ?> states = (Map<?, ?>) bridgeAccess.states.get(null);
             var shaderPack = IShaderPack.getCurrentPack().orElse(null);
             var lightRegistry = PhConfig.getLightRegistry();
@@ -62,7 +62,30 @@ public final class ContraptionLightsSableBridge {
             var replacedBlockPositions = new HashSet<Vector3i>();
             int sourceLights = 0;
 
-            for (var state : states.values()) {
+            for (var mapEntry : states.entrySet()) {
+                if (!(mapEntry.getKey() instanceof UUID uniqueId))
+                    continue;
+
+                Object state = mapEntry.getValue();
+                Object subLevel = transformAccess.subLevel.get(state);
+                if (subLevel == null)
+                    continue;
+
+                int minX = transformAccess.minX.getInt(state);
+                int minY = transformAccess.minY.getInt(state);
+                int minZ = transformAccess.minZ.getInt(state);
+                Object pose = transformAccess.renderPose.invoke(subLevel);
+                Matrix4f worldToGrid = new Matrix4f((Matrix4f) transformAccess.buildWorldToLocal.invoke(
+                        null,
+                        pose,
+                        minX,
+                        minY,
+                        minZ
+                ));
+                if (!worldToGrid.isFinite() || Math.abs(worldToGrid.determinant()) < 0.000001f)
+                    continue;
+                Matrix4d gridToWorld = new Matrix4d(worldToGrid).invert();
+
                 int[] lightX = (int[]) bridgeAccess.lightX.get(state);
                 int[] lightY = (int[]) bridgeAccess.lightY.get(state);
                 int[] lightZ = (int[]) bridgeAccess.lightZ.get(state);
@@ -71,10 +94,9 @@ public final class ContraptionLightsSableBridge {
                 if (lightX == null || lightY == null || lightZ == null || lightLum == null)
                     continue;
 
-                List<?> handles = selectHandles(bridgeAccess, state, lightX.length);
                 int count = Math.min(
                         Math.min(lightX.length, lightY.length),
-                        Math.min(Math.min(lightZ.length, lightLum.length), handles.size())
+                        Math.min(lightZ.length, lightLum.length)
                 );
                 sourceLights += count;
 
@@ -90,13 +112,19 @@ public final class ContraptionLightsSableBridge {
                     if (lightInfo == null || !lightInfo.isTraced())
                         continue;
 
-                    var worldPosition = bridgeAccess.position(handles.get(i));
+                    var worldPosition = gridToWorld.transformPosition(
+                            lightX[i] - minX + 0.5d,
+                            lightY[i] - minY + 0.5d,
+                            lightZ[i] - minZ + 0.5d,
+                            new Vector3d()
+                    );
                     int blockId = shaderPack == null ? -1 : shaderPack.getBlockId(apiBlockState);
                     lights.add(new TracedLightPosition(
                             blockId,
-                            new Vector3d(worldPosition),
+                            worldPosition,
                             apiBlockState,
-                            lightInfo
+                            lightInfo,
+                            new SableLightIdentity(uniqueId, lightX[i], lightY[i], lightZ[i])
                     ));
                     replacedBlockPositions.add(new Vector3i(lightX[i], lightY[i], lightZ[i]));
                 }
@@ -110,7 +138,7 @@ public final class ContraptionLightsSableBridge {
             if (!transientFailureLogged) {
                 transientFailureLogged = true;
                 Photonics.LOGGER.warn(
-                        "Photonics v20 temporarily skipped a Contraption Lights/Sable moving-light capture",
+                        "Photonics v23 temporarily skipped a frame-aligned Contraption Lights/Sable moving-light capture",
                         exception
                 );
             }
@@ -118,7 +146,7 @@ public final class ContraptionLightsSableBridge {
             unavailable = true;
             ExternalLightList.clear();
             Photonics.LOGGER.warn(
-                    "Photonics v20 disabled the optional Contraption Lights/Sable moving-light bridge",
+                    "Photonics v23 disabled the optional frame-aligned Contraption Lights/Sable moving-light bridge",
                     exception
             );
         }
@@ -131,7 +159,7 @@ public final class ContraptionLightsSableBridge {
         motionTokens.clear();
         nextMotionToken = 1;
         if (lastUploadedLights > 0)
-            Photonics.LOGGER.info("Photonics v20 Sable moving lights: {} -> 0", lastUploadedLights);
+            Photonics.LOGGER.info("Photonics v23 Sable moving lights: {} -> 0", lastUploadedLights);
         if (lastMotionSubLevels > 0)
             Photonics.LOGGER.info("Photonics v22 Sable receiver motion: {} -> 0", lastMotionSubLevels);
         lastUploadedLights = 0;
@@ -271,21 +299,11 @@ public final class ContraptionLightsSableBridge {
         }
     }
 
-    private static List<?> selectHandles(Access bridgeAccess, Object state, int lightCount)
-            throws IllegalAccessException {
-        List<?> pointHandles = (List<?>) bridgeAccess.pointHandles.get(state);
-        if (pointHandles != null && pointHandles.size() >= lightCount)
-            return pointHandles;
-
-        List<?> customHandles = (List<?>) bridgeAccess.handles.get(state);
-        return customHandles == null ? List.of() : customHandles;
-    }
-
     private static void logCapture(int structures, int sourceLights, int uploadedLights) {
         if (!activeLogged && structures > 0) {
             activeLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v20 Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}",
+                    "Photonics v23 frame-aligned Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}",
                     structures,
                     sourceLights,
                     uploadedLights
@@ -294,7 +312,7 @@ public final class ContraptionLightsSableBridge {
 
         if (uploadedLights != lastUploadedLights) {
             Photonics.LOGGER.info(
-                    "Photonics v20 Sable moving lights: {} -> {} (structures={}, sourceLights={})",
+                    "Photonics v23 Sable moving lights: {} -> {} (structures={}, sourceLights={})",
                     Math.max(lastUploadedLights, 0),
                     uploadedLights,
                     structures,
@@ -316,15 +334,15 @@ public final class ContraptionLightsSableBridge {
         return motionAccess;
     }
 
+    private record SableLightIdentity(UUID subLevelId, int x, int y, int z) {
+    }
+
     private static final class Access {
         private final Field states;
-        private final Field handles;
-        private final Field pointHandles;
         private final Field lightX;
         private final Field lightY;
         private final Field lightZ;
         private final Field lightLum;
-        private final Method getLightData;
 
         private Access() throws ReflectiveOperationException {
             var lightingClass = Class.forName(
@@ -333,33 +351,12 @@ public final class ContraptionLightsSableBridge {
             var stateClass = Class.forName(
                     "xyz.atmerek.contraptionlights.veil.sublevel.SubLevelVeilLighting$State"
             );
-            var handleClass = Class.forName(
-                    "foundry.veil.api.client.render.light.renderer.LightRenderHandle"
-            );
 
             states = accessible(lightingClass.getDeclaredField("states"));
-            handles = accessible(stateClass.getDeclaredField("handles"));
-            pointHandles = accessible(stateClass.getDeclaredField("pointHandles"));
             lightX = accessible(stateClass.getDeclaredField("lightX"));
             lightY = accessible(stateClass.getDeclaredField("lightY"));
             lightZ = accessible(stateClass.getDeclaredField("lightZ"));
             lightLum = accessible(stateClass.getDeclaredField("lightLum"));
-            getLightData = handleClass.getMethod("getLightData");
-        }
-
-        private Vector3dc position(Object handle) throws ReflectiveOperationException {
-            Object lightData = getLightData.invoke(handle);
-            Object position = lightData.getClass().getMethod("getPosition").invoke(lightData);
-
-            if (position instanceof Vector3dc vector)
-                return vector;
-
-            if (position instanceof Vec3 vector)
-                return new Vector3d(vector.x, vector.y, vector.z);
-
-            throw new ReflectiveOperationException(
-                    "Unsupported Contraption Lights position type: " + position.getClass().getName()
-            );
         }
 
         private static Field accessible(Field field) {

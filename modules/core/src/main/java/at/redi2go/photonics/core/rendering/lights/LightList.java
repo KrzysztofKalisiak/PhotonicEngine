@@ -70,7 +70,7 @@ public class LightList extends AbstractList<TracedLightPosition> {
     }
 
     public static class Mapping {
-        private final Map<TracedLightPosition, LightInvalidation> mapping = new HashMap<>();
+        private final Map<Object, LightInvalidation> mapping = new HashMap<>();
 
         private Mapping() {
 
@@ -78,7 +78,7 @@ public class LightList extends AbstractList<TracedLightPosition> {
 
         private LightInvalidation createInvalidation(TracedLightPosition light) {
             return mapping.computeIfAbsent(
-                    light,
+                    light.temporalMappingKey(),
                     ignored -> new LightInvalidation(light.blockPos())
             );
         }
