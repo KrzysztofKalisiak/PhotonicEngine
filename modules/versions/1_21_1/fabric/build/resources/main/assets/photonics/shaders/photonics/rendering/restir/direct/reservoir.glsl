@@ -1,4 +1,5 @@
 #include "/photonics/rendering/restir/direct/sample.glsl"
+#include "/photonics/rendering/frag/sable_motion.glsl"
 
 #define DIRECT_RESERVOIR_0 2
 
@@ -84,6 +85,16 @@ void direct_reservoir_validate_visiblity(inout DirectReservoir reservoir, vec3 s
 
     Light light = direct_sample_get_light(reservoir.smple);
 
+    if (!ph_sable_same_sublevel_light_visible(
+            frag_data_sublevel_slot(_frag_data),
+            frag_data_sublevel_token(_frag_data),
+            sample_pos + world_offset,
+            light.position + world_offset
+    )) {
+        reservoir.weight = 0.0f;
+        return;
+    }
+
     vec3 to_light = light.position - sample_pos;
 
     vec3 unused0;
@@ -154,6 +165,16 @@ vec3 direct_reservoir_get_final_color(
 #else
 #define trace_position light.position
 #endif
+
+    if (!ph_sable_same_sublevel_light_visible(
+            frag_data_sublevel_slot(_frag_data),
+            frag_data_sublevel_token(_frag_data),
+            sample_pos + world_offset,
+            light.position + world_offset
+    )) {
+        reservoir.weight = 0.0f;
+        return vec3(0.0f);
+    }
 
     vec3 to_light = trace_position - sample_pos;
 

@@ -60,6 +60,10 @@ SampleHistory sample_history_reproject_single(
     uint sublevel_token,
     float distance_factor
 ) {
+    ivec2 history_size = textureSize(prev_restir_lighting, 0);
+    if (any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, history_size)))
+        return INVALID_HISTORY;
+
     FragData prev_frag;
     frag_data_load_previous(prev_frag, texel);
 

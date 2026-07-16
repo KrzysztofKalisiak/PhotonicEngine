@@ -62,6 +62,10 @@ public final class TracedLightPosition {
         return lightInfo;
     }
 
+    boolean hasTemporalIdentity() {
+        return temporalIdentity != null;
+    }
+
     Object temporalMappingKey() {
         if (temporalIdentity == null)
             return this;

@@ -13,14 +13,24 @@ import static java.lang.Math.max;
 public class LightList extends AbstractList<TracedLightPosition> {
     private final TracedLightPosition[] lights;
     private final WorldOrigin origin;
+    private final int priorityLightCount;
 
     public LightList(TracedLightPosition[] lights, WorldOrigin origin) {
+        this(lights, origin, 0);
+    }
+
+    public LightList(TracedLightPosition[] lights, WorldOrigin origin, int priorityLightCount) {
         this.lights = lights;
         this.origin = origin;
+        this.priorityLightCount = priorityLightCount;
     }
 
     public WorldOrigin origin() {
         return origin;
+    }
+
+    public int priorityLightCount() {
+        return priorityLightCount;
     }
 
     @Override
@@ -53,13 +63,14 @@ public class LightList extends AbstractList<TracedLightPosition> {
 
     @Override
     public int hashCode() {
-        return Arrays.hashCode(lights);
+        return 31 * Arrays.hashCode(lights) + priorityLightCount;
     }
 
     @Override
     public boolean equals(Object obj) {
         if (!(obj instanceof LightList other)) return false;
         if (other.size() != size()) return false;
+        if (other.priorityLightCount != priorityLightCount) return false;
 
         for (int i = 0; i < size(); i++) {
             if (!other.lights[i].equals(lights[i]))

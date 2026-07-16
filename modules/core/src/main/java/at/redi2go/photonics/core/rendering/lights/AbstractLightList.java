@@ -343,15 +343,22 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         int mod = (int) System.nanoTime();
         Arrays.sort(
                 combined,
-                Comparator.comparingDouble(light -> -light.getLuminance(cameraPosition, mod))
+                Comparator
+                        .comparingInt((TracedLightPosition light) -> light.hasTemporalIdentity() ? 0 : 1)
+                        .thenComparingDouble(light -> -light.getLuminance(cameraPosition, mod))
         );
 
         if (combined.length > maxLights)
             combined = Arrays.copyOf(combined, maxLights);
 
+        int priorityLightCount = 0;
+        while (priorityLightCount < combined.length && combined[priorityLightCount].hasTemporalIdentity())
+            priorityLightCount++;
+
         return new LightList(
                 combined,
-                sectionLights == null ? WorldOrigin.get() : sectionLights.origin()
+                sectionLights == null ? WorldOrigin.get() : sectionLights.origin(),
+                priorityLightCount
         );
     }
 
@@ -427,7 +434,16 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     @Override
     public void registerDynamicUniforms(IDynamicUniformHolder dynamicUniforms) {
-        dynamicUniforms.uniform1i("light_list_size", () -> mostRecentLights == null ? 0 : mostRecentLights.size(), uniformUpdater.newNotifier());
+        dynamicUniforms.uniform1i(
+                "light_list_size",
+                () -> mostRecentLights == null ? 0 : mostRecentLights.size(),
+                uniformUpdater.newNotifier()
+        );
+        dynamicUniforms.uniform1i(
+                "ph_priority_light_count",
+                () -> mostRecentLights == null ? 0 : mostRecentLights.priorityLightCount(),
+                uniformUpdater.newNotifier()
+        );
     }
 
     @Override

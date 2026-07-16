@@ -7,12 +7,36 @@ struct DirectSample {
     int light_index; // The index of the sampled light, will be -1 when empty
 };
 
+const float PH_PRIORITY_LIGHT_PROPOSAL_SHARE = 0.25f;
+
 DirectSample direct_sample_empty() {
     return DirectSample(-1);
 }
 
 DirectSample direct_sample_random(inout uint rnd_state) {
+    int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
+    if (priority_count > 0
+            && ph_rand_next_float(rnd_state) < PH_PRIORITY_LIGHT_PROPOSAL_SHARE) {
+        return DirectSample(ph_rand_next_int(rnd_state, 0, priority_count));
+    }
+
     return DirectSample(ph_rand_next_int(rnd_state, 0, light_list_size));
+}
+
+float direct_sample_probability(DirectSample smple) {
+    if (smple.light_index < 0 || smple.light_index >= light_list_size)
+        return 0.0f;
+
+    int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
+    if (priority_count <= 0)
+        return 1.0f / float(light_list_size);
+
+    float probability = (1.0f - PH_PRIORITY_LIGHT_PROPOSAL_SHARE)
+        / float(light_list_size);
+    if (smple.light_index < priority_count)
+        probability += PH_PRIORITY_LIGHT_PROPOSAL_SHARE / float(priority_count);
+
+    return probability;
 }
 
 bool direct_sample_is_empty(DirectSample smple) {
@@ -43,13 +67,17 @@ vec3 direct_sample_get_color(
     if (!light_is_valid(light))
         return vec3(0.0f);
 
+    float proposal_probability = direct_sample_probability(smple);
+    if (proposal_probability <= 0.0f)
+        return vec3(0.0f);
+
     return light_sample_at(
         light,
         sample_pos,
         light.position,
         geo_normal,
         tex_normal
-    ) * light_list_size;
+    ) / proposal_probability;
 }
 
 float direct_sample_get_weight(
