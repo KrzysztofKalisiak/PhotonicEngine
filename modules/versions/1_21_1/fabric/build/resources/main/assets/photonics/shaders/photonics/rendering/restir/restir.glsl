@@ -67,6 +67,7 @@ SampleHistory sample_history_reproject_single(
     FragData prev_frag;
     frag_data_load_previous(prev_frag, texel);
 
+    if (!frag_data_is_in_world(prev_frag)) return INVALID_HISTORY;
     if (frag_data_sublevel_token(prev_frag) != sublevel_token) return INVALID_HISTORY;
 
     if (!frag_is_bad_angle) {
@@ -127,7 +128,7 @@ void sample_history_reproject(out SampleHistory smple) {
         previous_player_pos,
         expected_previous_normal,
         sublevel_token
-    ).xy * PH_VIEW_SIZE) - 0.5f;
+    ).xy * vec2(textureSize(prev_restir_lighting, 0))) - 0.5f;
 
     const float block_divsor = 64.0f * PH_RENDER_SCALE;
     float distance_factor = max(dot(previous_player_pos, previous_player_pos) / block_divsor, 0.1f);

@@ -376,9 +376,10 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         int priorityLightCount = lights.priorityLightCount();
         if (lastDiagnosticPriorityLights != priorityLightCount) {
             Photonics.LOGGER.info(
-                    "Photonics v25 direct-light priority prefix: movingLights={}, totalLights={}, expectedPriorityProposalsPerPixel=1",
+                    "Photonics v26 direct-light priority prefix: movingLights={}, totalLights={}, minimumStratifiedPriorityCandidatesPerPixel={}",
                     priorityLightCount,
-                    lights.size()
+                    lights.size(),
+                    Math.min(priorityLightCount, 4)
             );
             lastDiagnosticPriorityLights = priorityLightCount;
         }

@@ -50,16 +50,19 @@ public final class ContraptionLightsSableBridge {
     private static boolean motionActiveLogged;
     private static int lastMotionSubLevels = -1;
     private static int nextMotionToken = 1;
-    private static final Map<UUID, Matrix4f> previousWorldToGrid = new HashMap<>();
+    private static final Map<UUID, Matrix4f> previousWorldToLocal = new HashMap<>();
     private static final Map<UUID, Integer> motionTokens = new HashMap<>();
 
     private static IGpuTexture3D geometryTexture;
     private static List<GeometryKey> geometryKeys = List.of();
+    private static List<GeometryLayoutKey> geometryLayoutKeys = List.of();
     private static int[] geometryOffsets = new int[0];
+    private static byte[] geometryPayload = new byte[0];
     private static int geometryWidth;
     private static int geometryHeight;
     private static int geometryDepth;
     private static int geometryRebuilds;
+    private static int geometryUnchangedScans;
 
     private ContraptionLightsSableBridge() {
     }
@@ -177,7 +180,7 @@ public final class ContraptionLightsSableBridge {
     public static void clear() {
         ExternalLightList.clear();
         ExternalSubLevelMotion.clear();
-        previousWorldToGrid.clear();
+        previousWorldToLocal.clear();
         motionTokens.clear();
         nextMotionToken = 1;
         if (lastUploadedLights > 0)
@@ -201,7 +204,7 @@ public final class ContraptionLightsSableBridge {
             if (level == null)
                 return;
             var candidates = new ArrayList<MotionCandidate>();
-            var currentWorldToGrid = new HashMap<UUID, Matrix4f>();
+            var currentWorldToLocal = new HashMap<UUID, Matrix4f>();
 
             for (var mapEntry : states.entrySet()) {
                 if (candidates.size() >= ExternalSubLevelMotion.MAX_SUBLEVELS)
@@ -224,23 +227,31 @@ public final class ContraptionLightsSableBridge {
                 int minY = bridgeAccess.minY.getInt(state);
                 int minZ = bridgeAccess.minZ.getInt(state);
                 Object pose = bridgeAccess.renderPose.invoke(subLevel);
-                Matrix4f current = new Matrix4f((Matrix4f) bridgeAccess.buildWorldToLocal.invoke(
+                Matrix4f currentGrid = new Matrix4f((Matrix4f) bridgeAccess.buildWorldToLocal.invoke(
                         null,
                         pose,
                         minX,
                         minY,
                         minZ
                 ));
-                if (!current.isFinite() || Math.abs(current.determinant()) < 0.000001f)
+                Matrix4f currentLocal = new Matrix4f((Matrix4f) bridgeAccess.buildWorldToLocal.invoke(
+                        null,
+                        pose,
+                        0,
+                        0,
+                        0
+                ));
+                if (!currentGrid.isFinite() || Math.abs(currentGrid.determinant()) < 0.000001f
+                        || !currentLocal.isFinite() || Math.abs(currentLocal.determinant()) < 0.000001f)
                     continue;
 
-                Matrix4f previous = previousWorldToGrid.get(uniqueId);
+                Matrix4f previous = previousWorldToLocal.get(uniqueId);
                 if (previous == null || !previous.isFinite() || Math.abs(previous.determinant()) < 0.000001f)
-                    previous = current;
+                    previous = currentLocal;
 
                 Matrix4f currentToPrevious = new Matrix4f(previous)
                         .invert()
-                        .mul(current);
+                        .mul(currentLocal);
                 if (!currentToPrevious.isFinite())
                     continue;
 
@@ -256,7 +267,7 @@ public final class ContraptionLightsSableBridge {
 
                 candidates.add(new MotionCandidate(
                         uniqueId,
-                        current,
+                        currentGrid,
                         currentToPrevious,
                         level,
                         minX,
@@ -268,7 +279,7 @@ public final class ContraptionLightsSableBridge {
                         (byte[]) bridgeAccess.occupancy.get(state),
                         emissiveCells
                 ));
-                currentWorldToGrid.put(uniqueId, current);
+                currentWorldToLocal.put(uniqueId, currentLocal);
             }
 
             int[] atlasOffsets = updateGeometryAtlas(candidates);
@@ -289,14 +300,14 @@ public final class ContraptionLightsSableBridge {
                     ? 0
                     : IrisUtil.getTextureHandle(geometryTexture);
             ExternalSubLevelMotion.submit(occupancyTexture, subLevels);
-            previousWorldToGrid.keySet().retainAll(currentWorldToGrid.keySet());
-            previousWorldToGrid.putAll(currentWorldToGrid);
-            motionTokens.keySet().retainAll(currentWorldToGrid.keySet());
+            previousWorldToLocal.keySet().retainAll(currentWorldToLocal.keySet());
+            previousWorldToLocal.putAll(currentWorldToLocal);
+            motionTokens.keySet().retainAll(currentWorldToLocal.keySet());
             logMotionCapture(subLevels.size());
             motionTransientFailureLogged = false;
         } catch (InvocationTargetException | RuntimeException exception) {
             ExternalSubLevelMotion.clear();
-            previousWorldToGrid.clear();
+            previousWorldToLocal.clear();
             if (!motionTransientFailureLogged) {
                 motionTransientFailureLogged = true;
                 Photonics.LOGGER.warn(
@@ -307,7 +318,7 @@ public final class ContraptionLightsSableBridge {
         } catch (ReflectiveOperationException | LinkageError exception) {
             motionUnavailable = true;
             ExternalSubLevelMotion.clear();
-            previousWorldToGrid.clear();
+            previousWorldToLocal.clear();
             Photonics.LOGGER.warn(
                     "Photonics v24 disabled the optional Sable receiver-motion/geometry bridge",
                     exception
@@ -317,6 +328,7 @@ public final class ContraptionLightsSableBridge {
 
     private static int[] updateGeometryAtlas(List<MotionCandidate> candidates) {
         var keys = new ArrayList<GeometryKey>(candidates.size());
+        var layoutKeys = new ArrayList<GeometryLayoutKey>(candidates.size());
         for (MotionCandidate candidate : candidates) {
             keys.add(new GeometryKey(
                     candidate.uniqueId(),
@@ -327,6 +339,15 @@ public final class ContraptionLightsSableBridge {
                     candidate.sizeY(),
                     candidate.sizeZ(),
                     candidate.occupancyRevision()
+            ));
+            layoutKeys.add(new GeometryLayoutKey(
+                    candidate.uniqueId(),
+                    candidate.minX(),
+                    candidate.minY(),
+                    candidate.minZ(),
+                    candidate.sizeX(),
+                    candidate.sizeY(),
+                    candidate.sizeZ()
             ));
         }
 
@@ -360,12 +381,14 @@ public final class ContraptionLightsSableBridge {
         if (accepted == 0) {
             closeGeometryTexture();
             geometryKeys = List.copyOf(keys);
+            geometryLayoutKeys = List.copyOf(layoutKeys);
             geometryOffsets = offsets;
+            geometryPayload = new byte[0];
             return offsets;
         }
 
         width = (width + 3) & ~3;
-        ByteBuffer data = ByteBuffer.allocateDirect(width * height * depth);
+        byte[] payload = new byte[width * height * depth];
         int receiverCells = 0;
         int occluderCells = 0;
         var mutablePos = new BlockPos.MutableBlockPos();
@@ -394,7 +417,7 @@ public final class ContraptionLightsSableBridge {
                             continue;
 
                         int index = ((atlasZ + z) * height + y) * width + x;
-                        data.put(index, (byte) cellFlags);
+                        payload[index] = (byte) cellFlags;
                         receiverCells++;
                         if ((cellFlags & 0x80) != 0)
                             occluderCells++;
@@ -403,6 +426,34 @@ public final class ContraptionLightsSableBridge {
             }
         }
 
+        boolean unchanged = geometryTexture != null
+                && !geometryTexture.ph$isClosed()
+                && geometryWidth == width
+                && geometryHeight == height
+                && geometryDepth == depth
+                && layoutKeys.equals(geometryLayoutKeys)
+                && Arrays.equals(offsets, geometryOffsets)
+                && Arrays.equals(payload, geometryPayload);
+        if (unchanged) {
+            geometryKeys = List.copyOf(keys);
+            geometryUnchangedScans++;
+            if (Integer.bitCount(geometryUnchangedScans) == 1) {
+                Photonics.LOGGER.info(
+                        "Photonics v26 skipped unchanged Sable geometry upload: skipped={}, subLevels={}, size={}x{}x{}, payloadHash={}",
+                        geometryUnchangedScans,
+                        accepted,
+                        width,
+                        height,
+                        depth,
+                        Integer.toUnsignedString(Arrays.hashCode(payload), 16)
+                );
+            }
+            return geometryOffsets;
+        }
+
+        ByteBuffer data = ByteBuffer.allocateDirect(payload.length);
+        data.put(payload);
+        data.flip();
         if (geometryTexture == null) {
             geometryTexture = IRenderSystem.getDevice().ph$createTexture3D(
                     () -> "Photonics Sable Geometry Atlas",
@@ -428,17 +479,20 @@ public final class ContraptionLightsSableBridge {
         );
         geometryRebuilds++;
         Photonics.LOGGER.info(
-                "Photonics v24 Sable geometry atlas rebuilt: rebuild={}, subLevels={}, receiverCells={}, occluderCells={}, size={}x{}x{}, precision=conservative-block-cell",
+                "Photonics v26 Sable geometry atlas rebuilt: rebuild={}, subLevels={}, receiverCells={}, occluderCells={}, size={}x{}x{}, precision=solid-block-cell, payloadHash={}",
                 geometryRebuilds,
                 accepted,
                 receiverCells,
                 occluderCells,
                 width,
                 height,
-                depth
+                depth,
+                Integer.toUnsignedString(Arrays.hashCode(payload), 16)
         );
         geometryKeys = List.copyOf(keys);
+        geometryLayoutKeys = List.copyOf(layoutKeys);
         geometryOffsets = offsets;
+        geometryPayload = payload;
         return offsets;
     }
 
@@ -450,13 +504,16 @@ public final class ContraptionLightsSableBridge {
         if (collision.isEmpty())
             return false;
 
-        return state.canOcclude() || !Block.isShapeFullBlock(collision);
+        return state.canOcclude() && Block.isShapeFullBlock(collision);
     }
 
     private static void resetGeometryAtlas() {
         geometryKeys = List.of();
+        geometryLayoutKeys = List.of();
         geometryOffsets = new int[0];
+        geometryPayload = new byte[0];
         geometryRebuilds = 0;
+        geometryUnchangedScans = 0;
         closeGeometryTexture();
     }
 
@@ -482,7 +539,7 @@ public final class ContraptionLightsSableBridge {
         if (!motionActiveLogged && subLevels > 0) {
             motionActiveLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v24 Sable receiver motion active: subLevels={}, classifier=collision-cell-atlas+emissive-cells, localVisibility=block-cell",
+                    "Photonics v26 Sable receiver motion active: subLevels={}, classifier=receiver-cell-atlas+emissive-cells, localVisibility=solid-block-cell, temporalTransform=bounds-independent",
                     subLevels
             );
         }
@@ -501,7 +558,7 @@ public final class ContraptionLightsSableBridge {
         if (!activeLogged && structures > 0) {
             activeLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v25 frame-aligned Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}, proposalBudget=one-expected-candidate-per-pixel",
+                    "Photonics v26 frame-aligned Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}, proposalBudget=stratified-priority-prefix",
                     structures,
                     sourceLights,
                     uploadedLights
@@ -560,6 +617,17 @@ public final class ContraptionLightsSableBridge {
             int sizeY,
             int sizeZ,
             byte[] occupancyRevision
+    ) {
+    }
+
+    private record GeometryLayoutKey(
+            UUID uniqueId,
+            int minX,
+            int minY,
+            int minZ,
+            int sizeX,
+            int sizeY,
+            int sizeZ
     ) {
     }
 

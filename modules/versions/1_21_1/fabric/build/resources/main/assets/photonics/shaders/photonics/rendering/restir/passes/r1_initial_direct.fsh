@@ -17,8 +17,12 @@ void main() {
     float sample_weight = 0.0f;
 
     if (light_list_size > 0) {
+        int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
+        int priority_offset = priority_count > 0
+            ? ph_rand_next_int(frag_rnd_state, 0, priority_count)
+            : 0;
         for (int i = 0; i < PH_RESTIR_INITIAL_SAMPLES; i++) {
-            DirectSample smple = direct_sample_random(frag_rnd_state);
+            DirectSample smple = direct_sample_stratified(frag_rnd_state, i, priority_offset);
             float target_weight = direct_sample_get_weight(
                 smple,
                 frag_rt_pos,

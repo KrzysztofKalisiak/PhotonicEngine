@@ -12,8 +12,12 @@ import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import org.joml.Vector3i;
@@ -24,6 +28,10 @@ import java.util.List;
 public class MinecraftBlockMesher implements BlockMesher<McMeshState> {
     private static final Id BLOCK_ATLAS = (Id) (Object) TextureAtlas.LOCATION_BLOCKS;
     private static final Direction[] DIRECTIONS = Direction.values();
+    private static final TagKey<Block> NON_OCCLUDING_VOXELS = TagKey.create(
+            Registries.BLOCK,
+            ResourceLocation.fromNamespaceAndPath("photonics", "non_occluding_voxels")
+    );
 
     private final ThreadLocal<RandomSource> random = ThreadLocal.withInitial(RandomSource::create);
 
@@ -35,6 +43,7 @@ public class MinecraftBlockMesher implements BlockMesher<McMeshState> {
             IBlockAndTintGetter blockAndTintGetter
     ) {
         BlockState mcState = (BlockState) blockState;
+        if (mcState.is(NON_OCCLUDING_VOXELS)) return McMeshState.EMPTY;
         if (mcState.getRenderShape() != RenderShape.MODEL) return McMeshState.EMPTY;
 
         var model = Minecraft.getInstance().getBlockRenderer().getBlockModel(mcState);

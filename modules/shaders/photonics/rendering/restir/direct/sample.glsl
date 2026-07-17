@@ -7,22 +7,40 @@ struct DirectSample {
     int light_index; // The index of the sampled light, will be -1 when empty
 };
 
-// Spend one initial candidate on the moving-light prefix on average. This keeps
-// the other candidates available for the much larger world-light population.
-const float PH_PRIORITY_LIGHT_PROPOSAL_SHARE = 1.0f / float(PH_RESTIR_INITIAL_SAMPLES);
+const int PH_MAX_PRIORITY_LIGHT_PROPOSALS = 4;
 
 DirectSample direct_sample_empty() {
     return DirectSample(-1);
 }
 
-DirectSample direct_sample_random(inout uint rnd_state) {
+int direct_priority_sample_count() {
     int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
-    if (priority_count > 0
-            && ph_rand_next_float(rnd_state) < PH_PRIORITY_LIGHT_PROPOSAL_SHARE) {
-        return DirectSample(ph_rand_next_int(rnd_state, 0, priority_count));
-    }
+    if (priority_count <= 0)
+        return 0;
 
-    return DirectSample(ph_rand_next_int(rnd_state, 0, light_list_size));
+    // If every selected light is dynamic, the entire candidate budget belongs
+    // to this stratum. Otherwise reserve up to four distinct prefix samples.
+    if (priority_count == light_list_size)
+        return PH_RESTIR_INITIAL_SAMPLES;
+
+    return min(
+        PH_RESTIR_INITIAL_SAMPLES,
+        min(priority_count, PH_MAX_PRIORITY_LIGHT_PROPOSALS)
+    );
+}
+
+DirectSample direct_sample_stratified(
+    inout uint rnd_state,
+    int candidate_index,
+    int priority_offset
+) {
+    int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
+    int priority_samples = direct_priority_sample_count();
+    if (candidate_index < priority_samples)
+        return DirectSample((priority_offset + candidate_index) % priority_count);
+
+    int suffix_count = light_list_size - priority_count;
+    return DirectSample(priority_count + ph_rand_next_int(rnd_state, 0, suffix_count));
 }
 
 float direct_sample_probability(DirectSample smple) {
@@ -30,15 +48,24 @@ float direct_sample_probability(DirectSample smple) {
         return 0.0f;
 
     int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
-    if (priority_count <= 0)
-        return 1.0f / float(light_list_size);
+    int priority_samples = direct_priority_sample_count();
+    float total_samples = float(PH_RESTIR_INITIAL_SAMPLES);
 
-    float probability = (1.0f - PH_PRIORITY_LIGHT_PROPOSAL_SHARE)
-        / float(light_list_size);
-    if (smple.light_index < priority_count)
-        probability += PH_PRIORITY_LIGHT_PROPOSAL_SHARE / float(priority_count);
+    // These are disjoint strata. Using their exact aggregate proposal density
+    // keeps canonical RIS unbiased while guaranteeing useful dynamic samples.
+    if (smple.light_index < priority_count) {
+        if (priority_samples <= 0)
+            return 0.0f;
 
-    return probability;
+        return float(priority_samples) / (total_samples * float(priority_count));
+    }
+
+    int suffix_count = light_list_size - priority_count;
+    int suffix_samples = PH_RESTIR_INITIAL_SAMPLES - priority_samples;
+    if (suffix_count <= 0 || suffix_samples <= 0)
+        return 0.0f;
+
+    return float(suffix_samples) / (total_samples * float(suffix_count));
 }
 
 bool direct_sample_is_empty(DirectSample smple) {

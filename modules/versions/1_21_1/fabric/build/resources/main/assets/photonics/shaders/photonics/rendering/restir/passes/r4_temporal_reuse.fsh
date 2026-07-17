@@ -33,13 +33,16 @@ void main() {
         sublevel_token
     ).xy;
 
-    if (clamp(uv, 0, 1) != uv) discard;
+    if (any(lessThan(uv, vec2(0.0f))) || any(greaterThanEqual(uv, vec2(1.0f))))
+        discard;
 
-    ivec2 prev_texel = ivec2(uv * PH_VIEW_SIZE);
+    ivec2 previous_size = textureSize(prev_ph_frag_data0, 0);
+    ivec2 prev_texel = ivec2(uv * vec2(previous_size));
 
     FragData prev_frag;
     frag_data_load_previous(prev_frag, prev_texel);
 
+    if (!frag_data_is_in_world(prev_frag)) discard;
     if (frag_data_sublevel_token(prev_frag) != sublevel_token) discard;
 
     if (!frag_is_bad_angle) {
