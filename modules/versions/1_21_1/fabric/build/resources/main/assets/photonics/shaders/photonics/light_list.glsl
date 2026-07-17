@@ -31,7 +31,9 @@ Light light_list_get(int index) {
 }
 
 int light_list_map_index(int old_index) {
-    if (old_index < 0 || old_index > light_list_size) return -1;
+    // old_index belongs to the previous list, whose size can exceed the
+    // current generation. The mapping buffer is allocated to PH_MAX_LIGHTS.
+    if (old_index < 0 || old_index >= PH_MAX_LIGHTS) return -1;
 
     return ph_light_mapping_array[old_index];
 }

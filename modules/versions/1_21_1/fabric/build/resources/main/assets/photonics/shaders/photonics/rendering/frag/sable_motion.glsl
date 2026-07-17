@@ -116,70 +116,105 @@ bool ph_sable_light_grid_position(
     return false;
 }
 
+bool ph_sable_cell_line_interval(
+    vec3 origin,
+    vec3 direction,
+    ivec3 cell,
+    out float enter_t,
+    out float exit_t
+) {
+    vec3 cell_min = vec3(cell);
+    vec3 cell_max = cell_min + vec3(1.0f);
+    enter_t = -1e30f;
+    exit_t = 1e30f;
+
+    if (abs(direction.x) <= 1e-6f) {
+        if (origin.x < cell_min.x || origin.x > cell_max.x) return false;
+    } else {
+        float first_t = (cell_min.x - origin.x) / direction.x;
+        float second_t = (cell_max.x - origin.x) / direction.x;
+        enter_t = max(enter_t, min(first_t, second_t));
+        exit_t = min(exit_t, max(first_t, second_t));
+    }
+    if (abs(direction.y) <= 1e-6f) {
+        if (origin.y < cell_min.y || origin.y > cell_max.y) return false;
+    } else {
+        float first_t = (cell_min.y - origin.y) / direction.y;
+        float second_t = (cell_max.y - origin.y) / direction.y;
+        enter_t = max(enter_t, min(first_t, second_t));
+        exit_t = min(exit_t, max(first_t, second_t));
+    }
+    if (abs(direction.z) <= 1e-6f) {
+        if (origin.z < cell_min.z || origin.z > cell_max.z) return false;
+    } else {
+        float first_t = (cell_min.z - origin.z) / direction.z;
+        float second_t = (cell_max.z - origin.z) / direction.z;
+        enter_t = max(enter_t, min(first_t, second_t));
+        exit_t = min(exit_t, max(first_t, second_t));
+    }
+
+    return enter_t <= exit_t + 1e-6f;
+}
+
+bool ph_sable_receiver_cell_on_line(
+    vec3 grid_pos,
+    vec3 direction,
+    ivec3 size,
+    int atlas_z,
+    ivec3 candidate
+) {
+    float enter_t;
+    float exit_t;
+    return ph_sable_cell_receiver(candidate, size, atlas_z)
+        && ph_sable_cell_line_interval(grid_pos, direction, candidate, enter_t, exit_t);
+}
+
 bool ph_sable_resolve_receiver_cell(
     vec3 grid_pos,
-    vec3 outward_normal,
+    vec3 receiver_to_source_direction,
     ivec3 size,
     int atlas_z,
     out ivec3 receiver_cell
 ) {
     const float probe = 0.15f;
 
-    receiver_cell = ivec3(floor(grid_pos - outward_normal * probe));
-    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
+    receiver_cell = ivec3(floor(grid_pos - receiver_to_source_direction * probe));
+    if (ph_sable_receiver_cell_on_line(
+            grid_pos,
+            receiver_to_source_direction,
+            size,
+            atlas_z,
+            receiver_cell
+    )) return true;
 
     receiver_cell = ivec3(floor(grid_pos));
-    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
-
-    receiver_cell = ivec3(floor(grid_pos + vec3(probe, 0.0f, 0.0f)));
-    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
-    receiver_cell = ivec3(floor(grid_pos - vec3(probe, 0.0f, 0.0f)));
-    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
-    receiver_cell = ivec3(floor(grid_pos + vec3(0.0f, probe, 0.0f)));
-    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
-    receiver_cell = ivec3(floor(grid_pos - vec3(0.0f, probe, 0.0f)));
-    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
-    receiver_cell = ivec3(floor(grid_pos + vec3(0.0f, 0.0f, probe)));
-    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
-    receiver_cell = ivec3(floor(grid_pos - vec3(0.0f, 0.0f, probe)));
-    return ph_sable_cell_receiver(receiver_cell, size, atlas_z);
+    return ph_sable_receiver_cell_on_line(
+        grid_pos,
+        receiver_to_source_direction,
+        size,
+        atlas_z,
+        receiver_cell
+    );
 }
 
-vec3 ph_sable_exit_receiver_cell(vec3 grid_pos, vec3 direction, ivec3 receiver_cell) {
-    vec3 cell_min = vec3(receiver_cell);
-    vec3 cell_max = cell_min + vec3(1.0f);
-    vec3 point = clamp(grid_pos, cell_min, cell_max);
-    vec3 exit_t = vec3(1e30f);
+bool ph_sable_exit_receiver_cell(
+    vec3 grid_pos,
+    vec3 direction,
+    ivec3 receiver_cell,
+    out vec3 endpoint
+) {
+    float enter_t;
+    float exit_t;
+    if (!ph_sable_cell_line_interval(
+            grid_pos,
+            direction,
+            receiver_cell,
+            enter_t,
+            exit_t
+    )) return false;
 
-    if (direction.x > 1e-6f)
-        exit_t.x = (cell_max.x - point.x) / direction.x;
-    else if (direction.x < -1e-6f)
-        exit_t.x = (cell_min.x - point.x) / direction.x;
-    if (direction.y > 1e-6f)
-        exit_t.y = (cell_max.y - point.y) / direction.y;
-    else if (direction.y < -1e-6f)
-        exit_t.y = (cell_min.y - point.y) / direction.y;
-    if (direction.z > 1e-6f)
-        exit_t.z = (cell_max.z - point.z) / direction.z;
-    else if (direction.z < -1e-6f)
-        exit_t.z = (cell_min.z - point.z) / direction.z;
-
-    float first_exit = min(exit_t.x, min(exit_t.y, exit_t.z));
-    vec3 endpoint = point + direction * first_exit;
-    if (abs(exit_t.x - first_exit) <= 1e-5f)
-        endpoint.x = direction.x > 0.0f
-            ? cell_max.x + PH_SABLE_VISIBILITY_BIAS
-            : cell_min.x - PH_SABLE_VISIBILITY_BIAS;
-    if (abs(exit_t.y - first_exit) <= 1e-5f)
-        endpoint.y = direction.y > 0.0f
-            ? cell_max.y + PH_SABLE_VISIBILITY_BIAS
-            : cell_min.y - PH_SABLE_VISIBILITY_BIAS;
-    if (abs(exit_t.z - first_exit) <= 1e-5f)
-        endpoint.z = direction.z > 0.0f
-            ? cell_max.z + PH_SABLE_VISIBILITY_BIAS
-            : cell_min.z - PH_SABLE_VISIBILITY_BIAS;
-
-    return endpoint;
+    endpoint = grid_pos + direction * (exit_t + PH_SABLE_VISIBILITY_BIAS);
+    return ph_sable_finite_vec3(endpoint);
 }
 
 bool ph_sable_grid_segment_visible(
@@ -254,7 +289,6 @@ bool ph_sable_same_sublevel_light_visible(
     int receiver_slot,
     uint receiver_token,
     vec3 receiver_world_pos,
-    vec3 receiver_world_normal,
     vec3 light_world_pos
 ) {
     if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
@@ -279,39 +313,33 @@ bool ph_sable_same_sublevel_light_visible(
     if (!ph_sable_finite_vec3(receiver_grid_pos))
         return true;
 
-    vec3 receiver_grid_normal = transpose(inverse(mat3(world_to_grid))) * receiver_world_normal;
-    vec3 toward_light = (emissive_cell_min + vec3(0.5f)) - receiver_grid_pos;
-    float toward_light_length_sq = dot(toward_light, toward_light);
-    float normal_length_sq = dot(receiver_grid_normal, receiver_grid_normal);
-
-    if (!ph_sable_finite_vec3(receiver_grid_normal) || normal_length_sq <= 1e-8f) {
-        if (!ph_sable_finite_vec3(toward_light) || toward_light_length_sq <= 1e-8f)
-            return true;
-        receiver_grid_normal = toward_light * inversesqrt(toward_light_length_sq);
-    } else {
-        receiver_grid_normal *= inversesqrt(normal_length_sq);
-    }
-    if (dot(receiver_grid_normal, toward_light) < 0.0f)
-        receiver_grid_normal = -receiver_grid_normal;
+    vec3 source_center = emissive_cell_min + vec3(0.5f);
+    vec3 receiver_to_source = source_center - receiver_grid_pos;
+    float receiver_to_source_length_sq = dot(receiver_to_source, receiver_to_source);
+    if (!ph_sable_finite_vec3(receiver_to_source)
+            || receiver_to_source_length_sq <= 1e-8f)
+        return true;
+    receiver_to_source *= inversesqrt(receiver_to_source_length_sq);
 
     ivec3 grid_size = ivec3(ph_sable_grid_info[receiver_slot].xyz + 0.5f);
     int atlas_z = int(ph_sable_grid_info[receiver_slot].w);
     ivec3 receiver_cell;
     if (!ph_sable_resolve_receiver_cell(
             receiver_grid_pos,
-            receiver_grid_normal,
+            receiver_to_source,
             grid_size,
             atlas_z,
             receiver_cell
     ))
         return true;
 
-    vec3 receiver_endpoint = ph_sable_exit_receiver_cell(
+    vec3 receiver_endpoint;
+    if (!ph_sable_exit_receiver_cell(
         receiver_grid_pos,
-        receiver_grid_normal,
-        receiver_cell
-    );
-    vec3 source_center = emissive_cell_min + vec3(0.5f);
+        receiver_to_source,
+        receiver_cell,
+        receiver_endpoint
+    )) return true;
     vec3 source_to_receiver = receiver_endpoint - source_center;
     float source_ray_scale = max(
         abs(source_to_receiver.x),
