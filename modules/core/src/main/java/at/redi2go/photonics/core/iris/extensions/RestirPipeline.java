@@ -32,7 +32,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         registerComponent(ExternalSubLevelMotion.instance());
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v28 generation-aligned adaptive stratified ReSTIR proposals, thin-cutout vegetation visibility, collinear Sable local visibility, bounds-stable Sable receiver motion, strict temporal history validation, SVGF quality floor, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v29 generation-aligned adaptive stratified ReSTIR proposals, linear thin-cutout coverage, exposed-face Sable local visibility, motion-reactive Sable accumulation, bounds-stable Sable receiver motion, strict temporal history validation, SVGF quality floor, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, temporal reuse, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();

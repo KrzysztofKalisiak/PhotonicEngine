@@ -142,11 +142,39 @@ void sample_history_reproject(out SampleHistory smple) {
     );
 }
 
+float sample_history_accumulation_limit() {
+    if (frag_data_sublevel_token(_frag_data) == 0u)
+        return float(PH_RESTIR_ACCUMULATION_FRAMES);
+
+    FragMotion motion;
+    frag_motion_load(motion, frag_tex_coord);
+    vec3 current_world_pos = frag_data_player_pos(_frag_data) + cameraPosition;
+    vec3 previous_world_pos = motion.previous_player_pos + previousCameraPosition;
+    vec3 world_motion = current_world_pos - previous_world_pos;
+    float normal_alignment = dot(
+        frag_data_geo_normal(_frag_data),
+        motion.previous_geo_normal
+    );
+
+    // Reprojection preserves same-sublevel lighting, but visibility against
+    // ordinary world geometry changes as the receiver moves. Retain only one
+    // previous lighting sample while moving so old fence shadows decay quickly.
+    if (dot(world_motion, world_motion) > 1e-6f || normal_alignment < 0.9999f)
+        return 1.0f;
+
+    return float(PH_RESTIR_ACCUMULATION_FRAMES);
+}
+
 void sample_history_combine_lighting(inout SampleHistory history, in SampleHistory smple) {
+    float accumulation_limit = sample_history_accumulation_limit();
 #if PH_RESTIR_DENOISER_PASSES != 0
-    history.lighting.w = min(history.lighting.w, PH_RESTIR_ACCUMULATION_FRAMES);
+    history.lighting.w = min(history.lighting.w, accumulation_limit);
     history.lighting.rgb = mix(history.lighting.rgb, smple.lighting.rgb, 1f / (++history.lighting.w));
 #else
+    if (history.lighting.a > accumulation_limit) {
+        history.lighting.rgb *= accumulation_limit / history.lighting.a;
+        history.lighting.a = accumulation_limit;
+    }
     if (history.lighting.a >= PH_RESTIR_ACCUMULATION_FRAMES - 1f)
         history.lighting *= ((PH_RESTIR_ACCUMULATION_FRAMES - 1f) / history.lighting.a);
 
