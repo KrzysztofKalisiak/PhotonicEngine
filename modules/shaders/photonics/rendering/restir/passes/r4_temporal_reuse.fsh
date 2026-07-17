@@ -67,8 +67,11 @@ void main() {
 
     // load temporal sampled reservoir
     if (direct_reservoir_load_previous(temp_direct, prev_texel)) {
-        temp_direct.total_samples = min(max_direct_temporal_samples, temp_direct.total_samples);
-        direct_reservoir_merge(direct_result, temp_direct, direct_sample_weight);
+        direct_reservoir_validate_visiblity(temp_direct, frag_rt_pos, frag_geo_normal);
+        if (temp_direct.weight > 0.0f && !direct_reservoir_is_empty(temp_direct)) {
+            temp_direct.total_samples = min(max_direct_temporal_samples, temp_direct.total_samples);
+            direct_reservoir_merge(direct_result, temp_direct, direct_sample_weight);
+        }
     }
 
     // write resulting reservoir

@@ -11,15 +11,15 @@ public class VoxelNormal {
         float y = normal.y();
         float z = normal.z();
 
-        int index = (int) (Math.abs(x) * (x * 0.5 + 0.5)
-                + Math.abs(y) * (y * 0.5 + 2.5)
-                + Math.abs(z) * (z * 0.5 + 4.5)
-                + 0.5);
+        float absX = Math.abs(x);
+        float absY = Math.abs(y);
+        float absZ = Math.abs(z);
 
-        index = Math.max(index, 0);
-        index = Math.min(index, 5);
-
-        return index;
+        if (absX >= absY && absX >= absZ)
+            return x < 0.0f ? 0 : 1;
+        if (absY >= absZ)
+            return y < 0.0f ? 2 : 3;
+        return z < 0.0f ? 4 : 5;
     }
 
     public static Vector3fc getNormal(int index) {

@@ -20,7 +20,11 @@ public class MutablePaletteEntry extends PaletteEntry implements VoxelTreeEntry 
     }
 
     private void update(int normal, TextureData data) {
-        faces[normal] = data;
+        if (data == null) return;
+
+        TextureData current = faces[normal];
+        if (current == null || data.gt(current))
+            faces[normal] = data;
         hasTransparent = hasTransparent || VoxelColor.a(data.color()) != 255;
     }
 
@@ -59,6 +63,14 @@ public class MutablePaletteEntry extends PaletteEntry implements VoxelTreeEntry 
             if (faces[i] != null) continue;
 
             faces[i] = notNullFace;
+        }
+
+        hasTransparent = false;
+        for (TextureData face : faces) {
+            if (face != null && VoxelColor.a(face.color()) != 255) {
+                hasTransparent = true;
+                break;
+            }
         }
     }
 

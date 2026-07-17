@@ -14,11 +14,8 @@
 
 layout(location = 0) out vec4 denoise_out;
 
-vec3 ph_get_normal_for_denoise(ivec2 texel) {
-    FragData frag;
-    frag_data_load(frag, texel);
-
-    return frag_is_hand ? frag_data_geo_normal(frag) : frag_data_tex_normal(frag);
+vec3 ph_get_normal_for_denoise(FragData frag) {
+    return frag_data_is_hand(frag) ? frag_data_geo_normal(frag) : frag_data_tex_normal(frag);
 }
 
 ivec2 ph_get_denoise_depth_texel(ivec2 texel) {
@@ -66,12 +63,19 @@ void main() {
             max_texel
         );
 
+        FragData sample_frag;
+        frag_data_load(sample_frag, p);
+        if (!frag_data_is_in_world(sample_frag)
+                || frag_data_is_hand(sample_frag) != frag_is_hand
+                || frag_data_sublevel_token(sample_frag) != frag_data_sublevel_token(_frag_data))
+            continue;
+
         vec4 sample_data = texelFetch(prev_denoise_result, p, 0);
         #define Ci sample_data.rgb
         #define Vi sample_data.a
 
         float Li = ph_luminance(Ci);
-        vec3  Ni = ph_get_normal_for_denoise(p);
+        vec3  Ni = ph_get_normal_for_denoise(sample_frag);
         float Di = svgf_linearize_depth(texelFetch(depthtex0, ph_get_denoise_depth_texel(p), 0).x);
         const float k = kernel[i];
 

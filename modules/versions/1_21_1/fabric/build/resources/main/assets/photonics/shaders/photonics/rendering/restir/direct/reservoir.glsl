@@ -57,12 +57,20 @@ bool direct_reservoir_merge(
     DirectReservoir other,
     inout float sample_weight
 ) {
+    if (direct_reservoir_is_empty(other)
+            || other.weight <= 0.0f
+            || other.total_samples <= 0.0f
+            || direct_reservoir_is_nan(other))
+        return false;
+
     float other_sample_weight = direct_sample_get_weight(
         other.smple,
         frag_rt_pos,
         frag_geo_normal,
         frag_is_hand ? frag_geo_normal : frag_tex_normal
     );
+    if (other_sample_weight <= 0.0f || isnan(other_sample_weight) || isinf(other_sample_weight))
+        return false;
 
     float other_weight = other_sample_weight * other.weight * other.total_samples;
     if (direct_reservoir_update(result, other.smple, other_weight, other.total_samples)) {

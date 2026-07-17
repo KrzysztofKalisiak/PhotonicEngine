@@ -1,5 +1,6 @@
 package at.redi2go.photonics.common.mixins.iris.extension;
 
+import at.redi2go.photonics.common.compat.SableSectionExclusion;
 import at.redi2go.photonics.common.iris.IrisUtil;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -11,12 +12,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class RenderSectionManagerMixin {
     @Inject(method = "onSectionAdded", at = @At("HEAD"))
     private void onSectionAdded(int x, int y, int z, CallbackInfo ci) {
+        if (SableSectionExclusion.isSubLevelSection(x, z)) return;
+
         IrisUtil.getPhotonics()
                 .ifPresent(photonics -> photonics.onSectionAdded(x, y, z));
     }
     
     @Inject(method = "scheduleRebuild", at = @At("HEAD"))
     private void scheduleRebuild(int x, int y, int z, boolean playerChanged, CallbackInfo ci) {
+        if (SableSectionExclusion.isSubLevelSection(x, z)) return;
+
         IrisUtil.getPhotonics()
                 .ifPresent(photonics -> photonics.onSectionChanged(x, y, z));
     }
