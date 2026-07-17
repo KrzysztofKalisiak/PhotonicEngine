@@ -28,6 +28,7 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -53,7 +54,8 @@ public final class ContraptionLightsSableBridge {
     private static int lastMotionSubLevels = -1;
     private static int nextMotionToken = 1;
     private static final Map<UUID, Matrix4f> previousWorldToLocal = new HashMap<>();
-    private static final Map<UUID, Integer> motionTokens = new HashMap<>();
+    private static final Map<UUID, MotionTokenState> motionTokens = new HashMap<>();
+    private static final Map<UUID, GeometryRevisionSnapshot> geometryRevisionSnapshots = new HashMap<>();
 
     private static IGpuTexture3D geometryTexture;
     private static List<GeometryKey> geometryKeys = List.of();
@@ -207,6 +209,7 @@ public final class ContraptionLightsSableBridge {
         ExternalSubLevelMotion.clear();
         previousWorldToLocal.clear();
         motionTokens.clear();
+        geometryRevisionSnapshots.clear();
         nextMotionToken = 1;
         if (lastUploadedLights > 0)
             Photonics.LOGGER.info("Photonics v24 Sable moving lights: {} -> 0", lastUploadedLights);
@@ -309,12 +312,13 @@ public final class ContraptionLightsSableBridge {
                 currentWorldToLocal.put(uniqueId, currentLocal);
             }
 
+            candidates.sort(Comparator.comparing(MotionCandidate::uniqueId));
             int[] atlasOffsets = updateGeometryAtlas(candidates);
             var subLevels = new ArrayList<ExternalSubLevelMotion.SubLevel>(candidates.size());
             for (int i = 0; i < candidates.size(); i++) {
                 MotionCandidate candidate = candidates.get(i);
                 subLevels.add(new ExternalSubLevelMotion.SubLevel(
-                        motionToken(candidate.uniqueId()),
+                        motionToken(candidate),
                         candidate.currentWorldToGrid(),
                         candidate.currentWorldToPreviousWorld(),
                         new Vector3i(candidate.sizeX(), candidate.sizeY(), candidate.sizeZ()),
@@ -330,6 +334,7 @@ public final class ContraptionLightsSableBridge {
             previousWorldToLocal.keySet().retainAll(currentWorldToLocal.keySet());
             previousWorldToLocal.putAll(currentWorldToLocal);
             motionTokens.keySet().retainAll(currentWorldToLocal.keySet());
+            geometryRevisionSnapshots.keySet().retainAll(currentWorldToLocal.keySet());
             logMotionCapture(subLevels.size());
             motionTransientFailureLogged = false;
         } catch (InvocationTargetException | RuntimeException exception) {
@@ -357,16 +362,7 @@ public final class ContraptionLightsSableBridge {
         var keys = new ArrayList<GeometryKey>(candidates.size());
         var layoutKeys = new ArrayList<GeometryLayoutKey>(candidates.size());
         for (MotionCandidate candidate : candidates) {
-            keys.add(new GeometryKey(
-                    candidate.uniqueId(),
-                    candidate.minX(),
-                    candidate.minY(),
-                    candidate.minZ(),
-                    candidate.sizeX(),
-                    candidate.sizeY(),
-                    candidate.sizeZ(),
-                    candidate.occupancyRevision()
-            ));
+            keys.add(geometryKey(candidate));
             layoutKeys.add(new GeometryLayoutKey(
                     candidate.uniqueId(),
                     candidate.minX(),
@@ -553,13 +549,48 @@ public final class ContraptionLightsSableBridge {
         geometryDepth = 0;
     }
 
-    private static int motionToken(UUID uniqueId) {
-        return motionTokens.computeIfAbsent(uniqueId, ignored -> {
-            int token = nextMotionToken++;
-            if (nextMotionToken > 0xffff)
-                nextMotionToken = 1;
-            return token;
-        });
+    private static GeometryKey geometryKey(MotionCandidate candidate) {
+        byte[] revision = candidate.occupancyRevision();
+        GeometryRevisionSnapshot cached = geometryRevisionSnapshots.get(candidate.uniqueId());
+        ByteBuffer revisionContent;
+        if (cached != null && cached.sourceRevision() == revision) {
+            revisionContent = cached.content();
+        } else {
+            revisionContent = ByteBuffer.wrap(
+                    revision == null ? new byte[0] : revision
+            ).asReadOnlyBuffer();
+            geometryRevisionSnapshots.put(
+                    candidate.uniqueId(),
+                    new GeometryRevisionSnapshot(revision, revisionContent)
+            );
+        }
+
+        return new GeometryKey(
+                candidate.uniqueId(),
+                candidate.minX(),
+                candidate.minY(),
+                candidate.minZ(),
+                candidate.sizeX(),
+                candidate.sizeY(),
+                candidate.sizeZ(),
+                revisionContent
+        );
+    }
+
+    private static int motionToken(MotionCandidate candidate) {
+        var historyKey = new SubLevelHistoryKey(
+                geometryKey(candidate),
+                List.copyOf(candidate.emissiveCells())
+        );
+        MotionTokenState current = motionTokens.get(candidate.uniqueId());
+        if (current != null && current.historyKey().equals(historyKey))
+            return current.token();
+
+        int token = nextMotionToken++;
+        if (nextMotionToken > 0xffff)
+            nextMotionToken = 1;
+        motionTokens.put(candidate.uniqueId(), new MotionTokenState(token, historyKey));
+        return token;
     }
 
     private static void logMotionCapture(int subLevels) {
@@ -662,8 +693,17 @@ public final class ContraptionLightsSableBridge {
             int sizeX,
             int sizeY,
             int sizeZ,
-            byte[] occupancyRevision
+            ByteBuffer occupancyRevision
     ) {
+    }
+
+    private record SubLevelHistoryKey(GeometryKey geometry, List<Vector3i> emissiveCells) {
+    }
+
+    private record MotionTokenState(int token, SubLevelHistoryKey historyKey) {
+    }
+
+    private record GeometryRevisionSnapshot(byte[] sourceRevision, ByteBuffer content) {
     }
 
     private record GeometryLayoutKey(

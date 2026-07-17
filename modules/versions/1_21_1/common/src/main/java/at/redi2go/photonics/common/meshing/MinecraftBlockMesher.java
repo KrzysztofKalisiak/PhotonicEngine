@@ -65,6 +65,8 @@ public class MinecraftBlockMesher implements BlockMesher<McMeshState> {
         int thinCutoutAlpha = mcState.is(TALL_THIN_CUTOUT_VOXELS)
                 ? TALL_THIN_CUTOUT_ALPHA
                 : mcState.is(THIN_CUTOUT_VOXELS) ? THIN_CUTOUT_ALPHA : 0;
+        BlockAndTintGetter level = (BlockAndTintGetter) blockAndTintGetter;
+        var modelOffset = mcState.getOffset(level, mcPos);
         var model = Minecraft.getInstance().getBlockRenderer().getBlockModel(mcState);
         var randomSource = random.get();
         var quads = new ArrayList<BakedQuad>();
@@ -86,6 +88,9 @@ public class MinecraftBlockMesher implements BlockMesher<McMeshState> {
                 blockId,
                 thinCutoutAlpha,
                 positionTinted,
+                (float) modelOffset.x,
+                (float) modelOffset.y,
+                (float) modelOffset.z,
                 List.copyOf(quads)
         );
     }
@@ -109,7 +114,7 @@ public class MinecraftBlockMesher implements BlockMesher<McMeshState> {
         blockBuilder
                 .useAtlas(BLOCK_ATLAS)
                 .useBlockId(meshState.blockId())
-                .useOffset(0.0f, 0.0f, 0.0f);
+                .useOffset(meshState.offsetX(), meshState.offsetY(), meshState.offsetZ());
 
         for (BakedQuad quad : meshState.quads()) {
             int tint = getTint(

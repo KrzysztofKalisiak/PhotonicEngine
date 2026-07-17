@@ -9,9 +9,12 @@ public record McMeshState(
         int blockId,
         int thinCutoutAlpha,
         boolean positionTinted,
+        float offsetX,
+        float offsetY,
+        float offsetZ,
         List<BakedQuad> quads
 ) implements BlockMeshState {
-    public static final McMeshState EMPTY = new McMeshState(-1, 0, false, List.of());
+    public static final McMeshState EMPTY = new McMeshState(-1, 0, false, 0.0f, 0.0f, 0.0f, List.of());
 
     @Override
     public boolean shouldCache() {
