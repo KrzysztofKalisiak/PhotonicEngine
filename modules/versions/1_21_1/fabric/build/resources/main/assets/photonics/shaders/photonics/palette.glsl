@@ -7,6 +7,9 @@
 
 // VoxelData common
 
+const uint PH_VOXEL_DATA_THIN_CUTOUT_BIT = 0x80000000u;
+const uint PH_VOXEL_DATA_BLOCK_ID_MASK = 0x7fffffffu;
+
 #define VoxelData uvec4
 
 void voxel_data_apply_tint(inout VoxelData voxel_data, uvec4 tint) {
@@ -18,8 +21,13 @@ void voxel_data_apply_tint(inout VoxelData voxel_data, uvec4 tint) {
     );
 }
 
+bool voxel_data_is_thin_cutout(VoxelData voxel_data) {
+    return (voxel_data.x & PH_VOXEL_DATA_THIN_CUTOUT_BIT) != 0u;
+}
+
 int voxel_data_block_id(VoxelData voxel_data) {
-    return int(voxel_data.x);
+    uint payload = voxel_data.x & PH_VOXEL_DATA_BLOCK_ID_MASK;
+    return payload == PH_VOXEL_DATA_BLOCK_ID_MASK ? -1 : int(payload);
 }
 
 vec4 voxel_data_albedo(VoxelData voxel_data) {
