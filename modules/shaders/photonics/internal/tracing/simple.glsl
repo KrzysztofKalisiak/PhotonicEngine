@@ -92,7 +92,13 @@ bool trace_light_vis(
             VoxelData voxel_data = ray_result_voxel_data(result);
             vec4 albedo = voxel_data_albedo(voxel_data);
 
-            light_transmittance *= 1.0f - albedo.a;
+            float direct_opacity = albedo.a;
+            if (voxel_data_is_thin_cutout(voxel_data)) {
+                // Preserve plant voxels for GI while reducing the oversized
+                // 1/16-grid silhouettes they project from nearby point lights.
+                direct_opacity *= direct_opacity;
+            }
+            light_transmittance *= 1.0f - direct_opacity;
 
             // Cutout alpha represents unresolved geometric coverage, not a
             // colored transmissive medium like stained glass.

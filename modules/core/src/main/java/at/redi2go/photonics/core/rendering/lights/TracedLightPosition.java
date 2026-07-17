@@ -51,7 +51,7 @@ public final class TracedLightPosition {
     }
 
     public Vector3i blockPos() {
-        return new Vector3i(pos, RoundingMode.TRUNCATE);
+        return new Vector3i(pos, RoundingMode.FLOOR);
     }
 
     public IBlockState blockState() {

@@ -7,8 +7,6 @@ struct DirectSample {
     int light_index; // The index of the sampled light, will be -1 when empty
 };
 
-const int PH_MAX_PRIORITY_LIGHT_PROPOSALS = 4;
-
 DirectSample direct_sample_empty() {
     return DirectSample(-1);
 }
@@ -19,13 +17,14 @@ int direct_priority_sample_count() {
         return 0;
 
     // If every selected light is dynamic, the entire candidate budget belongs
-    // to this stratum. Otherwise reserve up to four distinct prefix samples.
+    // to this stratum. Otherwise reserve at most half the budget for distinct
+    // dynamic lights, leaving the ordinary-light suffix at least half.
     if (priority_count == light_list_size)
         return PH_RESTIR_INITIAL_SAMPLES;
 
     return min(
         PH_RESTIR_INITIAL_SAMPLES,
-        min(priority_count, PH_MAX_PRIORITY_LIGHT_PROPOSALS)
+        min(priority_count, max(4, PH_RESTIR_INITIAL_SAMPLES / 2))
     );
 }
 
