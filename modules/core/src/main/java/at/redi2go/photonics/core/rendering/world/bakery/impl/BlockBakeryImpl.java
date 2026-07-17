@@ -319,6 +319,11 @@ public class BlockBakeryImpl implements BlockBakery {
             int tint = rasterState.v0().tint();
             AtlasTexture texture = currentTexture;
 
+            if (isThinCutoutBlockId(currentBlockId)) {
+                voxelizeThinCutoutQuad(rasterState, tint, texture, consumer);
+                return;
+            }
+
             tri[0] = rasterState.v0();
             tri[1] = rasterState.v1();
             tri[2] = rasterState.v2();
@@ -331,6 +336,9 @@ public class BlockBakeryImpl implements BlockBakery {
         }
 
         private static final float BLOCK_SIZE_INV = 1f / 16f;
+        private static final int THIN_CUTOUT_COVERAGE_GRID = 4;
+        private static final int THIN_CUTOUT_COVERAGE_SAMPLES =
+                THIN_CUTOUT_COVERAGE_GRID * THIN_CUTOUT_COVERAGE_GRID;
         private static final Vector3i VEC3I_ZERO = new Vector3i(0);
         private static final Vector3i VEC3I_ONE = new Vector3i(1);
 
@@ -404,6 +412,267 @@ public class BlockBakeryImpl implements BlockBakery {
                     }
                 }
             }
+        }
+
+        private void voxelizeThinCutoutQuad(
+                RasterState rasterState,
+                int tint,
+                AtlasTexture texture,
+                VoxelConsumer consumer
+        ) throws InterruptedException {
+            Vertex v0 = rasterState.v0();
+            Vertex v1 = rasterState.v1();
+            Vertex v2 = rasterState.v2();
+            Vertex v3 = rasterState.v3();
+
+            Vector3f planeBa = v1.sub(v0, new Vector3f());
+            Vector3f planeCa = v2.sub(v0, new Vector3f());
+            Vector3f planeNormalUnnormalized = planeBa.cross(planeCa, new Vector3f());
+            float planeNormalLengthSquared = planeNormalUnnormalized.lengthSquared();
+            if (planeNormalLengthSquared <= 1e-12f)
+                return;
+
+            Vector3f planeNormal = planeNormalUnnormalized.normalize(new Vector3f());
+            Vector3f normalHalf = planeNormal.mul(0.5f, new Vector3f());
+            Vector3f planeVertex = v0.mul(16.0f, new Vector3f());
+
+            Vector3i temp = rasterState.temp();
+            Vector3i min = rasterState.min().set(Integer.MAX_VALUE);
+            Vector3i max = rasterState.max().set(Integer.MIN_VALUE);
+            Vector3f vertex = rasterState.vertex();
+            includeThinCutoutBounds(v0, normalHalf, min, max, temp, vertex);
+            includeThinCutoutBounds(v1, normalHalf, min, max, temp, vertex);
+            includeThinCutoutBounds(v2, normalHalf, min, max, temp, vertex);
+            includeThinCutoutBounds(v3, normalHalf, min, max, temp, vertex);
+
+            max.max(min);
+            max.sub(min).max(VEC3I_ONE);
+
+            Vector3f tri0Ba = v1.sub(v0, new Vector3f());
+            Vector3f tri0Ca = v2.sub(v0, new Vector3f());
+            Vector3f tri0N = tri0Ba.cross(tri0Ca, new Vector3f());
+            float tri0InvNormalSquared = 1.0f / tri0N.lengthSquared();
+
+            Vector3f tri1Ba = v3.sub(v2, new Vector3f());
+            Vector3f tri1Ca = v0.sub(v2, new Vector3f());
+            Vector3f tri1N = tri1Ba.cross(tri1Ca, new Vector3f());
+            float tri1InvNormalSquared = 1.0f / tri1N.lengthSquared();
+
+            int dominantAxis = dominantAxis(planeNormal);
+            int sampleAxis0 = (dominantAxis + 1) % 3;
+            int sampleAxis1 = (dominantAxis + 2) % 3;
+            float sampleStep = 1.0f / THIN_CUTOUT_COVERAGE_GRID;
+            int normalIndex = VoxelNormal.getIndex(planeNormal);
+
+            Vector3f samplePosition = new Vector3f();
+            Vector3f projectedPosition = new Vector3f();
+            Vector3f blockPosition = new Vector3f();
+
+            for (int px = 0; px < max.x; px++) {
+                for (int py = 0; py < max.y; py++) {
+                    for (int pz = 0; pz < max.z; pz++) {
+                        int x = min.x + px;
+                        int y = min.y + py;
+                        int z = min.z + pz;
+                        int alphaSum = 0;
+                        long redWeightedSum = 0;
+                        long greenWeightedSum = 0;
+                        long blueWeightedSum = 0;
+                        TextureData representative = null;
+                        int representativeAlpha = -1;
+
+                        for (int sample0 = 0; sample0 < THIN_CUTOUT_COVERAGE_GRID; sample0++) {
+                            for (int sample1 = 0; sample1 < THIN_CUTOUT_COVERAGE_GRID; sample1++) {
+                                samplePosition.set(x + 0.5f, y + 0.5f, z + 0.5f);
+                                setComponent(
+                                        samplePosition,
+                                        sampleAxis0,
+                                        voxelComponent(sampleAxis0, x, y, z)
+                                                + (sample0 + 0.5f) * sampleStep
+                                );
+                                setComponent(
+                                        samplePosition,
+                                        sampleAxis1,
+                                        voxelComponent(sampleAxis1, x, y, z)
+                                                + (sample1 + 0.5f) * sampleStep
+                                );
+
+                                float planeDistance = projectedPosition
+                                        .set(samplePosition)
+                                        .sub(planeVertex)
+                                        .dot(planeNormal);
+                                projectedPosition
+                                        .set(planeNormal)
+                                        .mul(-planeDistance)
+                                        .add(samplePosition);
+                                temp.set(projectedPosition, RoundingMode.FLOOR);
+                                if (temp.x != x || temp.y != y || temp.z != z)
+                                    continue;
+
+                                blockPosition.set(projectedPosition).mul(BLOCK_SIZE_INV);
+                                TextureData textureData = sampleThinCutoutQuad(
+                                        texture,
+                                        currentBlockId,
+                                        blockPosition,
+                                        v0,
+                                        v1,
+                                        v2,
+                                        v3,
+                                        tri0Ba,
+                                        tri0Ca,
+                                        tri0N,
+                                        tri0InvNormalSquared,
+                                        tri1Ba,
+                                        tri1Ca,
+                                        tri1N,
+                                        tri1InvNormalSquared
+                                );
+                                if (textureData == null)
+                                    continue;
+
+                                int color = textureData.color();
+                                int alpha = VoxelColor.a(color);
+                                if (alpha == 0)
+                                    continue;
+
+                                alphaSum += alpha;
+                                redWeightedSum += (long) VoxelColor.r(color) * alpha;
+                                greenWeightedSum += (long) VoxelColor.g(color) * alpha;
+                                blueWeightedSum += (long) VoxelColor.b(color) * alpha;
+                                if (alpha > representativeAlpha) {
+                                    representative = textureData;
+                                    representativeAlpha = alpha;
+                                }
+                            }
+                        }
+
+                        if (representative == null || alphaSum == 0)
+                            continue;
+
+                        int coverageAlpha = Math.min(
+                                255,
+                                (alphaSum + THIN_CUTOUT_COVERAGE_SAMPLES / 2)
+                                        / THIN_CUTOUT_COVERAGE_SAMPLES
+                        );
+                        TextureData textureData = new TextureData(
+                                representative.blockId(),
+                                VoxelColor.from(
+                                        (int) (redWeightedSum / alphaSum),
+                                        (int) (greenWeightedSum / alphaSum),
+                                        (int) (blueWeightedSum / alphaSum),
+                                        coverageAlpha
+                                ),
+                                representative.normal(),
+                                representative.specular()
+                        ).withTint(tint);
+
+                        if (activeDiagnostic != null)
+                            activeDiagnostic.record(x, y, z, textureData);
+
+                        if (VoxelColor.a(textureData.color()) != 0)
+                            consumer.acceptVoxel(x, y, z, normalIndex, textureData);
+                    }
+                }
+            }
+        }
+
+        private static void includeThinCutoutBounds(
+                Vertex source,
+                Vector3f normalHalf,
+                Vector3i min,
+                Vector3i max,
+                Vector3i temp,
+                Vector3f vertex
+        ) {
+            source.mul(16.0f, vertex).sub(normalHalf);
+            min.min(temp.set(vertex, RoundingMode.FLOOR));
+            max.max(temp.set(vertex, RoundingMode.CEILING));
+        }
+
+        private static TextureData sampleThinCutoutQuad(
+                AtlasTexture texture,
+                int blockId,
+                Vector3f position,
+                Vertex v0,
+                Vertex v1,
+                Vertex v2,
+                Vertex v3,
+                Vector3f tri0Ba,
+                Vector3f tri0Ca,
+                Vector3f tri0N,
+                float tri0InvNormalSquared,
+                Vector3f tri1Ba,
+                Vector3f tri1Ca,
+                Vector3f tri1N,
+                float tri1InvNormalSquared
+        ) {
+            TextureData result = sampleThinCutoutTriangle(
+                    texture, blockId, position, v0, v1, v2,
+                    tri0Ba, tri0Ca, tri0N, tri0InvNormalSquared
+            );
+            if (result != null)
+                return result;
+
+            return sampleThinCutoutTriangle(
+                    texture, blockId, position, v2, v3, v0,
+                    tri1Ba, tri1Ca, tri1N, tri1InvNormalSquared
+            );
+        }
+
+        private static TextureData sampleThinCutoutTriangle(
+                AtlasTexture texture,
+                int blockId,
+                Vector3f position,
+                Vertex a,
+                Vertex b,
+                Vertex c,
+                Vector3f ba,
+                Vector3f ca,
+                Vector3f n,
+                float inverseNormalSquared
+        ) {
+            float px = position.x - a.x;
+            float py = position.y - a.y;
+            float pz = position.z - a.z;
+            float w1 = ((ba.y * pz - ba.z * py) * n.x
+                    + (ba.z * px - ba.x * pz) * n.y
+                    + (ba.x * py - ba.y * px) * n.z) * inverseNormalSquared;
+            float w2 = ((py * ca.z - pz * ca.y) * n.x
+                    + (pz * ca.x - px * ca.z) * n.y
+                    + (px * ca.y - py * ca.x) * n.z) * inverseNormalSquared;
+            float w3 = 1.0f - w1 - w2;
+            if (w1 < -1e-5f || w2 < -1e-5f || w3 < -1e-5f)
+                return null;
+
+            float u = Math.fma(w1, c.u(), Math.fma(w2, b.u(), w3 * a.u()));
+            float v = Math.fma(w1, c.v(), Math.fma(w2, b.v(), w3 * a.v()));
+            return texture.sample(blockId, u, v);
+        }
+
+        private static boolean isThinCutoutBlockId(int blockId) {
+            return (blockId & Integer.MIN_VALUE) != 0;
+        }
+
+        private static int dominantAxis(Vector3f normal) {
+            float x = Math.abs(normal.x);
+            float y = Math.abs(normal.y);
+            float z = Math.abs(normal.z);
+            if (x >= y && x >= z)
+                return 0;
+            return y >= z ? 1 : 2;
+        }
+
+        private static float voxelComponent(int axis, int x, int y, int z) {
+            return axis == 0 ? x : axis == 1 ? y : z;
+        }
+
+        private static void setComponent(Vector3f vector, int axis, float value) {
+            if (axis == 0)
+                vector.x = value;
+            else if (axis == 1)
+                vector.y = value;
+            else
+                vector.z = value;
         }
 
         @Override

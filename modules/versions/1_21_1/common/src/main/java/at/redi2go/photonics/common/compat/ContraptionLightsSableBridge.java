@@ -9,6 +9,7 @@ import at.redi2go.photonics.api.shaders.IShaderPack;
 import at.redi2go.photonics.common.iris.IrisUtil;
 import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.config.PhConfig;
+import at.redi2go.photonics.core.iris.extensions.RestirPipeline;
 import at.redi2go.photonics.core.rendering.lights.ExternalLightList;
 import at.redi2go.photonics.core.rendering.lights.TracedLightPosition;
 import at.redi2go.photonics.core.rendering.sublevel.ExternalSubLevelMotion;
@@ -44,6 +45,7 @@ public final class ContraptionLightsSableBridge {
     private static boolean unavailable;
     private static boolean activeLogged;
     private static boolean transientFailureLogged;
+    private static boolean veilPointLightSuppressionLogged;
     private static int lastUploadedLights = -1;
     private static int lastZeroLuminanceTracedLights = -1;
     private static int lastRejectedMaterials = -1;
@@ -202,6 +204,22 @@ public final class ContraptionLightsSableBridge {
                     exception
             );
         }
+    }
+
+    public static float filterVeilPointLightBrightness(float brightness) {
+        var extension = IrisUtil.getPhotonics().orElse(null);
+        if (!(extension instanceof RestirPipeline restirPipeline)
+                || !restirPipeline.isBlockLightEnabled())
+            return brightness;
+
+        if (!veilPointLightSuppressionLogged) {
+            veilPointLightSuppressionLogged = true;
+            Photonics.LOGGER.info(
+                    "Photonics v31 suppressing duplicate Contraption Lights/Veil point-light energy; Sable emissive material and bloom remain enabled"
+            );
+        }
+
+        return 0.0f;
     }
 
     public static void clear() {

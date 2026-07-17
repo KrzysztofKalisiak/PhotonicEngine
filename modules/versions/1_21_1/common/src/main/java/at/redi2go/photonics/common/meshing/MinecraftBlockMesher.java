@@ -44,8 +44,7 @@ public class MinecraftBlockMesher implements BlockMesher<McMeshState> {
     );
     private static final int UNKNOWN_BLOCK_ID_PAYLOAD = Integer.MAX_VALUE;
     private static final int THIN_CUTOUT_BLOCK_ID_FLAG = Integer.MIN_VALUE;
-    private static final int THIN_CUTOUT_ALPHA = 96;
-    private static final int TALL_THIN_CUTOUT_ALPHA = 54;
+    private static final int THIN_CUTOUT_TINT_ALPHA = 255;
     private static final AtomicBoolean INVALID_BLOCK_ID_LOGGED = new AtomicBoolean();
 
     private final ThreadLocal<RandomSource> random = ThreadLocal.withInitial(RandomSource::create);
@@ -63,8 +62,8 @@ public class MinecraftBlockMesher implements BlockMesher<McMeshState> {
 
         BlockPos mcPos = (BlockPos) pos;
         int thinCutoutAlpha = mcState.is(TALL_THIN_CUTOUT_VOXELS)
-                ? TALL_THIN_CUTOUT_ALPHA
-                : mcState.is(THIN_CUTOUT_VOXELS) ? THIN_CUTOUT_ALPHA : 0;
+                || mcState.is(THIN_CUTOUT_VOXELS)
+                ? THIN_CUTOUT_TINT_ALPHA : 0;
         BlockAndTintGetter level = (BlockAndTintGetter) blockAndTintGetter;
         var modelOffset = mcState.getOffset(level, mcPos);
         var model = Minecraft.getInstance().getBlockRenderer().getBlockModel(mcState);
