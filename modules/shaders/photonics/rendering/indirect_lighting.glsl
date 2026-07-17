@@ -103,9 +103,15 @@ void sample_indirect(
             albedo = voxel_data_albedo(voxel_data);
 
             if (ray_result_is_transparent(hit)) {
-                // Multiply alpha by 0.25 as it looks better with glass
-                running_light_transmittance *= 1.0f - (albedo.a * 0.25f);
-                ray_iter_apply_transparency(running_tint_color, albedo);
+                if (voxel_data_is_thin_cutout(voxel_data)) {
+                    // Thin alpha is neutral coverage from unresolved cutout
+                    // geometry; it must not tint light with plant albedo.
+                    running_light_transmittance *= 1.0f - albedo.a;
+                } else {
+                    // Multiply alpha by 0.25 as it looks better with glass.
+                    running_light_transmittance *= 1.0f - (albedo.a * 0.25f);
+                    ray_iter_apply_transparency(running_tint_color, albedo);
+                }
                 ray_iter_skip_block(ray);
 
                 continue;

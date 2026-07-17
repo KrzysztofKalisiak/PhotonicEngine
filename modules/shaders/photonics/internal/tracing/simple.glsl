@@ -93,7 +93,11 @@ bool trace_light_vis(
             vec4 albedo = voxel_data_albedo(voxel_data);
 
             light_transmittance *= 1.0f - albedo.a;
-            ray_iter_apply_transparency(running_tint_color, albedo);
+
+            // Cutout alpha represents unresolved geometric coverage, not a
+            // colored transmissive medium like stained glass.
+            if (!voxel_data_is_thin_cutout(voxel_data))
+                ray_iter_apply_transparency(running_tint_color, albedo);
             ray_iter_skip_block(ray);
 
             continue;

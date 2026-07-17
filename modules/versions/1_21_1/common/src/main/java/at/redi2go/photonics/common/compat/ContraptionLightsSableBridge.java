@@ -439,7 +439,7 @@ public final class ContraptionLightsSableBridge {
             geometryUnchangedScans++;
             if (Integer.bitCount(geometryUnchangedScans) == 1) {
                 Photonics.LOGGER.info(
-                        "Photonics v26 skipped unchanged Sable geometry upload: skipped={}, subLevels={}, size={}x{}x{}, payloadHash={}",
+                        "Photonics v27 skipped unchanged Sable geometry upload: skipped={}, subLevels={}, size={}x{}x{}, payloadHash={}",
                         geometryUnchangedScans,
                         accepted,
                         width,
@@ -479,7 +479,7 @@ public final class ContraptionLightsSableBridge {
         );
         geometryRebuilds++;
         Photonics.LOGGER.info(
-                "Photonics v26 Sable geometry atlas rebuilt: rebuild={}, subLevels={}, receiverCells={}, occluderCells={}, size={}x{}x{}, precision=solid-block-cell, payloadHash={}",
+                "Photonics v27 Sable geometry atlas rebuilt: rebuild={}, subLevels={}, receiverCells={}, occluderCells={}, size={}x{}x{}, precision=solid-block-cell, payloadHash={}",
                 geometryRebuilds,
                 accepted,
                 receiverCells,
@@ -539,7 +539,7 @@ public final class ContraptionLightsSableBridge {
         if (!motionActiveLogged && subLevels > 0) {
             motionActiveLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v26 Sable receiver motion active: subLevels={}, classifier=receiver-cell-atlas+emissive-cells, localVisibility=solid-block-cell, temporalTransform=bounds-independent",
+                    "Photonics v27 Sable receiver motion active: subLevels={}, classifier=receiver-cell-atlas+emissive-cells, localVisibility=surface-biased-solid-block-cell, temporalTransform=bounds-independent",
                     subLevels
             );
         }
@@ -558,7 +558,7 @@ public final class ContraptionLightsSableBridge {
         if (!activeLogged && structures > 0) {
             activeLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v26 frame-aligned Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}, proposalBudget=stratified-priority-prefix",
+                    "Photonics v27 frame-aligned Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}, proposalBudget=stratified-priority-prefix",
                     structures,
                     sourceLights,
                     uploadedLights

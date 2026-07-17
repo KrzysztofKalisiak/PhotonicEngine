@@ -376,7 +376,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         int priorityLightCount = lights.priorityLightCount();
         if (lastDiagnosticPriorityLights != priorityLightCount) {
             Photonics.LOGGER.info(
-                    "Photonics v26 direct-light priority prefix: movingLights={}, totalLights={}, minimumStratifiedPriorityCandidatesPerPixel={}",
+                    "Photonics v27 direct-light priority prefix: movingLights={}, totalLights={}, minimumStratifiedPriorityCandidatesPerPixel={}",
                     priorityLightCount,
                     lights.size(),
                     Math.min(priorityLightCount, 4)
@@ -420,12 +420,17 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
             }
 
             upload();
+
+            boolean listChanged = lights != mostRecentLights;
+            if (listChanged)
+                mostRecentLights = lights;
+
+            // Publish the size and priority prefix from the same generation that
+            // was just uploaded. Temporal mapping remains valid for this frame.
             uniformUpdater.updateAll();
 
-            if (lights != mostRecentLights) {
-                mostRecentLights = lights;
+            if (listChanged)
                 clearMapping();
-            }
         } finally {
             lock.unlock();
         }

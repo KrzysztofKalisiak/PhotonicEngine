@@ -132,6 +132,12 @@ int voxel_data_block_id(VoxelData voxel_data);
 ```
 Returns the block id of `voxel_data`.
 
+### `voxel_data_is_thin_cutout`
+```glsl
+bool voxel_data_is_thin_cutout(VoxelData voxel_data);
+```
+Returns whether alpha represents neutral coverage from thin cutout geometry rather than colored transmission.
+
 ### `voxel_data_albedo`
 ```glsl
 vec4 voxel_data_albedo(VoxelData voxel_data);
