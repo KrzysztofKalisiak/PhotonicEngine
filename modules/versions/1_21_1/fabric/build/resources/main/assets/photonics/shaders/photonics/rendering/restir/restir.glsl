@@ -156,11 +156,10 @@ float sample_history_accumulation_limit() {
         motion.previous_geo_normal
     );
 
-    // Reprojection preserves same-sublevel lighting, but visibility against
-    // ordinary world geometry changes as the receiver moves. Retain only one
-    // previous lighting sample while moving so old fence shadows decay quickly.
+    // Visibility is retraced in the current frame. Do not blend old RGB while
+    // the receiver moves, otherwise one retained sample leaves a 50/50 trail.
     if (dot(world_motion, world_motion) > 1e-6f || normal_alignment < 0.9999f)
-        return 1.0f;
+        return 0.0f;
 
     return float(PH_RESTIR_ACCUMULATION_FRAMES);
 }
