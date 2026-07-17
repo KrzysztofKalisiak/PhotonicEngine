@@ -156,45 +156,58 @@ bool ph_sable_cell_line_interval(
     return enter_t <= exit_t + 1e-6f;
 }
 
-bool ph_sable_receiver_cell_on_line(
-    vec3 grid_pos,
-    vec3 direction,
-    ivec3 size,
-    int atlas_z,
-    ivec3 candidate
-) {
-    float enter_t;
-    float exit_t;
-    return ph_sable_cell_receiver(candidate, size, atlas_z)
-        && ph_sable_cell_line_interval(grid_pos, direction, candidate, enter_t, exit_t);
+vec3 ph_sable_dominant_axis(vec3 value) {
+    vec3 magnitude = abs(value);
+    if (magnitude.x >= magnitude.y && magnitude.x >= magnitude.z)
+        return vec3(value.x >= 0.0f ? 1.0f : -1.0f, 0.0f, 0.0f);
+    if (magnitude.y >= magnitude.z)
+        return vec3(0.0f, value.y >= 0.0f ? 1.0f : -1.0f, 0.0f);
+    return vec3(0.0f, 0.0f, value.z >= 0.0f ? 1.0f : -1.0f);
 }
 
 bool ph_sable_resolve_receiver_cell(
     vec3 grid_pos,
-    vec3 receiver_to_source_direction,
+    vec3 grid_normal,
     ivec3 size,
     int atlas_z,
-    out ivec3 receiver_cell
+    out ivec3 receiver_cell,
+    out vec3 face_normal
 ) {
     const float probe = 0.15f;
+    face_normal = ph_sable_dominant_axis(grid_normal);
 
-    receiver_cell = ivec3(floor(grid_pos - receiver_to_source_direction * probe));
-    if (ph_sable_receiver_cell_on_line(
-            grid_pos,
-            receiver_to_source_direction,
-            size,
-            atlas_z,
-            receiver_cell
-    )) return true;
+    receiver_cell = ivec3(floor(grid_pos - face_normal * probe));
+    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
+
+    receiver_cell = ivec3(floor(grid_pos + face_normal * probe));
+    if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) {
+        face_normal = -face_normal;
+        return true;
+    }
 
     receiver_cell = ivec3(floor(grid_pos));
-    return ph_sable_receiver_cell_on_line(
-        grid_pos,
-        receiver_to_source_direction,
-        size,
-        atlas_z,
-        receiver_cell
-    );
+    return ph_sable_cell_receiver(receiver_cell, size, atlas_z);
+}
+
+vec3 ph_sable_receiver_surface_endpoint(
+    vec3 grid_pos,
+    vec3 face_normal,
+    ivec3 receiver_cell
+) {
+    vec3 cell_min = vec3(receiver_cell);
+    vec3 endpoint = clamp(grid_pos, cell_min, cell_min + vec3(1.0f));
+
+    if (face_normal.x != 0.0f)
+        endpoint.x = cell_min.x + (face_normal.x > 0.0f ? 1.0f : 0.0f)
+            + face_normal.x * PH_SABLE_VISIBILITY_BIAS;
+    else if (face_normal.y != 0.0f)
+        endpoint.y = cell_min.y + (face_normal.y > 0.0f ? 1.0f : 0.0f)
+            + face_normal.y * PH_SABLE_VISIBILITY_BIAS;
+    else
+        endpoint.z = cell_min.z + (face_normal.z > 0.0f ? 1.0f : 0.0f)
+            + face_normal.z * PH_SABLE_VISIBILITY_BIAS;
+
+    return endpoint;
 }
 
 bool ph_sable_exit_receiver_cell(
@@ -289,6 +302,7 @@ bool ph_sable_same_sublevel_light_visible(
     int receiver_slot,
     uint receiver_token,
     vec3 receiver_world_pos,
+    vec3 receiver_world_normal,
     vec3 light_world_pos
 ) {
     if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
@@ -313,6 +327,14 @@ bool ph_sable_same_sublevel_light_visible(
     if (!ph_sable_finite_vec3(receiver_grid_pos))
         return true;
 
+    vec3 receiver_grid_normal = transpose(inverse(mat3(world_to_grid)))
+        * receiver_world_normal;
+    float receiver_grid_normal_length_sq = dot(receiver_grid_normal, receiver_grid_normal);
+    if (!ph_sable_finite_vec3(receiver_grid_normal)
+            || receiver_grid_normal_length_sq <= 1e-8f)
+        return true;
+    receiver_grid_normal *= inversesqrt(receiver_grid_normal_length_sq);
+
     vec3 source_center = emissive_cell_min + vec3(0.5f);
     vec3 receiver_to_source = source_center - receiver_grid_pos;
     float receiver_to_source_length_sq = dot(receiver_to_source, receiver_to_source);
@@ -324,36 +346,63 @@ bool ph_sable_same_sublevel_light_visible(
     ivec3 grid_size = ivec3(ph_sable_grid_info[receiver_slot].xyz + 0.5f);
     int atlas_z = int(ph_sable_grid_info[receiver_slot].w);
     ivec3 receiver_cell;
+    vec3 face_normal;
     if (!ph_sable_resolve_receiver_cell(
             receiver_grid_pos,
-            receiver_to_source,
+            receiver_grid_normal,
             grid_size,
             atlas_z,
-            receiver_cell
+            receiver_cell,
+            face_normal
     ))
         return true;
 
-    vec3 receiver_endpoint;
-    if (!ph_sable_exit_receiver_cell(
-        receiver_grid_pos,
-        receiver_to_source,
-        receiver_cell,
-        receiver_endpoint
-    )) return true;
-    vec3 source_to_receiver = receiver_endpoint - source_center;
-    float source_ray_scale = max(
-        abs(source_to_receiver.x),
-        max(abs(source_to_receiver.y), abs(source_to_receiver.z))
-    );
-    if (!ph_sable_finite_vec3(receiver_endpoint) || source_ray_scale <= 1e-8f)
-        return true;
+    vec3 axis_mask = abs(face_normal);
+    bool coplanar_source = abs(dot(
+        emissive_cell_min - vec3(receiver_cell),
+        axis_mask
+    )) < 0.5f;
 
-    vec3 source_cell_ray = source_to_receiver / source_ray_scale;
-    light_grid_pos = source_center
-        + source_cell_ray * (0.5f - PH_SABLE_VISIBILITY_BIAS);
+    vec3 receiver_endpoint;
+    vec3 source_endpoint;
+    if (coplanar_source) {
+        // A wall-mounted source must begin on the exposed face. Starting from
+        // its center sends tangential rays through neighboring wall cells.
+        receiver_endpoint = ph_sable_receiver_surface_endpoint(
+            receiver_grid_pos,
+            face_normal,
+            receiver_cell
+        );
+        source_endpoint = source_center
+            + face_normal * (0.5f + PH_SABLE_VISIBILITY_BIAS);
+    } else {
+        // Preserve the collinear v28 segment for non-coplanar layouts.
+        if (!ph_sable_exit_receiver_cell(
+                receiver_grid_pos,
+                receiver_to_source,
+                receiver_cell,
+                receiver_endpoint
+        )) return true;
+
+        vec3 source_to_receiver = receiver_endpoint - source_center;
+        float source_ray_scale = max(
+            abs(source_to_receiver.x),
+            max(abs(source_to_receiver.y), abs(source_to_receiver.z))
+        );
+        if (!ph_sable_finite_vec3(receiver_endpoint) || source_ray_scale <= 1e-8f)
+            return true;
+
+        vec3 source_cell_ray = source_to_receiver / source_ray_scale;
+        source_endpoint = source_center
+            + source_cell_ray * (0.5f - PH_SABLE_VISIBILITY_BIAS);
+    }
+
+    if (!ph_sable_finite_vec3(source_endpoint)
+            || !ph_sable_finite_vec3(receiver_endpoint))
+        return true;
     return ph_sable_grid_segment_visible(
         receiver_slot,
-        light_grid_pos,
+        source_endpoint,
         receiver_endpoint,
         receiver_cell
     );
