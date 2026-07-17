@@ -142,7 +142,7 @@ void sample_history_reproject(out SampleHistory smple) {
     );
 }
 
-float sample_history_accumulation_limit() {
+float sample_history_accumulation_limit(SampleHistory history, SampleHistory smple) {
     if (frag_data_sublevel_token(_frag_data) == 0u)
         return float(PH_RESTIR_ACCUMULATION_FRAMES);
 
@@ -156,16 +156,35 @@ float sample_history_accumulation_limit() {
         motion.previous_geo_normal
     );
 
-    // Visibility is retraced in the current frame. Do not blend old RGB while
-    // the receiver moves, otherwise one retained sample leaves a 50/50 trail.
-    if (dot(world_motion, world_motion) > 1e-6f || normal_alignment < 0.9999f)
+    if (dot(world_motion, world_motion) <= 1e-6f && normal_alignment >= 0.9999f)
+        return float(PH_RESTIR_ACCUMULATION_FRAMES);
+
+    // Geometry edits change the token and arrive here with no retained samples.
+    // For rigid motion, retain a short history only while the current trace
+    // agrees with the reprojected result. A newly crossed shadow edge therefore
+    // resets immediately instead of leaving the v29 50/50 trail.
+    if (history.lighting.a < 0.5f)
+        return min(float(PH_RESTIR_ACCUMULATION_FRAMES), 4.0f);
+
+    vec3 previous_color = max(history.lighting.rgb, vec3(0.0f));
+    vec3 current_color = max(smple.lighting.rgb, vec3(0.0f));
+    vec3 color_delta = abs(previous_color - current_color);
+    float color_scale = max(
+        max(
+            max(previous_color.x, max(previous_color.y, previous_color.z)),
+            max(current_color.x, max(current_color.y, current_color.z))
+        ),
+        0.02f
+    );
+    float relative_change = max(color_delta.x, max(color_delta.y, color_delta.z)) / color_scale;
+    if (relative_change > 0.25f)
         return 0.0f;
 
-    return float(PH_RESTIR_ACCUMULATION_FRAMES);
+    return min(float(PH_RESTIR_ACCUMULATION_FRAMES), 4.0f);
 }
 
 void sample_history_combine_lighting(inout SampleHistory history, in SampleHistory smple) {
-    float accumulation_limit = sample_history_accumulation_limit();
+    float accumulation_limit = sample_history_accumulation_limit(history, smple);
 #if PH_RESTIR_DENOISER_PASSES != 0
     history.lighting.w = min(history.lighting.w, accumulation_limit);
     history.lighting.rgb = mix(history.lighting.rgb, smple.lighting.rgb, 1f / (++history.lighting.w));
