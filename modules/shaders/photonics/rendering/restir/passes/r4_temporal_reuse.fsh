@@ -65,10 +65,13 @@ void main() {
     direct_reservoir_load(temp_direct, frag_tex_coord);
     direct_reservoir_merge(direct_result, temp_direct, direct_sample_weight);
 
-    // load temporal sampled reservoir
-    if (direct_reservoir_load_previous(temp_direct, prev_texel)) {
+    // Only reuse a reservoir that survived the final visibility check in the
+    // previous frame. The encoded minimum-weight sentinel is not history.
+    vec2 direct_history_state;
+    if (direct_history_load_previous(direct_history_state, prev_texel)
+            && direct_reservoir_load_previous(temp_direct, prev_texel)) {
         direct_reservoir_validate_visiblity(temp_direct, frag_rt_pos, frag_geo_normal);
-        if (temp_direct.weight > 0.0f && !direct_reservoir_is_empty(temp_direct)) {
+        if (direct_reservoir_is_reusable(temp_direct)) {
             temp_direct.total_samples = min(max_direct_temporal_samples, temp_direct.total_samples);
             direct_reservoir_merge(direct_result, temp_direct, direct_sample_weight);
         }

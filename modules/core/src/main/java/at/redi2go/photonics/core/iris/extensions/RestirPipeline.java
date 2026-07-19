@@ -32,7 +32,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         registerComponent(ExternalSubLevelMotion.instance());
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v32 current-visible temporal reuse, Sable plot-section isolation, receiver-bounded SVGF, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, geometry-generation history invalidation, reactive moving Sable accumulation, duplicate Veil point-light suppression, bounds-stable Sable receiver motion, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v33 final-visibility direct-history provenance, sentinel rejection, verified moving-Sable accumulation, current-visible temporal reuse, Sable plot-section isolation, receiver-bounded SVGF, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, geometry-generation history invalidation, duplicate Veil point-light suppression, bounds-stable Sable receiver motion, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
@@ -53,6 +53,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirEnabled)
                 .addAttachment("restir_lighting_variance", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirEnabled)
                 .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
+                .addAttachment("restir_direct_state", ITextureFormat.rg16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
                 .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs2", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
@@ -75,6 +76,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         var diffuseFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_lighting",
                 "restir_direct_reservoirs0",
+                "restir_direct_state",
                 "restir_indirect_reservoirs0",
                 "restir_indirect_reservoirs1",
                 "restir_indirect_reservoirs2"

@@ -142,6 +142,79 @@ void sample_history_reproject(out SampleHistory smple) {
     );
 }
 
+bool sample_history_reproject_nearest_texel(out ivec2 texel) {
+    vec3 previous_player_pos;
+    vec3 expected_previous_normal;
+    uint sublevel_token;
+
+    vec2 uv = ph_reproject_frag_data(
+        _frag_data,
+        frag_tex_coord,
+        frag_is_hand,
+        get_taa_jitter(),
+        previous_player_pos,
+        expected_previous_normal,
+        sublevel_token
+    ).xy;
+
+    if (any(lessThan(uv, vec2(0.0f))) || any(greaterThanEqual(uv, vec2(1.0f))))
+        return false;
+
+    ivec2 history_size = textureSize(prev_restir_lighting, 0);
+    texel = ivec2(uv * vec2(history_size));
+    if (any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, history_size)))
+        return false;
+
+    FragData prev_frag;
+    frag_data_load_previous(prev_frag, texel);
+
+    if (!frag_data_is_in_world(prev_frag)) return false;
+    if (frag_data_sublevel_token(prev_frag) != sublevel_token) return false;
+
+    const float block_divsor = 64.0f * PH_RENDER_SCALE;
+    float distance_factor = max(dot(previous_player_pos, previous_player_pos) / block_divsor, 0.1f);
+    if (!frag_is_bad_angle) {
+        vec3 projected_player_pos = frag_data_player_pos(prev_frag);
+        vec3 d = projected_player_pos - previous_player_pos;
+        if (dot(d, d) > distance_factor) return false;
+    }
+
+    return dot(frag_data_geo_normal(prev_frag), expected_previous_normal) >= 0.99f;
+}
+
+const int DIRECT_HISTORY_UNKNOWN = 0;
+const int DIRECT_HISTORY_MISMATCH = 1;
+const int DIRECT_HISTORY_VERIFIED = 2;
+
+int sample_history_direct_provenance() {
+#if defined PH_ENABLE_BLOCKLIGHT
+    DirectReservoir current_reservoir = direct_reservoir_empty();
+    vec2 current_state;
+    bool current_visible = direct_history_load(current_state, frag_tex_coord)
+        && direct_reservoir_load(current_reservoir, frag_tex_coord);
+
+    DirectReservoir previous_reservoir = direct_reservoir_empty();
+    bool previous_visible = false;
+    ivec2 previous_texel;
+    if (sample_history_reproject_nearest_texel(previous_texel)) {
+        vec2 previous_state;
+        previous_visible = direct_history_load_previous(previous_state, previous_texel)
+            && direct_reservoir_load_previous(previous_reservoir, previous_texel);
+    }
+
+    if (!current_visible && !previous_visible)
+        return DIRECT_HISTORY_UNKNOWN;
+    if (!current_visible || !previous_visible)
+        return DIRECT_HISTORY_MISMATCH;
+
+    return current_reservoir.smple.light_index == previous_reservoir.smple.light_index
+        ? DIRECT_HISTORY_VERIFIED
+        : DIRECT_HISTORY_MISMATCH;
+#else
+    return DIRECT_HISTORY_UNKNOWN;
+#endif
+}
+
 float sample_history_accumulation_limit(SampleHistory history, SampleHistory smple) {
     if (frag_data_sublevel_token(_frag_data) == 0u)
         return float(PH_RESTIR_ACCUMULATION_FRAMES);
@@ -159,10 +232,14 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
     if (dot(world_motion, world_motion) <= 1e-6f && normal_alignment >= 0.9999f)
         return float(PH_RESTIR_ACCUMULATION_FRAMES);
 
+    int direct_history = sample_history_direct_provenance();
+    if (direct_history == DIRECT_HISTORY_MISMATCH)
+        return 0.0f;
+
     // Geometry edits change the token and arrive here with no retained samples.
-    // For rigid motion, retain a short history only while the current trace
-    // agrees with the reprojected result. A newly crossed shadow edge therefore
-    // resets immediately instead of leaving the v29 50/50 trail.
+    // For rigid motion, preserve a longer history only when both frames have
+    // a final-visible reservoir for the same remapped light. Any new shadow
+    // edge, light remap, or failed visibility check resets immediately.
     if (history.lighting.a < 0.5f)
         return min(float(PH_RESTIR_ACCUMULATION_FRAMES), 4.0f);
 
@@ -177,10 +254,16 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
         0.02f
     );
     float relative_change = max(color_delta.x, max(color_delta.y, color_delta.z)) / color_scale;
-    if (relative_change > 0.25f)
+    float relative_change_limit = direct_history == DIRECT_HISTORY_VERIFIED
+        ? 0.75f
+        : 0.25f;
+    if (relative_change > relative_change_limit)
         return 0.0f;
 
-    return min(float(PH_RESTIR_ACCUMULATION_FRAMES), 4.0f);
+    float verified_history_limit = direct_history == DIRECT_HISTORY_VERIFIED
+        ? 8.0f
+        : 4.0f;
+    return min(float(PH_RESTIR_ACCUMULATION_FRAMES), verified_history_limit);
 }
 
 void sample_history_combine_lighting(inout SampleHistory history, in SampleHistory smple) {

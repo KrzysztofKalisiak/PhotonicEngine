@@ -15,6 +15,7 @@
 
 #if defined PH_ENABLE_BLOCKLIGHT
 layout(location = DIRECT_RESERVOIR_0) out vec3 di_reservoir_0;
+layout(location = DIRECT_HISTORY_STATE_0) out vec2 di_history_state;
 #endif
 
 #if defined PH_ENABLE_RESTIR_GI
@@ -27,6 +28,10 @@ layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting;
 
 void main() {
     lighting = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
+#if defined PH_ENABLE_BLOCKLIGHT
+    di_history_state = vec2(0.0f);
+#endif
 
     setup_frag_data(0);
     if (!frag_is_in_world) return;
@@ -55,5 +60,6 @@ void main() {
     );
 
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
+    direct_history_encode(direct_reservoir, di_history_state);
 #endif
 }

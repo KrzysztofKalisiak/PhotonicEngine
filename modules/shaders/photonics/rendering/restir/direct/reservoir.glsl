@@ -2,9 +2,12 @@
 #include "/photonics/rendering/frag/sable_motion.glsl"
 
 #define DIRECT_RESERVOIR_0 2
+#define DIRECT_HISTORY_STATE_0 3
 
 //ph_required: uniform sampler2D restir_direct_reservoirs0;
 //ph_required: uniform sampler2D prev_restir_direct_reservoirs0;
+//ph_required: uniform sampler2D restir_direct_state;
+//ph_required: uniform sampler2D prev_restir_direct_state;
 
 const float max_direct_temporal_samples = 20.0f * PH_RESTIR_INITIAL_SAMPLES;
 const float max_direct_reservoir_samples = 128.0f;
@@ -34,6 +37,44 @@ bool direct_reservoir_is_empty(DirectReservoir reservoir) {
     return direct_sample_is_empty(reservoir.smple);
 }
 
+// A visibility rejection is encoded with MINIMUM_RESERVOIR_WEIGHT so that the
+// texture stays finite. Treat that sentinel as unusable in every reuse path.
+bool direct_reservoir_is_reusable(DirectReservoir reservoir) {
+    return !direct_reservoir_is_empty(reservoir)
+        && reservoir.weight > MINIMUM_RESERVOIR_WEIGHT
+        && reservoir.total_samples > 0.0f
+        && !direct_reservoir_is_nan(reservoir);
+}
+
+bool direct_history_state_is_visible(vec2 state) {
+    return !any(isnan(state)) && !any(isinf(state)) && state.x >= 0.5f;
+}
+
+bool direct_history_load(out vec2 state, ivec2 tex_coord) {
+    state = texelFetch(restir_direct_state, tex_coord, 0).rg;
+    return direct_history_state_is_visible(state);
+}
+
+bool direct_history_load_previous(out vec2 state, ivec2 tex_coord) {
+    state = texelFetch(prev_restir_direct_state, tex_coord, 0).rg;
+    return direct_history_state_is_visible(state);
+}
+
+void direct_history_encode(DirectReservoir reservoir, out vec2 state) {
+    if (!direct_reservoir_is_reusable(reservoir)) {
+        state = vec2(0.0f);
+        return;
+    }
+
+    // Keep a compact confidence value beside the final visibility bit. The
+    // current policy only consumes the bit, but the confidence is useful when
+    // expanding the reactive policy without adding another history target.
+    state = vec2(
+        1.0f,
+        min(reservoir.total_samples / max_direct_temporal_samples, 1.0f)
+    );
+}
+
 bool direct_reservoir_update(
     inout DirectReservoir reservoir,
     DirectSample smple,
@@ -57,10 +98,7 @@ bool direct_reservoir_merge(
     DirectReservoir other,
     inout float sample_weight
 ) {
-    if (direct_reservoir_is_empty(other)
-            || other.weight <= 0.0f
-            || other.total_samples <= 0.0f
-            || direct_reservoir_is_nan(other))
+    if (!direct_reservoir_is_reusable(other))
         return false;
 
     float other_sample_weight = direct_sample_get_weight(
