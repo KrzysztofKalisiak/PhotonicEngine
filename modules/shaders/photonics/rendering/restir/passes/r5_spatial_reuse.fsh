@@ -20,22 +20,53 @@ layout(location = INDIRECT_RESERVOIR_2) out vec4 gi_reservoir_2;
 const float ph_spatial_max_receiver_distance_sq = 0.5625f;
 const float ph_spatial_max_plane_distance = 0.05f;
 const float ph_spatial_min_normal_alignment = 0.99f;
+const float ph_spatial_max_sable_motion_sq = 1e-6f;
+const float ph_spatial_min_sable_motion_normal_alignment = 0.9999f;
 
 bool ph_spatial_is_finite(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
 }
 
-bool ph_spatial_receiver_matches(FragData sample_frag) {
-    // The first rollout deliberately excludes moving/Sable and hand receivers.
-    // Their reuse policies need motion-aware confidence rather than this static
-    // world-space test.
+bool ph_spatial_current_receiver_can_reuse() {
     if (frag_is_hand
-            || frag_data_sublevel_token(_frag_data) != 0u
-            || !frag_data_is_in_world(sample_frag)
+            || frag_is_bad_angle
+            || !ph_spatial_is_finite(frag_geo_normal)
+            || !ph_spatial_is_finite(frag_player_pos))
+        return false;
+
+    int receiver_slot = frag_data_sublevel_slot(_frag_data);
+    uint receiver_token = frag_data_sublevel_token(_frag_data);
+    if (receiver_token == 0u)
+        return receiver_slot < 0;
+
+    if (receiver_slot < 0
+            || receiver_slot >= ph_sable_sublevel_count
+            || receiver_token != ph_sable_identity_token(receiver_slot))
+        return false;
+
+    FragMotion motion;
+    frag_motion_load(motion, frag_tex_coord);
+    vec3 current_world_pos = frag_player_pos + cameraPosition;
+    vec3 previous_world_pos = motion.previous_player_pos
+        + previousCameraPosition;
+    if (!ph_spatial_is_finite(current_world_pos)
+            || !ph_spatial_is_finite(previous_world_pos)
+            || !ph_spatial_is_finite(motion.previous_geo_normal))
+        return false;
+
+    vec3 world_motion = current_world_pos - previous_world_pos;
+    float normal_alignment = dot(
+        frag_geo_normal,
+        motion.previous_geo_normal
+    );
+    return dot(world_motion, world_motion) <= ph_spatial_max_sable_motion_sq
+        && normal_alignment >= ph_spatial_min_sable_motion_normal_alignment;
+}
+
+bool ph_spatial_receiver_matches(FragData sample_frag) {
+    if (!frag_data_is_in_world(sample_frag)
             || frag_data_is_hand(sample_frag)
-            || frag_data_sublevel_token(sample_frag) != 0u
-            || frag_data_is_bad_angle(sample_frag)
-            || frag_is_bad_angle)
+            || frag_data_is_bad_angle(sample_frag))
         return false;
 
     if (frag_data_sublevel_slot(sample_frag)
@@ -46,9 +77,7 @@ bool ph_spatial_receiver_matches(FragData sample_frag) {
 
     vec3 sample_normal = frag_data_geo_normal(sample_frag);
     vec3 sample_position = frag_data_player_pos(sample_frag);
-    if (!ph_spatial_is_finite(frag_geo_normal)
-            || !ph_spatial_is_finite(frag_player_pos)
-            || !ph_spatial_is_finite(sample_normal)
+    if (!ph_spatial_is_finite(sample_normal)
             || !ph_spatial_is_finite(sample_position))
         return false;
 
@@ -80,6 +109,32 @@ void ph_spatial_direct_reservoir_load(
     );
     if (direct_reservoir_is_nan(reservoir))
         reservoir = direct_reservoir_empty();
+}
+
+bool ph_spatial_direct_light_matches_receiver(DirectReservoir reservoir) {
+    int light_index = reservoir.smple.light_index;
+    if (light_index < 0 || light_index >= light_list_size)
+        return false;
+
+    int priority_count = clamp(
+        ph_priority_light_count,
+        0,
+        light_list_size
+    );
+    uint receiver_token = frag_data_sublevel_token(_frag_data);
+    if (receiver_token == 0u)
+        return light_index >= priority_count;
+
+    int moving_count = clamp(ph_moving_light_count, 0, priority_count);
+    if (light_index < moving_count || light_index >= priority_count)
+        return false;
+
+    Light light = direct_sample_get_light(reservoir.smple);
+    return ph_sable_light_belongs_to_sublevel(
+        frag_data_sublevel_slot(_frag_data),
+        receiver_token,
+        light.position + world_offset
+    );
 }
 
 bool ph_spatial_direct_reservoir_merge(
@@ -177,9 +232,10 @@ void main() {
     const float reuse_radius = PH_RESTIR_SPATIAL_REUSE_RADIUS * PH_RENDER_SCALE;
     const int reuse_samples = PH_RESTIR_SPATIAL_REUSE_SAMPLES;
     ivec2 spatial_texture_size = textureSize(ph_frag_data0, 0);
+    bool spatial_receiver_can_reuse = ph_spatial_current_receiver_can_reuse();
 
     for (int i = 0; i < reuse_samples; i++) {
-        if (reuse_radius <= 0.0f) break;
+        if (!spatial_receiver_can_reuse || reuse_radius <= 0.0f) break;
 
         float angle = 6.28318530718f * ph_rand_next_float(frag_rnd_state);
         float sample_radius = max(
@@ -203,7 +259,7 @@ void main() {
 #if PH_RESTIR_SPATIAL_REUSE_SAMPLES > 0
         ph_spatial_direct_reservoir_load(temp_direct, sample_texel);
         if (direct_reservoir_is_reusable(temp_direct)
-                && temp_direct.smple.light_index >= ph_priority_light_count) {
+                && ph_spatial_direct_light_matches_receiver(temp_direct)) {
             ph_spatial_direct_reservoir_merge(
                 direct_result,
                 temp_direct,
