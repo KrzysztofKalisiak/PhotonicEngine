@@ -24,7 +24,7 @@ final class ReservoirDiagnostics implements AutoCloseable {
     private static final int SAMPLE_PERMUTATION = 997;
     private static final int MIN_LOG_SAMPLES = 120;
     private static final long LOG_INTERVAL_NANOS = 5_000_000_000L;
-    private static final float MINIMUM_RESERVOIR_WEIGHT = 0.000001f;
+    private static final float MAXIMUM_RESERVOIR_SAMPLES = 128.0f;
 
     private final Slot[] slots = new Slot[SLOT_COUNT];
 
@@ -40,6 +40,7 @@ final class ReservoirDiagnostics implements AutoCloseable {
     private int empty = 0;
     private int visibilityRejected = 0;
     private int invalid = 0;
+    private int overCap = 0;
     private float minimumTotalSamples = Float.POSITIVE_INFINITY;
     private float maximumTotalSamples = 0.0f;
 
@@ -166,6 +167,9 @@ final class ReservoirDiagnostics implements AutoCloseable {
             return;
         }
 
+        if (totalSamples > MAXIMUM_RESERVOIR_SAMPLES + 0.5f)
+            overCap++;
+
         if (lightIndex < -0.5f) {
             empty++;
             return;
@@ -176,7 +180,7 @@ final class ReservoirDiagnostics implements AutoCloseable {
 
         if (totalSamples <= 0.0f) {
             invalid++;
-        } else if (weight <= MINIMUM_RESERVOIR_WEIGHT * 1.5f) {
+        } else if (weight <= 0.0f) {
             visibilityRejected++;
         } else {
             populated++;
@@ -189,12 +193,13 @@ final class ReservoirDiagnostics implements AutoCloseable {
 
         float minimumSamples = minimumTotalSamples == Float.POSITIVE_INFINITY ? 0.0f : minimumTotalSamples;
         Photonics.LOGGER.info(
-                "Photonics direct reservoir sample v18: samples={}, populated={}, emptyOrBackground={}, visibilityRejected={}, invalid={}, totalSamplesRange={}..{}, viewport={}x{}",
+                "Photonics direct reservoir sample v34: samples={}, populated={}, emptyOrBackground={}, visibilityRejected={}, invalid={}, overCap={}, totalSamplesRange={}..{}, viewport={}x{}",
                 samples,
                 populated,
                 empty,
                 visibilityRejected,
                 invalid,
+                overCap,
                 formatFloat(minimumSamples),
                 formatFloat(maximumTotalSamples),
                 sampledWidth,
@@ -211,6 +216,7 @@ final class ReservoirDiagnostics implements AutoCloseable {
         empty = 0;
         visibilityRejected = 0;
         invalid = 0;
+        overCap = 0;
         minimumTotalSamples = Float.POSITIVE_INFINITY;
         maximumTotalSamples = 0.0f;
         lastLogNanos = System.nanoTime();

@@ -32,7 +32,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         registerComponent(ExternalSubLevelMotion.instance());
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v33 final-visibility direct-history provenance, sentinel rejection, verified moving-Sable accumulation, current-visible temporal reuse, Sable plot-section isolation, receiver-bounded SVGF, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, geometry-generation history invalidation, duplicate Veil point-light suppression, bounds-stable Sable receiver motion, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v34 bounded reservoirs, visibility-transition provenance, stable Sable identity, reactive moving-light accumulation, current-visible temporal reuse, Sable plot-section isolation, receiver-bounded SVGF, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, duplicate Veil point-light suppression, bounds-stable Sable receiver motion, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
@@ -106,7 +106,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
                 .withFramebuffer(reusedReservoirFramebuffer)
                 .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isRestirEnabled)
-                .deferredPass("spatial reuse", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isSpatialReuseEnabled)
+                // The spatial pass also caps temporal reservoirs, so it must run
+                // when the configured spatial candidate count is zero.
+                .deferredPass("spatial reuse/clamp", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isRestirEnabled)
                 .withFramebuffer(diffuseFramebuffer)
                 .deferredPass("diffuse", "/photonics/rendering/restir/passes/r6_diffuse.fsh", null, this::isRestirEnabled)
                 .withFramebuffer(accumulationFramebuffer)

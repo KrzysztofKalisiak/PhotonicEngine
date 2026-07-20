@@ -24,8 +24,13 @@ void main() {
     float direct_sample_weight = 0.0f;
     DirectReservoir direct_result = direct_reservoir_empty();
     DirectReservoir temp_direct = direct_reservoir_empty();
+    DirectReservoir direct_fallback = direct_reservoir_empty();
 
     direct_reservoir_load(temp_direct, frag_tex_coord);
+    if (direct_reservoir_has_sample(temp_direct)) {
+        direct_fallback = temp_direct;
+        direct_fallback.weight = 0.0f;
+    }
     direct_reservoir_merge(direct_result, temp_direct, direct_sample_weight);
 #endif
 
@@ -77,9 +82,14 @@ void main() {
     }
 
 #if defined PH_ENABLE_BLOCKLIGHT
-    direct_reservoir_clamp_samples(direct_result);
+    if (direct_reservoir_is_reusable(direct_result)) {
+        direct_reservoir_clamp_samples(direct_result);
+        direct_reservoir_finalize_weight(direct_result, direct_sample_weight);
+    }
+    if (!direct_reservoir_is_reusable(direct_result)
+            && direct_reservoir_has_sample(direct_fallback))
+        direct_result = direct_fallback;
 
-    direct_reservoir_finalize_weight(direct_result, direct_sample_weight);
     direct_reservoir_encode(direct_result, di_reservoir_0);
 #endif
 

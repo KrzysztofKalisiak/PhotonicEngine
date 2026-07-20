@@ -56,7 +56,7 @@ public final class ContraptionLightsSableBridge {
     private static int lastMotionSubLevels = -1;
     private static int nextMotionToken = 1;
     private static final Map<UUID, Matrix4f> previousWorldToLocal = new HashMap<>();
-    private static final Map<UUID, MotionTokenState> motionTokens = new HashMap<>();
+    private static final Map<UUID, Integer> motionTokens = new HashMap<>();
     private static final Map<UUID, GeometryRevisionSnapshot> geometryRevisionSnapshots = new HashMap<>();
 
     private static IGpuTexture3D geometryTexture;
@@ -255,8 +255,6 @@ public final class ContraptionLightsSableBridge {
             var currentWorldToLocal = new HashMap<UUID, Matrix4f>();
 
             for (var mapEntry : states.entrySet()) {
-                if (candidates.size() >= ExternalSubLevelMotion.MAX_SUBLEVELS)
-                    break;
                 if (!(mapEntry.getKey() instanceof UUID uniqueId))
                     continue;
 
@@ -331,6 +329,9 @@ public final class ContraptionLightsSableBridge {
             }
 
             candidates.sort(Comparator.comparing(MotionCandidate::uniqueId));
+            if (candidates.size() > ExternalSubLevelMotion.MAX_SUBLEVELS)
+                candidates.subList(ExternalSubLevelMotion.MAX_SUBLEVELS, candidates.size()).clear();
+
             int[] atlasOffsets = updateGeometryAtlas(candidates);
             var subLevels = new ArrayList<ExternalSubLevelMotion.SubLevel>(candidates.size());
             for (int i = 0; i < candidates.size(); i++) {
@@ -351,7 +352,6 @@ public final class ContraptionLightsSableBridge {
             ExternalSubLevelMotion.submit(occupancyTexture, subLevels);
             previousWorldToLocal.keySet().retainAll(currentWorldToLocal.keySet());
             previousWorldToLocal.putAll(currentWorldToLocal);
-            motionTokens.keySet().retainAll(currentWorldToLocal.keySet());
             geometryRevisionSnapshots.keySet().retainAll(currentWorldToLocal.keySet());
             logMotionCapture(subLevels.size());
             motionTransientFailureLogged = false;
@@ -568,18 +568,19 @@ public final class ContraptionLightsSableBridge {
     }
 
     private static GeometryKey geometryKey(MotionCandidate candidate) {
-        byte[] revision = candidate.occupancyRevision();
+        byte[] currentRevision = candidate.occupancyRevision() == null
+                ? new byte[0]
+                : candidate.occupancyRevision();
         GeometryRevisionSnapshot cached = geometryRevisionSnapshots.get(candidate.uniqueId());
         ByteBuffer revisionContent;
-        if (cached != null && cached.sourceRevision() == revision) {
+        if (cached != null && Arrays.equals(cached.sourceRevision(), currentRevision)) {
             revisionContent = cached.content();
         } else {
-            revisionContent = ByteBuffer.wrap(
-                    revision == null ? new byte[0] : revision
-            ).asReadOnlyBuffer();
+            byte[] revisionSnapshot = Arrays.copyOf(currentRevision, currentRevision.length);
+            revisionContent = ByteBuffer.wrap(revisionSnapshot).asReadOnlyBuffer();
             geometryRevisionSnapshots.put(
                     candidate.uniqueId(),
-                    new GeometryRevisionSnapshot(revision, revisionContent)
+                    new GeometryRevisionSnapshot(revisionSnapshot, revisionContent)
             );
         }
 
@@ -596,18 +597,14 @@ public final class ContraptionLightsSableBridge {
     }
 
     private static int motionToken(MotionCandidate candidate) {
-        var historyKey = new SubLevelHistoryKey(
-                geometryKey(candidate),
-                List.copyOf(candidate.emissiveCells())
-        );
-        MotionTokenState current = motionTokens.get(candidate.uniqueId());
-        if (current != null && current.historyKey().equals(historyKey))
-            return current.token();
+        Integer current = motionTokens.get(candidate.uniqueId());
+        if (current != null)
+            return current;
 
         int token = nextMotionToken++;
         if (nextMotionToken > 0xffff)
             nextMotionToken = 1;
-        motionTokens.put(candidate.uniqueId(), new MotionTokenState(token, historyKey));
+        motionTokens.put(candidate.uniqueId(), token);
         return token;
     }
 
@@ -713,12 +710,6 @@ public final class ContraptionLightsSableBridge {
             int sizeZ,
             ByteBuffer occupancyRevision
     ) {
-    }
-
-    private record SubLevelHistoryKey(GeometryKey geometry, List<Vector3i> emissiveCells) {
-    }
-
-    private record MotionTokenState(int token, SubLevelHistoryKey historyKey) {
     }
 
     private record GeometryRevisionSnapshot(byte[] sourceRevision, ByteBuffer content) {
