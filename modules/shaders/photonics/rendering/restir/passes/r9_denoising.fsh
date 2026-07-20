@@ -50,7 +50,22 @@ void main() {
 
     // 2) Bilateral‐style filter with adaptive color weight
     const float phi_depth = 0.5f;
+    const float phi_position = 0.05f;
     float phi_luminance = 6.0f * sqrt(max(0.0f, V0)) + 1e-10;
+
+    bool center_has_direct_sample = false;
+    int center_direct_light = -1;
+    bool center_direct_visible = false;
+#if defined PH_ENABLE_BLOCKLIGHT
+    DirectReservoir center_reservoir = direct_reservoir_empty();
+    center_has_direct_sample = direct_reservoir_load(center_reservoir, frag_tex_coord)
+        && direct_reservoir_has_sample(center_reservoir);
+    if (center_has_direct_sample) {
+        center_direct_light = center_reservoir.smple.light_index;
+        vec2 center_state;
+        center_direct_visible = direct_history_load(center_state, frag_tex_coord);
+    }
+#endif
 
     vec3 C_sum = vec3(0.0f);
     float W_sum = 0.0f;
@@ -70,6 +85,20 @@ void main() {
                 || frag_data_sublevel_token(sample_frag) != frag_data_sublevel_token(_frag_data))
             continue;
 
+#if defined PH_ENABLE_BLOCKLIGHT
+        if (center_has_direct_sample) {
+            DirectReservoir sample_reservoir = direct_reservoir_empty();
+            if (direct_reservoir_load(sample_reservoir, p)
+                    && direct_reservoir_has_sample(sample_reservoir)
+                    && sample_reservoir.smple.light_index == center_direct_light) {
+                vec2 sample_state;
+                bool sample_visible = direct_history_load(sample_state, p);
+                if (sample_visible != center_direct_visible)
+                    continue;
+            }
+        }
+#endif
+
         vec4 sample_data = texelFetch(prev_denoise_result, p, 0);
         #define Ci sample_data.rgb
         #define Vi sample_data.a
@@ -85,8 +114,23 @@ void main() {
         // Normal weight
         float wN = svgf_normal_edge_stopping_weight(N0, Ni);
 
-        // Position weight
-        float wP = svgf_depth_edge_stopping_weight(D0, Di, phi_depth);
+        // Camera depth changes rapidly across an oblique planar wall and makes
+        // coarse a-trous taps form view-dependent rings. World-space distance
+        // from both geometric planes is stable under projection jitter.
+        float wP;
+        if (frag_is_hand) {
+            wP = svgf_depth_edge_stopping_weight(D0, Di, phi_depth);
+        } else {
+            vec3 center_geo_normal = frag_data_geo_normal(_frag_data);
+            vec3 sample_geo_normal = frag_data_geo_normal(sample_frag);
+            vec3 position_delta = frag_data_player_pos(sample_frag)
+                - frag_data_player_pos(_frag_data);
+            float plane_distance = max(
+                abs(dot(position_delta, center_geo_normal)),
+                abs(dot(position_delta, sample_geo_normal))
+            );
+            wP = exp(-plane_distance / phi_position);
+        }
 
         float w = any(isnan(Ci)) ? 0.0f : wC * wN * wP * k;
         W_sum += w;

@@ -15,6 +15,7 @@ public final class TracedLightPosition {
     private final IBlockState blockState;
     private final BlockLightInfo lightInfo;
     private final Object temporalIdentity;
+    private final boolean temporallyMoving;
 
     private int luminanceMod = 0;
     private double luminance = 0f;
@@ -25,7 +26,7 @@ public final class TracedLightPosition {
             IBlockState blockState,
             BlockLightInfo lightInfo
     ) {
-        this(blockId, pos, blockState, lightInfo, null);
+        this(blockId, pos, blockState, lightInfo, null, false);
     }
 
     public TracedLightPosition(
@@ -35,11 +36,23 @@ public final class TracedLightPosition {
             BlockLightInfo lightInfo,
             Object temporalIdentity
     ) {
+        this(blockId, pos, blockState, lightInfo, temporalIdentity, false);
+    }
+
+    public TracedLightPosition(
+            int blockId,
+            Vector3d pos,
+            IBlockState blockState,
+            BlockLightInfo lightInfo,
+            Object temporalIdentity,
+            boolean temporallyMoving
+    ) {
         this.blockId = blockId;
         this.pos = pos;
         this.blockState = blockState;
         this.lightInfo = lightInfo;
         this.temporalIdentity = temporalIdentity;
+        this.temporallyMoving = temporalIdentity != null && temporallyMoving;
     }
 
     public int blockId() {
@@ -64,6 +77,10 @@ public final class TracedLightPosition {
 
     boolean hasTemporalIdentity() {
         return temporalIdentity != null;
+    }
+
+    boolean isTemporallyMoving() {
+        return temporallyMoving;
     }
 
     Object temporalMappingKey() {
@@ -96,12 +113,13 @@ public final class TracedLightPosition {
                 Objects.equals(this.pos, that.pos) &&
                 Objects.equals(this.blockState, that.blockState) &&
                 Objects.equals(this.lightInfo, that.lightInfo) &&
-                Objects.equals(this.temporalIdentity, that.temporalIdentity);
+                Objects.equals(this.temporalIdentity, that.temporalIdentity) &&
+                this.temporallyMoving == that.temporallyMoving;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(blockId, pos, blockState, lightInfo, temporalIdentity);
+        return Objects.hash(blockId, pos, blockState, lightInfo, temporalIdentity, temporallyMoving);
     }
 
     @Override
@@ -111,7 +129,8 @@ public final class TracedLightPosition {
                 "pos=" + pos + ", " +
                 "blockState=" + blockState + ", " +
                 "lightInfo=" + lightInfo + ", " +
-                "temporalIdentity=" + temporalIdentity + ']';
+                "temporalIdentity=" + temporalIdentity + ", " +
+                "temporallyMoving=" + temporallyMoving + ']';
     }
 
     private record TemporalMappingKey(

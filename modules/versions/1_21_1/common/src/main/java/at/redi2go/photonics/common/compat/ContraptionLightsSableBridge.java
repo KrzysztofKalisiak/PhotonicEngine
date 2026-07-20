@@ -40,6 +40,8 @@ public final class ContraptionLightsSableBridge {
     private static final int MAX_GEOMETRY_AXIS = 96;
     private static final int MAX_GEOMETRY_VOLUME = 300_000;
     private static final int MAX_GEOMETRY_ATLAS_DEPTH = 512;
+    private static final double STATIC_LIGHT_POSITION_EPSILON_SQUARED = 1.0e-6;
+    private static final int MOVING_LIGHT_HOLD_FRAMES = 3;
 
     private static Access access;
     private static boolean unavailable;
@@ -49,15 +51,19 @@ public final class ContraptionLightsSableBridge {
     private static int lastUploadedLights = -1;
     private static int lastZeroLuminanceTracedLights = -1;
     private static int lastRejectedMaterials = -1;
+    private static int lastActuallyMovingLights = -1;
     private static MotionAccess motionAccess;
     private static boolean motionUnavailable;
     private static boolean motionTransientFailureLogged;
     private static boolean motionActiveLogged;
     private static int lastMotionSubLevels = -1;
     private static int nextMotionToken = 1;
-    private static final Map<UUID, Matrix4f> previousWorldToLocal = new HashMap<>();
+    private static final Map<UUID, Matrix4d> previousWorldToMotionAnchor = new HashMap<>();
+    private static final Map<UUID, Vector3i> motionAnchors = new HashMap<>();
     private static final Map<UUID, Integer> motionTokens = new HashMap<>();
     private static final Map<UUID, GeometryRevisionSnapshot> geometryRevisionSnapshots = new HashMap<>();
+    private static final Map<SableLightIdentity, Vector3d> publishedLightPositions = new HashMap<>();
+    private static final Map<SableLightIdentity, Integer> movingLightHoldFrames = new HashMap<>();
 
     private static IGpuTexture3D geometryTexture;
     private static List<GeometryKey> geometryKeys = List.of();
@@ -91,9 +97,11 @@ public final class ContraptionLightsSableBridge {
             var lightRegistry = PhConfig.getLightRegistry();
             var lights = new ArrayList<TracedLightPosition>();
             var replacedBlockPositions = new HashSet<Vector3i>();
+            var seenLightIdentities = new HashSet<SableLightIdentity>();
             int sourceLights = 0;
             int zeroLuminanceTracedLights = 0;
             int rejectedMaterials = 0;
+            int actuallyMovingLights = 0;
             String firstValidationIssue = null;
 
             for (var mapEntry : states.entrySet()) {
@@ -165,23 +173,48 @@ public final class ContraptionLightsSableBridge {
                             lightZ[i] - minZ + 0.5d,
                             new Vector3d()
                     );
+                    var identity = new SableLightIdentity(uniqueId, lightX[i], lightY[i], lightZ[i]);
+                    seenLightIdentities.add(identity);
+
+                    Vector3d publishedPosition = publishedLightPositions.get(identity);
+                    boolean moved = publishedPosition == null
+                            || publishedPosition.distanceSquared(worldPosition)
+                            > STATIC_LIGHT_POSITION_EPSILON_SQUARED;
+                    if (!moved)
+                        worldPosition.set(publishedPosition);
+
+                    int movingFrames = moved
+                            ? MOVING_LIGHT_HOLD_FRAMES
+                            : Math.max(0, movingLightHoldFrames.getOrDefault(identity, 0) - 1);
+                    if (movingFrames > 0) {
+                        movingLightHoldFrames.put(identity, movingFrames);
+                        actuallyMovingLights++;
+                    } else {
+                        movingLightHoldFrames.remove(identity);
+                    }
+                    publishedLightPositions.put(identity, new Vector3d(worldPosition));
+
                     int blockId = shaderPack == null ? -1 : shaderPack.getBlockId(apiBlockState);
                     lights.add(new TracedLightPosition(
                             blockId,
                             worldPosition,
                             apiBlockState,
                             lightInfo,
-                            new SableLightIdentity(uniqueId, lightX[i], lightY[i], lightZ[i])
+                            identity,
+                            movingFrames > 0
                     ));
                     replacedBlockPositions.add(new Vector3i(lightX[i], lightY[i], lightZ[i]));
                 }
             }
 
+            publishedLightPositions.keySet().retainAll(seenLightIdentities);
+            movingLightHoldFrames.keySet().retainAll(seenLightIdentities);
             ExternalLightList.submit(lights, replacedBlockPositions);
             logCapture(
                     states.size(),
                     sourceLights,
                     lights.size(),
+                    actuallyMovingLights,
                     zeroLuminanceTracedLights,
                     rejectedMaterials,
                     firstValidationIssue
@@ -225,15 +258,19 @@ public final class ContraptionLightsSableBridge {
     public static void clear() {
         ExternalLightList.clear();
         ExternalSubLevelMotion.clear();
-        previousWorldToLocal.clear();
+        previousWorldToMotionAnchor.clear();
+        motionAnchors.clear();
         motionTokens.clear();
         geometryRevisionSnapshots.clear();
+        publishedLightPositions.clear();
+        movingLightHoldFrames.clear();
         nextMotionToken = 1;
         if (lastUploadedLights > 0)
             Photonics.LOGGER.info("Photonics v24 Sable moving lights: {} -> 0", lastUploadedLights);
         if (lastMotionSubLevels > 0)
             Photonics.LOGGER.info("Photonics v24 Sable receiver motion: {} -> 0", lastMotionSubLevels);
         lastUploadedLights = 0;
+        lastActuallyMovingLights = 0;
         lastMotionSubLevels = 0;
         lastZeroLuminanceTracedLights = -1;
         lastRejectedMaterials = -1;
@@ -252,7 +289,7 @@ public final class ContraptionLightsSableBridge {
             if (level == null)
                 return;
             var candidates = new ArrayList<MotionCandidate>();
-            var currentWorldToLocal = new HashMap<UUID, Matrix4f>();
+            var currentWorldToMotionAnchor = new HashMap<UUID, Matrix4d>();
 
             for (var mapEntry : states.entrySet()) {
                 if (!(mapEntry.getKey() instanceof UUID uniqueId))
@@ -280,26 +317,28 @@ public final class ContraptionLightsSableBridge {
                         minY,
                         minZ
                 ));
-                Matrix4f currentLocal = new Matrix4f((Matrix4f) bridgeAccess.buildWorldToLocal.invoke(
-                        null,
-                        pose,
-                        0,
-                        0,
-                        0
-                ));
-                if (!currentGrid.isFinite() || Math.abs(currentGrid.determinant()) < 0.000001f
-                        || !currentLocal.isFinite() || Math.abs(currentLocal.determinant()) < 0.000001f)
+                if (!currentGrid.isFinite() || Math.abs(currentGrid.determinant()) < 0.000001f)
                     continue;
 
-                Matrix4f previous = previousWorldToLocal.get(uniqueId);
-                if (previous == null || !previous.isFinite() || Math.abs(previous.determinant()) < 0.000001f)
-                    previous = currentLocal;
+                Vector3i anchor = motionAnchors.computeIfAbsent(
+                        uniqueId,
+                        ignored -> new Vector3i(minX, minY, minZ)
+                );
+                Matrix4d currentAnchor = new Matrix4d(currentGrid);
+                currentAnchor.m30(currentAnchor.m30() + (double) minX - anchor.x);
+                currentAnchor.m31(currentAnchor.m31() + (double) minY - anchor.y);
+                currentAnchor.m32(currentAnchor.m32() + (double) minZ - anchor.z);
 
-                Matrix4f currentToPrevious = new Matrix4f(previous)
+                Matrix4d previous = previousWorldToMotionAnchor.get(uniqueId);
+                if (previous == null || !previous.isFinite() || Math.abs(previous.determinant()) < 0.000001d)
+                    previous = currentAnchor;
+
+                Matrix4d currentToPreviousDouble = new Matrix4d(previous)
                         .invert()
-                        .mul(currentLocal);
-                if (!currentToPrevious.isFinite())
+                        .mul(currentAnchor);
+                if (!currentToPreviousDouble.isFinite())
                     continue;
+                Matrix4f currentToPrevious = new Matrix4f(currentToPreviousDouble);
 
                 var emissiveCells = bridgeAccess.emissiveCells(
                         state,
@@ -325,7 +364,7 @@ public final class ContraptionLightsSableBridge {
                         (byte[]) bridgeAccess.occupancy.get(state),
                         emissiveCells
                 ));
-                currentWorldToLocal.put(uniqueId, currentLocal);
+                currentWorldToMotionAnchor.put(uniqueId, currentAnchor);
             }
 
             candidates.sort(Comparator.comparing(MotionCandidate::uniqueId));
@@ -350,14 +389,16 @@ public final class ContraptionLightsSableBridge {
                     ? 0
                     : IrisUtil.getTextureHandle(geometryTexture);
             ExternalSubLevelMotion.submit(occupancyTexture, subLevels);
-            previousWorldToLocal.keySet().retainAll(currentWorldToLocal.keySet());
-            previousWorldToLocal.putAll(currentWorldToLocal);
-            geometryRevisionSnapshots.keySet().retainAll(currentWorldToLocal.keySet());
+            previousWorldToMotionAnchor.keySet().retainAll(currentWorldToMotionAnchor.keySet());
+            previousWorldToMotionAnchor.putAll(currentWorldToMotionAnchor);
+            motionAnchors.keySet().retainAll(currentWorldToMotionAnchor.keySet());
+            geometryRevisionSnapshots.keySet().retainAll(currentWorldToMotionAnchor.keySet());
             logMotionCapture(subLevels.size());
             motionTransientFailureLogged = false;
         } catch (InvocationTargetException | RuntimeException exception) {
             ExternalSubLevelMotion.clear();
-            previousWorldToLocal.clear();
+            previousWorldToMotionAnchor.clear();
+            motionAnchors.clear();
             if (!motionTransientFailureLogged) {
                 motionTransientFailureLogged = true;
                 Photonics.LOGGER.warn(
@@ -368,7 +409,8 @@ public final class ContraptionLightsSableBridge {
         } catch (ReflectiveOperationException | LinkageError exception) {
             motionUnavailable = true;
             ExternalSubLevelMotion.clear();
-            previousWorldToLocal.clear();
+            previousWorldToMotionAnchor.clear();
+            motionAnchors.clear();
             Photonics.LOGGER.warn(
                     "Photonics v24 disabled the optional Sable receiver-motion/geometry bridge",
                     exception
@@ -612,7 +654,7 @@ public final class ContraptionLightsSableBridge {
         if (!motionActiveLogged && subLevels > 0) {
             motionActiveLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v27 Sable receiver motion active: subLevels={}, classifier=receiver-cell-atlas+emissive-cells, localVisibility=surface-biased-solid-block-cell, temporalTransform=bounds-independent",
+                    "Photonics v35 Sable receiver motion active: subLevels={}, classifier=receiver-cell-atlas+emissive-cells, localVisibility=surface-biased-solid-block-cell, temporalTransform=stable-anchor-double-compose",
                     subLevels
             );
         }
@@ -631,6 +673,7 @@ public final class ContraptionLightsSableBridge {
             int structures,
             int sourceLights,
             int uploadedLights,
+            int actuallyMovingLights,
             int zeroLuminanceTracedLights,
             int rejectedMaterials,
             String firstValidationIssue
@@ -654,6 +697,16 @@ public final class ContraptionLightsSableBridge {
                     sourceLights
             );
             lastUploadedLights = uploadedLights;
+        }
+
+        if (actuallyMovingLights != lastActuallyMovingLights) {
+            Photonics.LOGGER.info(
+                    "Photonics v35 Sable reactive lights: moving={}, stationary={}, uploaded={}",
+                    actuallyMovingLights,
+                    Math.max(0, uploadedLights - actuallyMovingLights),
+                    uploadedLights
+            );
+            lastActuallyMovingLights = actuallyMovingLights;
         }
 
         if (zeroLuminanceTracedLights != lastZeroLuminanceTracedLights

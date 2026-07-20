@@ -19,6 +19,7 @@
 //ph_required: uniform vec3 light_list_offset;
 //ph_required: uniform int light_list_size;
 //ph_required: uniform int ph_priority_light_count;
+//ph_required: uniform int ph_moving_light_count;
 
 //ph_required: uniform bool left_handed;
 

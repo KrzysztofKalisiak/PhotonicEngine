@@ -101,8 +101,16 @@ bool direct_reservoir_merge(
     DirectReservoir other,
     inout float sample_weight
 ) {
-    if (!direct_reservoir_is_reusable(other))
+    if (!direct_reservoir_has_sample(other))
         return false;
+
+    // A visibility-rejected reservoir represents a valid zero-contribution
+    // batch. Its M must remain in the estimator denominator; dropping it lets
+    // an older visible representative survive at excessive brightness.
+    if (!direct_reservoir_is_reusable(other)) {
+        result.total_samples += other.total_samples;
+        return false;
+    }
 
     float other_sample_weight = direct_sample_get_weight(
         other.smple,

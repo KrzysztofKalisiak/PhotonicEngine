@@ -68,6 +68,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     private int lastDiagnosticSelectedLights = -1;
     private int lastDiagnosticSections = -1;
     private int lastDiagnosticPriorityLights = -1;
+    private int lastDiagnosticMovingLights = -1;
 
     @SuppressWarnings("UnstableApiUsage")
     public AbstractLightList(
@@ -345,12 +346,17 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         Arrays.sort(
                 combined,
                 Comparator
-                        .comparingInt((TracedLightPosition light) -> light.hasTemporalIdentity() ? 0 : 1)
+                        .comparingInt((TracedLightPosition light) -> light.isTemporallyMoving() ? 0 : 1)
+                        .thenComparingInt(light -> light.hasTemporalIdentity() ? 0 : 1)
                         .thenComparingDouble(light -> -light.getLuminance(cameraPosition, mod))
         );
 
         if (combined.length > maxLights)
             combined = Arrays.copyOf(combined, maxLights);
+
+        int movingLightCount = 0;
+        while (movingLightCount < combined.length && combined[movingLightCount].isTemporallyMoving())
+            movingLightCount++;
 
         int priorityLightCount = 0;
         while (priorityLightCount < combined.length && combined[priorityLightCount].hasTemporalIdentity())
@@ -359,6 +365,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         return new LightList(
                 combined,
                 sectionLights == null ? WorldOrigin.get() : sectionLights.origin(),
+                movingLightCount,
                 priorityLightCount
         );
     }
@@ -374,13 +381,17 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
             Photonics.LOGGER.info("Photonics light list pending: {} -> {}", previousSize, lights.size());
 
         int priorityLightCount = lights.priorityLightCount();
-        if (lastDiagnosticPriorityLights != priorityLightCount) {
+        int movingLightCount = lights.movingLightCount();
+        if (lastDiagnosticPriorityLights != priorityLightCount
+                || lastDiagnosticMovingLights != movingLightCount) {
             Photonics.LOGGER.info(
-                    "Photonics v28 direct-light priority prefix: movingLights={}, totalLights={}, proposalBudget=adaptive-half-candidates",
+                    "Photonics v35 direct-light prefixes: movingLights={}, externalLights={}, totalLights={}, proposalBudget=adaptive-half-candidates",
+                    movingLightCount,
                     priorityLightCount,
                     lights.size()
             );
             lastDiagnosticPriorityLights = priorityLightCount;
+            lastDiagnosticMovingLights = movingLightCount;
         }
 
         for (int i = 0; i < lights.size(); i++) {
@@ -458,6 +469,11 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         dynamicUniforms.uniform1i(
                 "ph_priority_light_count",
                 () -> mostRecentLights == null ? 0 : mostRecentLights.priorityLightCount(),
+                uniformUpdater.newNotifier()
+        );
+        dynamicUniforms.uniform1i(
+                "ph_moving_light_count",
+                () -> mostRecentLights == null ? 0 : mostRecentLights.movingLightCount(),
                 uniformUpdater.newNotifier()
         );
     }

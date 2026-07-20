@@ -8,13 +8,51 @@
 
 layout(location = 0) out vec4 denoise_out;
 
-bool ph_matches_denoise_receiver(ivec2 texel) {
+bool ph_matches_denoise_receiver(
+    ivec2 texel,
+    bool center_has_direct_sample,
+    int center_direct_light,
+    bool center_direct_visible
+) {
     FragData frag;
     frag_data_load(frag, texel);
 
-    return frag_data_is_in_world(frag)
-        && frag_data_is_hand(frag) == frag_is_hand
-        && frag_data_sublevel_token(frag) == frag_data_sublevel_token(_frag_data);
+    if (!frag_data_is_in_world(frag))
+        return false;
+
+    if (frag_data_is_hand(frag) != frag_is_hand
+            || frag_data_sublevel_token(frag) != frag_data_sublevel_token(_frag_data))
+        return false;
+
+    vec3 center_normal = frag_data_geo_normal(_frag_data);
+    vec3 sample_normal = frag_data_geo_normal(frag);
+    if (dot(center_normal, sample_normal) < 0.95f)
+        return false;
+
+    vec3 position_delta = frag_data_player_pos(frag)
+        - frag_data_player_pos(_frag_data);
+    float plane_distance = max(
+        abs(dot(position_delta, center_normal)),
+        abs(dot(position_delta, sample_normal))
+    );
+    if (plane_distance > 0.075f)
+        return false;
+
+#if defined PH_ENABLE_BLOCKLIGHT
+    if (center_has_direct_sample) {
+        DirectReservoir sample_reservoir = direct_reservoir_empty();
+        if (direct_reservoir_load(sample_reservoir, texel)
+                && direct_reservoir_has_sample(sample_reservoir)
+                && sample_reservoir.smple.light_index == center_direct_light) {
+            vec2 sample_state;
+            bool sample_visible = direct_history_load(sample_state, texel);
+            if (sample_visible != center_direct_visible)
+                return false;
+        }
+    }
+#endif
+
+    return true;
 }
 
 void main() {
@@ -27,6 +65,20 @@ void main() {
     denoise_out = vec4(center.rgb, 10.0f);
     if (!frag_is_in_world) return;
 
+    bool center_has_direct_sample = false;
+    int center_direct_light = -1;
+    bool center_direct_visible = false;
+#if defined PH_ENABLE_BLOCKLIGHT
+    DirectReservoir center_reservoir = direct_reservoir_empty();
+    center_has_direct_sample = direct_reservoir_load(center_reservoir, frag_tex_coord)
+        && direct_reservoir_has_sample(center_reservoir);
+    if (center_has_direct_sample) {
+        center_direct_light = center_reservoir.smple.light_index;
+        vec2 center_state;
+        center_direct_visible = direct_history_load(center_state, frag_tex_coord);
+    }
+#endif
+
     vec3 maxNeighbour = vec3(0.0f);
     bool hasNeighbour = false;
     for (int x = -1; x <= 1; x++) {
@@ -34,7 +86,12 @@ void main() {
             if (x == 0 && y == 0) continue;
 
             ivec2 pos = clamp(frag_tex_coord + ivec2(x, y), ivec2(0), max_texel);
-            if (!ph_matches_denoise_receiver(pos)) continue;
+            if (!ph_matches_denoise_receiver(
+                    pos,
+                    center_has_direct_sample,
+                    center_direct_light,
+                    center_direct_visible
+            )) continue;
 
             vec3 color = texelFetch(restir_lighting, pos, 0).rgb;
             maxNeighbour = max(maxNeighbour, color);
@@ -52,7 +109,12 @@ void main() {
 
     for (int i = 0; i < 9; i++) {
         ivec2 p = clamp(frag_tex_coord + offset[i], ivec2(0), max_texel);
-        if (!ph_matches_denoise_receiver(p)) continue;
+        if (!ph_matches_denoise_receiver(
+                p,
+                center_has_direct_sample,
+                center_direct_light,
+                center_direct_visible
+        )) continue;
 
         float variance = texelFetch(restir_lighting_variance, p, 0).z;
         float kernel_weight = kernel[i];

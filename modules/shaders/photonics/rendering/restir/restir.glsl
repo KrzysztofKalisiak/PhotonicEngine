@@ -185,10 +185,10 @@ const int DIRECT_HISTORY_MISMATCH = 1;
 const int DIRECT_HISTORY_VERIFIED = 2;
 
 int sample_history_direct_provenance(
-    out bool involves_priority_light,
+    out bool involves_moving_light,
     out bool same_sublevel_light
 ) {
-    involves_priority_light = false;
+    involves_moving_light = false;
     same_sublevel_light = false;
 
 #if defined PH_ENABLE_BLOCKLIGHT
@@ -221,11 +221,11 @@ int sample_history_direct_provenance(
         && direct_reservoir_has_sample(previous_reservoir);
 
     if (current_has_sample)
-        involves_priority_light = current_reservoir.smple.light_index
-            < ph_priority_light_count;
+        involves_moving_light = current_reservoir.smple.light_index
+            < ph_moving_light_count;
     if (previous_has_sample)
-        involves_priority_light = involves_priority_light
-            || previous_reservoir.smple.light_index < ph_priority_light_count;
+        involves_moving_light = involves_moving_light
+            || previous_reservoir.smple.light_index < ph_moving_light_count;
 
     uint receiver_token = frag_data_sublevel_token(_frag_data);
     if (receiver_token != 0u && current_has_sample && previous_has_sample) {
@@ -262,28 +262,11 @@ int sample_history_direct_provenance(
 #endif
 }
 
-float sample_history_relative_lighting_change(
-    SampleHistory history,
-    SampleHistory smple
-) {
-    vec3 previous_color = max(history.lighting.rgb, vec3(0.0f));
-    vec3 current_color = max(smple.lighting.rgb, vec3(0.0f));
-    vec3 color_delta = abs(previous_color - current_color);
-    float color_scale = max(
-        max(
-            max(previous_color.x, max(previous_color.y, previous_color.z)),
-            max(current_color.x, max(current_color.y, current_color.z))
-        ),
-        0.02f
-    );
-    return max(color_delta.x, max(color_delta.y, color_delta.z)) / color_scale;
-}
-
 float sample_history_accumulation_limit(SampleHistory history, SampleHistory smple) {
-    bool involves_priority_light;
+    bool involves_moving_light;
     bool same_sublevel_light;
     int direct_history = sample_history_direct_provenance(
-        involves_priority_light,
+        involves_moving_light,
         same_sublevel_light
     );
     if (direct_history == DIRECT_HISTORY_MISMATCH)
@@ -305,26 +288,16 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
             || normal_alignment < 0.9999f;
     }
 
-    bool reactive = moving_receiver || involves_priority_light;
-    if (!reactive) {
-        // Stable Sable identity intentionally survives geometry edits. Reset a
-        // stationary receiver only when its actual lighting changed sharply.
-        if (sable_receiver && history.lighting.a >= 0.5f
-                && sample_history_relative_lighting_change(history, smple) > 0.75f)
-            return 0.0f;
+    bool reactive = moving_receiver || involves_moving_light;
+    if (!reactive)
         return float(PH_RESTIR_ACCUMULATION_FRAMES);
-    }
 
     if (history.lighting.a < 0.5f)
         return min(float(PH_RESTIR_ACCUMULATION_FRAMES), 4.0f);
 
-    float relative_change = sample_history_relative_lighting_change(history, smple);
-    float relative_change_limit = same_sublevel_light
-        ? 0.75f
-        : (direct_history == DIRECT_HISTORY_VERIFIED ? 0.5f : 0.75f);
-    if (relative_change > relative_change_limit)
-        return 0.0f;
-
+    // A single ReSTIR representative is stochastic, so its frame-to-frame
+    // brightness is not a reliable motion detector. Real receiver/source
+    // motion and verified visibility transitions provide the reactive signal.
     float verified_history_limit = same_sublevel_light
         ? float(PH_RESTIR_ACCUMULATION_FRAMES)
         : (direct_history == DIRECT_HISTORY_VERIFIED ? 12.0f : 8.0f);
