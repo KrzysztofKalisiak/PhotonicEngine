@@ -116,6 +116,26 @@ bool ph_sable_light_grid_position(
     return false;
 }
 
+bool ph_sable_light_belongs_to_sublevel(
+    int slot,
+    uint token,
+    vec3 light_world_pos
+) {
+    if (slot < 0 || slot >= ph_sable_sublevel_count
+            || token == 0u
+            || token != ph_sable_identity_token(slot))
+        return false;
+
+    vec3 light_grid_pos;
+    vec3 emissive_cell_min;
+    return ph_sable_light_grid_position(
+        slot,
+        light_world_pos,
+        light_grid_pos,
+        emissive_cell_min
+    );
+}
+
 bool ph_sable_cell_line_interval(
     vec3 origin,
     vec3 direction,

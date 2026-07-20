@@ -37,13 +37,16 @@ bool direct_reservoir_is_empty(DirectReservoir reservoir) {
     return direct_sample_is_empty(reservoir.smple);
 }
 
-// A visibility rejection is encoded with MINIMUM_RESERVOIR_WEIGHT so that the
-// texture stays finite. Treat that sentinel as unusable in every reuse path.
-bool direct_reservoir_is_reusable(DirectReservoir reservoir) {
+bool direct_reservoir_has_sample(DirectReservoir reservoir) {
     return !direct_reservoir_is_empty(reservoir)
-        && reservoir.weight > MINIMUM_RESERVOIR_WEIGHT
         && reservoir.total_samples > 0.0f
         && !direct_reservoir_is_nan(reservoir);
+}
+
+// Zero is the explicit final-visibility rejection marker. Positive weights,
+// including very dim valid samples, remain eligible for reuse.
+bool direct_reservoir_is_reusable(DirectReservoir reservoir) {
+    return direct_reservoir_has_sample(reservoir) && reservoir.weight > 0.0f;
 }
 
 bool direct_history_state_is_visible(vec2 state) {
@@ -251,7 +254,7 @@ void direct_reservoir_encode(DirectReservoir reservoir, out vec3 data0) {
         reservoir = direct_reservoir_empty();
 
     data0[0] = float(reservoir.smple.light_index);
-    data0[1] = max(reservoir.weight, MINIMUM_RESERVOIR_WEIGHT);
+    data0[1] = max(reservoir.weight, 0.0f);
     data0[2] = reservoir.total_samples;
 }
 

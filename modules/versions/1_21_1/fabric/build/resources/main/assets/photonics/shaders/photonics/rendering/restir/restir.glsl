@@ -28,6 +28,7 @@ struct SampleHistory {
 
 const float INVALID_SAMPLE_COMPONENT = -999.0f;
 const SampleHistory INVALID_HISTORY = SampleHistory(vec4(INVALID_SAMPLE_COMPONENT), vec4(INVALID_SAMPLE_COMPONENT));
+const float PH_HISTORY_POSITION_ERROR_SQ = 0.3f;
 
 bool sample_history_is_valid(SampleHistory history) {
     return history.lighting.x != INVALID_SAMPLE_COMPONENT;
@@ -130,8 +131,7 @@ void sample_history_reproject(out SampleHistory smple) {
         sublevel_token
     ).xy * vec2(textureSize(prev_restir_lighting, 0))) - 0.5f;
 
-    const float block_divsor = 64.0f * PH_RENDER_SCALE;
-    float distance_factor = max(dot(previous_player_pos, previous_player_pos) / block_divsor, 0.1f);
+    const float distance_factor = PH_HISTORY_POSITION_ERROR_SQ;
 
     smple = sample_history_reproject_mixed(
         center,
@@ -171,12 +171,10 @@ bool sample_history_reproject_nearest_texel(out ivec2 texel) {
     if (!frag_data_is_in_world(prev_frag)) return false;
     if (frag_data_sublevel_token(prev_frag) != sublevel_token) return false;
 
-    const float block_divsor = 64.0f * PH_RENDER_SCALE;
-    float distance_factor = max(dot(previous_player_pos, previous_player_pos) / block_divsor, 0.1f);
     if (!frag_is_bad_angle) {
         vec3 projected_player_pos = frag_data_player_pos(prev_frag);
         vec3 d = projected_player_pos - previous_player_pos;
-        if (dot(d, d) > distance_factor) return false;
+        if (dot(d, d) >= PH_HISTORY_POSITION_ERROR_SQ) return false;
     }
 
     return dot(frag_data_geo_normal(prev_frag), expected_previous_normal) >= 0.99f;
@@ -186,63 +184,88 @@ const int DIRECT_HISTORY_UNKNOWN = 0;
 const int DIRECT_HISTORY_MISMATCH = 1;
 const int DIRECT_HISTORY_VERIFIED = 2;
 
-int sample_history_direct_provenance() {
+int sample_history_direct_provenance(
+    out bool involves_priority_light,
+    out bool same_sublevel_light
+) {
+    involves_priority_light = false;
+    same_sublevel_light = false;
+
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir current_reservoir = direct_reservoir_empty();
+    bool current_loaded = direct_reservoir_load(
+        current_reservoir,
+        frag_tex_coord
+    );
     vec2 current_state;
-    bool current_visible = direct_history_load(current_state, frag_tex_coord)
-        && direct_reservoir_load(current_reservoir, frag_tex_coord);
+    bool current_visible = direct_history_load(current_state, frag_tex_coord);
+    bool current_has_sample = current_loaded
+        && direct_reservoir_has_sample(current_reservoir);
 
     DirectReservoir previous_reservoir = direct_reservoir_empty();
+    bool previous_loaded = false;
     bool previous_visible = false;
     ivec2 previous_texel;
     if (sample_history_reproject_nearest_texel(previous_texel)) {
+        previous_loaded = direct_reservoir_load_previous(
+            previous_reservoir,
+            previous_texel
+        );
         vec2 previous_state;
-        previous_visible = direct_history_load_previous(previous_state, previous_texel)
-            && direct_reservoir_load_previous(previous_reservoir, previous_texel);
+        previous_visible = direct_history_load_previous(
+            previous_state,
+            previous_texel
+        );
+    }
+    bool previous_has_sample = previous_loaded
+        && direct_reservoir_has_sample(previous_reservoir);
+
+    if (current_has_sample)
+        involves_priority_light = current_reservoir.smple.light_index
+            < ph_priority_light_count;
+    if (previous_has_sample)
+        involves_priority_light = involves_priority_light
+            || previous_reservoir.smple.light_index < ph_priority_light_count;
+
+    uint receiver_token = frag_data_sublevel_token(_frag_data);
+    if (receiver_token != 0u && current_has_sample && previous_has_sample) {
+        int receiver_slot = frag_data_sublevel_slot(_frag_data);
+        Light current_light = direct_sample_get_light(current_reservoir.smple);
+        Light previous_light = direct_sample_get_light(previous_reservoir.smple);
+        same_sublevel_light = ph_sable_light_belongs_to_sublevel(
+            receiver_slot,
+            receiver_token,
+            current_light.position + world_offset
+        ) && ph_sable_light_belongs_to_sublevel(
+            receiver_slot,
+            receiver_token,
+            previous_light.position + world_offset
+        );
     }
 
-    if (!current_visible && !previous_visible)
+    // A reservoir stores one stochastic representative of total direct light.
+    // Different representatives are normal and do not prove discontinuity.
+    if (!current_has_sample || !previous_has_sample
+            || current_reservoir.smple.light_index
+                != previous_reservoir.smple.light_index)
         return DIRECT_HISTORY_UNKNOWN;
-    if (!current_visible || !previous_visible)
-        return DIRECT_HISTORY_MISMATCH;
 
-    return current_reservoir.smple.light_index == previous_reservoir.smple.light_index
-        ? DIRECT_HISTORY_VERIFIED
-        : DIRECT_HISTORY_MISMATCH;
+    // Visibility is comparable only for the same remapped light.
+    if (current_visible != previous_visible)
+        return DIRECT_HISTORY_MISMATCH;
+    if (!current_visible)
+        return DIRECT_HISTORY_UNKNOWN;
+
+    return DIRECT_HISTORY_VERIFIED;
 #else
     return DIRECT_HISTORY_UNKNOWN;
 #endif
 }
 
-float sample_history_accumulation_limit(SampleHistory history, SampleHistory smple) {
-    if (frag_data_sublevel_token(_frag_data) == 0u)
-        return float(PH_RESTIR_ACCUMULATION_FRAMES);
-
-    FragMotion motion;
-    frag_motion_load(motion, frag_tex_coord);
-    vec3 current_world_pos = frag_data_player_pos(_frag_data) + cameraPosition;
-    vec3 previous_world_pos = motion.previous_player_pos + previousCameraPosition;
-    vec3 world_motion = current_world_pos - previous_world_pos;
-    float normal_alignment = dot(
-        frag_data_geo_normal(_frag_data),
-        motion.previous_geo_normal
-    );
-
-    if (dot(world_motion, world_motion) <= 1e-6f && normal_alignment >= 0.9999f)
-        return float(PH_RESTIR_ACCUMULATION_FRAMES);
-
-    int direct_history = sample_history_direct_provenance();
-    if (direct_history == DIRECT_HISTORY_MISMATCH)
-        return 0.0f;
-
-    // Geometry edits change the token and arrive here with no retained samples.
-    // For rigid motion, preserve a longer history only when both frames have
-    // a final-visible reservoir for the same remapped light. Any new shadow
-    // edge, light remap, or failed visibility check resets immediately.
-    if (history.lighting.a < 0.5f)
-        return min(float(PH_RESTIR_ACCUMULATION_FRAMES), 4.0f);
-
+float sample_history_relative_lighting_change(
+    SampleHistory history,
+    SampleHistory smple
+) {
     vec3 previous_color = max(history.lighting.rgb, vec3(0.0f));
     vec3 current_color = max(smple.lighting.rgb, vec3(0.0f));
     vec3 color_delta = abs(previous_color - current_color);
@@ -253,16 +276,58 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
         ),
         0.02f
     );
-    float relative_change = max(color_delta.x, max(color_delta.y, color_delta.z)) / color_scale;
-    float relative_change_limit = direct_history == DIRECT_HISTORY_VERIFIED
+    return max(color_delta.x, max(color_delta.y, color_delta.z)) / color_scale;
+}
+
+float sample_history_accumulation_limit(SampleHistory history, SampleHistory smple) {
+    bool involves_priority_light;
+    bool same_sublevel_light;
+    int direct_history = sample_history_direct_provenance(
+        involves_priority_light,
+        same_sublevel_light
+    );
+    if (direct_history == DIRECT_HISTORY_MISMATCH)
+        return 0.0f;
+
+    bool sable_receiver = frag_data_sublevel_token(_frag_data) != 0u;
+    bool moving_receiver = false;
+    if (sable_receiver) {
+        FragMotion motion;
+        frag_motion_load(motion, frag_tex_coord);
+        vec3 current_world_pos = frag_data_player_pos(_frag_data) + cameraPosition;
+        vec3 previous_world_pos = motion.previous_player_pos + previousCameraPosition;
+        vec3 world_motion = current_world_pos - previous_world_pos;
+        float normal_alignment = dot(
+            frag_data_geo_normal(_frag_data),
+            motion.previous_geo_normal
+        );
+        moving_receiver = dot(world_motion, world_motion) > 1e-6f
+            || normal_alignment < 0.9999f;
+    }
+
+    bool reactive = moving_receiver || involves_priority_light;
+    if (!reactive) {
+        // Stable Sable identity intentionally survives geometry edits. Reset a
+        // stationary receiver only when its actual lighting changed sharply.
+        if (sable_receiver && history.lighting.a >= 0.5f
+                && sample_history_relative_lighting_change(history, smple) > 0.75f)
+            return 0.0f;
+        return float(PH_RESTIR_ACCUMULATION_FRAMES);
+    }
+
+    if (history.lighting.a < 0.5f)
+        return min(float(PH_RESTIR_ACCUMULATION_FRAMES), 4.0f);
+
+    float relative_change = sample_history_relative_lighting_change(history, smple);
+    float relative_change_limit = same_sublevel_light
         ? 0.75f
-        : 0.25f;
+        : (direct_history == DIRECT_HISTORY_VERIFIED ? 0.5f : 0.75f);
     if (relative_change > relative_change_limit)
         return 0.0f;
 
-    float verified_history_limit = direct_history == DIRECT_HISTORY_VERIFIED
-        ? 8.0f
-        : 4.0f;
+    float verified_history_limit = same_sublevel_light
+        ? float(PH_RESTIR_ACCUMULATION_FRAMES)
+        : (direct_history == DIRECT_HISTORY_VERIFIED ? 12.0f : 8.0f);
     return min(float(PH_RESTIR_ACCUMULATION_FRAMES), verified_history_limit);
 }
 

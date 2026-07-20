@@ -48,7 +48,7 @@ void main() {
     if (!frag_is_bad_angle) {
         vec3 projected_player_pos = frag_data_player_pos(prev_frag);
         vec3 d = projected_player_pos - previous_player_pos;
-        if (dot(d, d) >= 0.3f) discard;
+        if (dot(d, d) >= PH_HISTORY_POSITION_ERROR_SQ) discard;
     }
 
     vec3 n = frag_data_geo_normal(prev_frag);
@@ -60,13 +60,19 @@ void main() {
     float direct_sample_weight = 0.0f;
     DirectReservoir direct_result = direct_reservoir_empty();
     DirectReservoir temp_direct = direct_reservoir_empty();
+    DirectReservoir direct_fallback = direct_reservoir_empty();
 
     // load freshly sampled reservoir
     direct_reservoir_load(temp_direct, frag_tex_coord);
+    if (direct_reservoir_has_sample(temp_direct)) {
+        direct_fallback = temp_direct;
+        direct_fallback.weight = 0.0f;
+    }
     direct_reservoir_merge(direct_result, temp_direct, direct_sample_weight);
 
     // Only reuse a reservoir that survived the final visibility check in the
-    // previous frame. The encoded minimum-weight sentinel is not history.
+    // previous frame. A zero-weight reservoir retains identity for the
+    // accumulation pass, but contributes no energy here.
     vec2 direct_history_state;
     if (direct_history_load_previous(direct_history_state, prev_texel)
             && direct_reservoir_load_previous(temp_direct, prev_texel)) {
@@ -77,8 +83,15 @@ void main() {
         }
     }
 
-    // write resulting reservoir
-    direct_reservoir_finalize_weight(direct_result, direct_sample_weight);
+    // Preserve the current rejected sample when no visible candidate won. Its
+    // identity lets accumulation distinguish a real visibility transition
+    // from ordinary stochastic representative-light churn.
+    if (direct_reservoir_is_reusable(direct_result))
+        direct_reservoir_finalize_weight(direct_result, direct_sample_weight);
+    if (!direct_reservoir_is_reusable(direct_result)
+            && direct_reservoir_has_sample(direct_fallback))
+        direct_result = direct_fallback;
+
     direct_reservoir_encode(direct_result, di_reservoir_0);
 
 #endif
