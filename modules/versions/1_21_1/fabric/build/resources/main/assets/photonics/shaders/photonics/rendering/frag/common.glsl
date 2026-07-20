@@ -39,7 +39,7 @@ vec3 frag_tex_normal;
 #define frag_is_hand frag_data_is_hand(_frag_data)
 
 void setup_frag_data(int rnd_seed) {
-    frag_rnd_state = ph_new_rand_state(gl_FragCoord.xy, frameCounter, 0);
+    frag_rnd_state = ph_new_rand_state(gl_FragCoord.xy, frameCounter, rnd_seed);
     frag_data_load(_frag_data, frag_tex_coord);
 
 #if defined FRAG_USE_PLAYER_POS

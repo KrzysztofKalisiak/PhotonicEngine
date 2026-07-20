@@ -8,6 +8,8 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     private static final boolean DISABLE_ACTIVE_PIPELINE_FOR_DIAGNOSTICS = false;
     private static final int MIN_RESTIR_INITIAL_SAMPLES = 8;
     private static final int MAX_RESTIR_INITIAL_SAMPLES = 32;
+    private static final int MAX_RESTIR_SPATIAL_REUSE_SAMPLES = 1;
+    private static final float MAX_RESTIR_SPATIAL_REUSE_RADIUS = 5.0f;
     private static final int MIN_RESTIR_DENOISER_PASSES = 5;
 
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
@@ -117,12 +119,18 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public int getRestirSpatialReuseSamples() {
-        return 0;
+        return Math.max(
+                0,
+                Math.min(restirSpatialReuseSamples, MAX_RESTIR_SPATIAL_REUSE_SAMPLES)
+        );
     }
 
     @Override
     public float getRestirSpatialReuseRadius() {
-        return restirRestirSpatialReuseRadius;
+        return Math.max(
+                0.0f,
+                Math.min(restirRestirSpatialReuseRadius, MAX_RESTIR_SPATIAL_REUSE_RADIUS)
+        );
     }
 
     @Override

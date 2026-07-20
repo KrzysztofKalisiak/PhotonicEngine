@@ -32,17 +32,18 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         registerComponent(ExternalSubLevelMotion.instance());
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v35 bounded reservoirs, zero-contribution batch accounting, actual-motion reactive lights, stable-anchor Sable reprojection, surface-plane SVGF, visibility-transition provenance, stable Sable identity, current-visible temporal reuse, Sable plot-section isolation, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, duplicate Veil point-light suppression, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; spatial and combined GI compatibility gates active");
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v36 guarded ordinary-world single-neighbor spatial reuse, immutable spatial input, current-receiver visibility validation, bounded spatial history, independent spatial random stream, bounded reservoirs, zero-contribution batch accounting, actual-motion reactive lights, stable-anchor Sable reprojection, surface-plane SVGF, visibility-transition provenance, stable Sable identity, current-visible temporal reuse, Sable plot-section isolation, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, duplicate Veil point-light suppression, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; external/Sable spatial reuse and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
         this.denoiserPasses = requestedDenoiserPasses != 0 ? Math.max(requestedDenoiserPasses, 7) : 0;
 
         Photonics.LOGGER.info(
-                "Photonics ReSTIR configuration v21: directCandidatesPerPixel={}, directTemporalSampleCap={}, spatialCandidates={}, requestedDenoiserPasses={}, effectiveDenoiserPasses={}, softShadows={}, combinedGi={}",
+                "Photonics ReSTIR configuration v36: directCandidatesPerPixel={}, directTemporalSampleCap={}, spatialCandidates={}, spatialRadiusPixels={}, spatialPolicy=ordinary-world/current-visibility/immutable-input/initial-batch-cap, requestedDenoiserPasses={}, effectiveDenoiserPasses={}, softShadows={}, combinedGi={}",
                 properties.getRestirInitialSamples(),
                 20 * properties.getRestirInitialSamples(),
                 properties.getRestirSpatialReuseSamples(),
+                properties.getRestirSpatialReuseRadius(),
                 requestedDenoiserPasses,
                 denoiserPasses,
                 properties.useRestirSoftShadows(),
@@ -90,6 +91,10 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("denoise_result", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isDenoisingEnabled)
                 .build(this::registerComponent);
 
+        var spatialInputFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
+                .addAttachment("restir_direct_spatial_input", ITextureFormat.rgb32f(), CREATE_SAMPLER, this::isSpatialReuseEnabled)
+                .build(this::registerComponent);
+
         var otherFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment("other_handheld", ITextureFormat.rgb16f(), CREATE_SAMPLER, this::isHandheldLightingEnabled)
                 .build(this::registerComponent);
@@ -106,6 +111,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
                 .withFramebuffer(reusedReservoirFramebuffer)
                 .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isRestirEnabled)
+                .withFramebuffer(spatialInputFramebuffer)
+                .deferredPass("copy spatial input", "/photonics/rendering/restir/passes/r5_copy_spatial_input.fsh", null, this::isSpatialReuseEnabled)
+                .withFramebuffer(reusedReservoirFramebuffer)
                 // The spatial pass also caps temporal reservoirs, so it must run
                 // when the configured spatial candidate count is zero.
                 .deferredPass("spatial reuse/clamp", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isRestirEnabled)
@@ -155,7 +163,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isSpatialReuseEnabled() {
-        return isRestirEnabled() && properties.getRestirSpatialReuseSamples() > 0;
+        return isBlockLightEnabled() && properties.getRestirSpatialReuseSamples() > 0;
     }
 
     public boolean isHandheldLightingEnabled() {
