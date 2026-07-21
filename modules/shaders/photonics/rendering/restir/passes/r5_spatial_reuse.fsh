@@ -20,8 +20,6 @@ layout(location = INDIRECT_RESERVOIR_2) out vec4 gi_reservoir_2;
 const float ph_spatial_max_receiver_distance_sq = 0.5625f;
 const float ph_spatial_max_plane_distance = 0.05f;
 const float ph_spatial_min_normal_alignment = 0.99f;
-const float ph_spatial_max_sable_motion_sq = 1e-6f;
-const float ph_spatial_min_sable_motion_normal_alignment = 0.9999f;
 
 bool ph_spatial_is_finite(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
@@ -39,28 +37,11 @@ bool ph_spatial_current_receiver_can_reuse() {
     if (receiver_token == 0u)
         return receiver_slot < 0;
 
-    if (receiver_slot < 0
-            || receiver_slot >= ph_sable_sublevel_count
-            || receiver_token != ph_sable_identity_token(receiver_slot))
-        return false;
-
-    FragMotion motion;
-    frag_motion_load(motion, frag_tex_coord);
-    vec3 current_world_pos = frag_player_pos + cameraPosition;
-    vec3 previous_world_pos = motion.previous_player_pos
-        + previousCameraPosition;
-    if (!ph_spatial_is_finite(current_world_pos)
-            || !ph_spatial_is_finite(previous_world_pos)
-            || !ph_spatial_is_finite(motion.previous_geo_normal))
-        return false;
-
-    vec3 world_motion = current_world_pos - previous_world_pos;
-    float normal_alignment = dot(
-        frag_geo_normal,
-        motion.previous_geo_normal
-    );
-    return dot(world_motion, world_motion) <= ph_spatial_max_sable_motion_sq
-        && normal_alignment >= ph_spatial_min_sable_motion_normal_alignment;
+    // Spatial candidates come from this frame. Rigid world motion therefore
+    // does not invalidate two receivers carrying the same live Sable identity.
+    return receiver_slot >= 0
+        && receiver_slot < ph_sable_sublevel_count
+        && receiver_token == ph_sable_identity_token(receiver_slot);
 }
 
 bool ph_spatial_receiver_matches(FragData sample_frag) {
@@ -125,8 +106,9 @@ bool ph_spatial_direct_light_matches_receiver(DirectReservoir reservoir) {
     if (receiver_token == 0u)
         return light_index >= priority_count;
 
-    int moving_count = clamp(ph_moving_light_count, 0, priority_count);
-    if (light_index < moving_count || light_index >= priority_count)
+    // The priority prefix contains both moving and stationary external lights.
+    // The emissive-cell ownership test narrows it to this receiver's sublevel.
+    if (light_index >= priority_count)
         return false;
 
     Light light = direct_sample_get_light(reservoir.smple);
