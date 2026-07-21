@@ -4,30 +4,32 @@
 #define PH_SABLE_MAX_SUBLEVELS 16
 #define PH_SABLE_MAX_EMISSIVE_CELLS 64
 const float PH_SABLE_VISIBILITY_BIAS = 0.001f;
+const float PH_SABLE_RECEIVER_PROBE = 0.35f;
+const float PH_SABLE_RECEIVER_BOUNDS_PAD = 0.4f;
 //ph_required: uniform sampler3D ph_sable_occupancy;
 //ph_required: uniform int ph_sable_sublevel_count;
 //ph_required: uniform int ph_sable_emissive_cell_count;
-//ph_required: uniform mat4 ph_sable_current_world_to_grid[16];
-//ph_required: uniform mat4 ph_sable_current_world_to_previous_world[16];
-//ph_required: uniform mat4 ph_sable_previous_world_to_current_grid[16];
+//ph_required: uniform mat4 ph_sable_current_player_to_grid[16];
+//ph_required: uniform mat4 ph_sable_current_player_to_previous_player[16];
+//ph_required: uniform mat4 ph_sable_previous_player_to_current_grid[16];
 //ph_required: uniform vec4 ph_sable_grid_info[16];
 //ph_required: uniform vec4 ph_sable_identity_tokens[4];
 //ph_required: uniform vec4 ph_sable_emissive_cells[64];
 
-mat4 ph_sable_world_to_grid_matrix(int slot) {
-    return ph_sable_current_world_to_grid[slot];
+mat4 ph_sable_player_to_grid_matrix(int slot) {
+    return ph_sable_current_player_to_grid[slot];
 }
 
-mat4 ph_sable_world_to_previous_world_matrix(int slot) {
-    return ph_sable_current_world_to_previous_world[slot];
+mat4 ph_sable_player_to_previous_player_matrix(int slot) {
+    return ph_sable_current_player_to_previous_player[slot];
 }
 
-mat4 ph_sable_previous_world_to_current_grid_matrix(int slot) {
-    return ph_sable_previous_world_to_current_grid[slot];
+mat4 ph_sable_previous_player_to_current_grid_matrix(int slot) {
+    return ph_sable_previous_player_to_current_grid[slot];
 }
 
 mat3 ph_sable_normal_to_previous_normal_matrix(int slot) {
-    return transpose(inverse(mat3(ph_sable_world_to_previous_world_matrix(slot))));
+    return transpose(inverse(mat3(ph_sable_player_to_previous_player_matrix(slot))));
 }
 
 uint ph_sable_identity_token(int slot) {
@@ -42,25 +44,25 @@ bool ph_sable_finite_vec3(vec3 value) {
 float ph_sable_receiver_relative_light_step(
     int receiver_slot,
     uint receiver_token,
-    vec3 current_world_pos,
-    vec3 previous_world_pos
+    vec3 current_player_pos,
+    vec3 previous_player_pos
 ) {
     if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
             || receiver_token == 0u
             || receiver_token != ph_sable_identity_token(receiver_slot))
-        return length(current_world_pos - previous_world_pos);
+        return length(current_player_pos - previous_player_pos);
 
     vec3 current_grid_pos = (
-        ph_sable_world_to_grid_matrix(receiver_slot)
-            * vec4(current_world_pos, 1.0f)
+        ph_sable_player_to_grid_matrix(receiver_slot)
+            * vec4(current_player_pos, 1.0f)
     ).xyz;
     vec3 previous_grid_pos = (
-        ph_sable_previous_world_to_current_grid_matrix(receiver_slot)
-            * vec4(previous_world_pos, 1.0f)
+        ph_sable_previous_player_to_current_grid_matrix(receiver_slot)
+            * vec4(previous_player_pos, 1.0f)
     ).xyz;
     if (!ph_sable_finite_vec3(current_grid_pos)
             || !ph_sable_finite_vec3(previous_grid_pos))
-        return length(current_world_pos - previous_world_pos);
+        return length(current_player_pos - previous_player_pos);
 
     return length(current_grid_pos - previous_grid_pos);
 }
@@ -78,20 +80,6 @@ bool ph_sable_cell_receiver(ivec3 cell, ivec3 size, int atlas_z) {
 
 bool ph_sable_cell_occluder(ivec3 cell, ivec3 size, int atlas_z) {
     return ph_sable_cell_flags(cell, size, atlas_z) > 0.5f;
-}
-
-bool ph_sable_matches_occupancy(vec3 grid_pos, ivec3 size, int atlas_z) {
-    if (atlas_z < 0)
-        return false;
-
-    const float probe = 0.15f;
-    if (ph_sable_cell_receiver(ivec3(floor(grid_pos)), size, atlas_z)) return true;
-    if (ph_sable_cell_receiver(ivec3(floor(grid_pos + vec3(probe, 0.0f, 0.0f))), size, atlas_z)) return true;
-    if (ph_sable_cell_receiver(ivec3(floor(grid_pos - vec3(probe, 0.0f, 0.0f))), size, atlas_z)) return true;
-    if (ph_sable_cell_receiver(ivec3(floor(grid_pos + vec3(0.0f, probe, 0.0f))), size, atlas_z)) return true;
-    if (ph_sable_cell_receiver(ivec3(floor(grid_pos - vec3(0.0f, probe, 0.0f))), size, atlas_z)) return true;
-    if (ph_sable_cell_receiver(ivec3(floor(grid_pos + vec3(0.0f, 0.0f, probe))), size, atlas_z)) return true;
-    return ph_sable_cell_receiver(ivec3(floor(grid_pos - vec3(0.0f, 0.0f, probe))), size, atlas_z);
 }
 
 bool ph_sable_matches_emissive_cell(int slot, vec3 grid_pos) {
@@ -114,12 +102,12 @@ bool ph_sable_matches_emissive_cell(int slot, vec3 grid_pos) {
 
 bool ph_sable_light_grid_position(
     int slot,
-    vec3 light_world_pos,
+    vec3 light_player_pos,
     out vec3 light_grid_pos,
     out vec3 emissive_cell_min
 ) {
     light_grid_pos = (
-        ph_sable_world_to_grid_matrix(slot) * vec4(light_world_pos, 1.0f)
+        ph_sable_player_to_grid_matrix(slot) * vec4(light_player_pos, 1.0f)
     ).xyz;
     if (!ph_sable_finite_vec3(light_grid_pos))
         return false;
@@ -150,7 +138,7 @@ bool ph_sable_light_grid_position(
 bool ph_sable_light_belongs_to_sublevel(
     int slot,
     uint token,
-    vec3 light_world_pos
+    vec3 light_player_pos
 ) {
     if (slot < 0 || slot >= ph_sable_sublevel_count
             || token == 0u
@@ -161,7 +149,7 @@ bool ph_sable_light_belongs_to_sublevel(
     vec3 emissive_cell_min;
     return ph_sable_light_grid_position(
         slot,
-        light_world_pos,
+        light_player_pos,
         light_grid_pos,
         emissive_cell_min
     );
@@ -224,13 +212,12 @@ bool ph_sable_resolve_receiver_cell(
     out ivec3 receiver_cell,
     out vec3 face_normal
 ) {
-    const float probe = 0.15f;
     face_normal = ph_sable_dominant_axis(grid_normal);
 
-    receiver_cell = ivec3(floor(grid_pos - face_normal * probe));
+    receiver_cell = ivec3(floor(grid_pos - face_normal * PH_SABLE_RECEIVER_PROBE));
     if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) return true;
 
-    receiver_cell = ivec3(floor(grid_pos + face_normal * probe));
+    receiver_cell = ivec3(floor(grid_pos + face_normal * PH_SABLE_RECEIVER_PROBE));
     if (ph_sable_cell_receiver(receiver_cell, size, atlas_z)) {
         face_normal = -face_normal;
         return true;
@@ -281,6 +268,20 @@ bool ph_sable_exit_receiver_cell(
     return ph_sable_finite_vec3(endpoint);
 }
 
+bool ph_sable_visibility_cell_occludes(
+    ivec3 cell,
+    ivec3 grid_size,
+    int atlas_z,
+    ivec3 receiver_cell
+) {
+    if (all(equal(cell, receiver_cell)))
+        return false;
+    if (any(lessThan(cell, ivec3(0)))
+            || any(greaterThanEqual(cell, grid_size)))
+        return false;
+    return ph_sable_cell_occluder(cell, grid_size, atlas_z);
+}
+
 bool ph_sable_grid_segment_visible(
     int slot,
     vec3 start_grid,
@@ -323,15 +324,59 @@ bool ph_sable_grid_segment_visible(
         if (next_t > 1.0f)
             return true;
 
-        if (t_max.x <= next_t + 1e-6f) {
+        bool cross_x = t_max.x <= next_t + 1e-6f;
+        bool cross_y = t_max.y <= next_t + 1e-6f;
+        bool cross_z = t_max.z <= next_t + 1e-6f;
+        ivec3 base_cell = cell;
+        ivec3 x_cell = base_cell + ivec3(step.x, 0, 0);
+        ivec3 y_cell = base_cell + ivec3(0, step.y, 0);
+        ivec3 z_cell = base_cell + ivec3(0, 0, step.z);
+
+        // A standard DDA advances all tied axes at once and can jump through
+        // the gap between blocks that meet on an edge or corner. Test every
+        // touched side cell before the diagonal cell so shared voxel borders
+        // remain conservatively closed.
+        if (cross_x && ph_sable_visibility_cell_occludes(
+                x_cell, grid_size, atlas_z, receiver_cell)) return false;
+        if (cross_y && ph_sable_visibility_cell_occludes(
+                y_cell, grid_size, atlas_z, receiver_cell)) return false;
+        if (cross_z && ph_sable_visibility_cell_occludes(
+                z_cell, grid_size, atlas_z, receiver_cell)) return false;
+        if (cross_x && cross_y && ph_sable_visibility_cell_occludes(
+                x_cell + ivec3(0, step.y, 0),
+                grid_size,
+                atlas_z,
+                receiver_cell
+        )) return false;
+        if (cross_x && cross_z && ph_sable_visibility_cell_occludes(
+                x_cell + ivec3(0, 0, step.z),
+                grid_size,
+                atlas_z,
+                receiver_cell
+        )) return false;
+        if (cross_y && cross_z && ph_sable_visibility_cell_occludes(
+                y_cell + ivec3(0, 0, step.z),
+                grid_size,
+                atlas_z,
+                receiver_cell
+        )) return false;
+        if (cross_x && cross_y && cross_z
+                && ph_sable_visibility_cell_occludes(
+                    x_cell + ivec3(0, step.y, step.z),
+                    grid_size,
+                    atlas_z,
+                    receiver_cell
+                )) return false;
+
+        if (cross_x) {
             cell.x += step.x;
             t_max.x += t_delta.x;
         }
-        if (t_max.y <= next_t + 1e-6f) {
+        if (cross_y) {
             cell.y += step.y;
             t_max.y += t_delta.y;
         }
-        if (t_max.z <= next_t + 1e-6f) {
+        if (cross_z) {
             cell.z += step.z;
             t_max.z += t_delta.z;
         }
@@ -340,8 +385,6 @@ bool ph_sable_grid_segment_visible(
             return true;
         if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, grid_size)))
             return true;
-        if (ph_sable_cell_occluder(cell, grid_size, atlas_z))
-            return false;
         if (all(equal(cell, target_cell)))
             return true;
     }
@@ -349,45 +392,47 @@ bool ph_sable_grid_segment_visible(
     return false;
 }
 
-bool ph_sable_same_sublevel_light_visible(
+bool ph_sable_same_sublevel_light_visibility(
     int receiver_slot,
     uint receiver_token,
-    vec3 receiver_world_pos,
+    vec3 receiver_player_pos,
     vec3 receiver_world_normal,
     int light_temporal_domain,
-    vec3 light_world_pos
+    vec3 light_player_pos,
+    out bool visible
 ) {
+    visible = true;
     if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
             || receiver_token == 0u
             || receiver_token != ph_sable_identity_token(receiver_slot))
-        return true;
+        return false;
     if (light_temporal_domain <= 0
             || uint(light_temporal_domain) != receiver_token)
-        return true;
+        return false;
 
     vec3 light_grid_pos;
     vec3 emissive_cell_min;
     if (!ph_sable_light_grid_position(
             receiver_slot,
-            light_world_pos,
+            light_player_pos,
             light_grid_pos,
             emissive_cell_min
     ))
-        return true;
+        return false;
 
-    mat4 world_to_grid = ph_sable_world_to_grid_matrix(receiver_slot);
+    mat4 player_to_grid = ph_sable_player_to_grid_matrix(receiver_slot);
     vec3 receiver_grid_pos = (
-        world_to_grid * vec4(receiver_world_pos, 1.0f)
+        player_to_grid * vec4(receiver_player_pos, 1.0f)
     ).xyz;
     if (!ph_sable_finite_vec3(receiver_grid_pos))
-        return true;
+        return false;
 
-    vec3 receiver_grid_normal = transpose(inverse(mat3(world_to_grid)))
+    vec3 receiver_grid_normal = transpose(inverse(mat3(player_to_grid)))
         * receiver_world_normal;
     float receiver_grid_normal_length_sq = dot(receiver_grid_normal, receiver_grid_normal);
     if (!ph_sable_finite_vec3(receiver_grid_normal)
             || receiver_grid_normal_length_sq <= 1e-8f)
-        return true;
+        return false;
     receiver_grid_normal *= inversesqrt(receiver_grid_normal_length_sq);
 
     vec3 source_center = emissive_cell_min + vec3(0.5f);
@@ -410,7 +455,7 @@ bool ph_sable_same_sublevel_light_visible(
             receiver_cell,
             face_normal
     ))
-        return true;
+        return false;
 
     vec3 axis_mask = abs(face_normal);
     bool coplanar_source = abs(dot(
@@ -437,7 +482,7 @@ bool ph_sable_same_sublevel_light_visible(
                 receiver_to_source,
                 receiver_cell,
                 receiver_endpoint
-        )) return true;
+        )) return false;
 
         vec3 source_to_receiver = receiver_endpoint - source_center;
         float source_ray_scale = max(
@@ -445,7 +490,7 @@ bool ph_sable_same_sublevel_light_visible(
             max(abs(source_to_receiver.y), abs(source_to_receiver.z))
         );
         if (!ph_sable_finite_vec3(receiver_endpoint) || source_ray_scale <= 1e-8f)
-            return true;
+            return false;
 
         vec3 source_cell_ray = source_to_receiver / source_ray_scale;
         source_endpoint = source_center
@@ -454,19 +499,20 @@ bool ph_sable_same_sublevel_light_visible(
 
     if (!ph_sable_finite_vec3(source_endpoint)
             || !ph_sable_finite_vec3(receiver_endpoint))
-        return true;
-    return ph_sable_grid_segment_visible(
+        return false;
+    visible = ph_sable_grid_segment_visible(
         receiver_slot,
         source_endpoint,
         receiver_endpoint,
         receiver_cell
     );
+    return true;
 }
 
 bool ph_sable_receiver_motion(
-    vec3 current_world_pos,
+    vec3 current_player_pos,
     vec3 current_world_normal,
-    out vec3 previous_world_pos,
+    out vec3 previous_player_pos,
     out vec3 previous_world_normal,
     out int sublevel_slot,
     out uint sublevel_token
@@ -475,20 +521,41 @@ bool ph_sable_receiver_motion(
         if (slot >= ph_sable_sublevel_count)
             break;
 
-        mat4 world_to_grid = ph_sable_world_to_grid_matrix(slot);
-        vec3 grid_pos = (world_to_grid * vec4(current_world_pos, 1.0f)).xyz;
+        mat4 player_to_grid = ph_sable_player_to_grid_matrix(slot);
+        vec3 grid_pos = (player_to_grid * vec4(current_player_pos, 1.0f)).xyz;
         ivec3 grid_size = ivec3(ph_sable_grid_info[slot].xyz + 0.5f);
 
-        if (any(lessThan(grid_pos, vec3(-0.2f))) || any(greaterThan(grid_pos, vec3(grid_size) + 0.2f)))
+        if (any(lessThan(grid_pos, vec3(-PH_SABLE_RECEIVER_BOUNDS_PAD)))
+                || any(greaterThan(
+                    grid_pos,
+                    vec3(grid_size) + PH_SABLE_RECEIVER_BOUNDS_PAD
+                )))
             continue;
 
         int atlas_z = int(ph_sable_grid_info[slot].w);
-        if (!ph_sable_matches_occupancy(grid_pos, grid_size, atlas_z)
-                && !ph_sable_matches_emissive_cell(slot, grid_pos))
+        vec3 grid_normal = transpose(inverse(mat3(player_to_grid)))
+            * current_world_normal;
+        float grid_normal_length_sq = dot(grid_normal, grid_normal);
+        if (!ph_sable_finite_vec3(grid_normal)
+                || grid_normal_length_sq <= 1e-8f)
+            continue;
+        grid_normal *= inversesqrt(grid_normal_length_sq);
+
+        ivec3 receiver_cell;
+        vec3 receiver_face_normal;
+        bool receiver_match = ph_sable_resolve_receiver_cell(
+            grid_pos,
+            grid_normal,
+            grid_size,
+            atlas_z,
+            receiver_cell,
+            receiver_face_normal
+        );
+        if (!receiver_match && !ph_sable_matches_emissive_cell(slot, grid_pos))
             continue;
 
-        previous_world_pos = (
-            ph_sable_world_to_previous_world_matrix(slot) * vec4(current_world_pos, 1.0f)
+        previous_player_pos = (
+            ph_sable_player_to_previous_player_matrix(slot) * vec4(current_player_pos, 1.0f)
         ).xyz;
         previous_world_normal = normalize(
             ph_sable_normal_to_previous_normal_matrix(slot) * current_world_normal
@@ -498,7 +565,7 @@ bool ph_sable_receiver_motion(
         return sublevel_token != 0u;
     }
 
-    previous_world_pos = current_world_pos;
+    previous_player_pos = current_player_pos;
     previous_world_normal = current_world_normal;
     sublevel_slot = -1;
     sublevel_token = 0u;

@@ -180,19 +180,22 @@ void direct_reservoir_validate_visiblity(inout DirectReservoir reservoir, vec3 s
         frag_data_sublevel_token(_frag_data)
     );
 
-    if (!ph_sable_same_sublevel_light_visible(
+    bool local_visible;
+    bool local_visibility_handled = ph_sable_same_sublevel_light_visibility(
             frag_data_sublevel_slot(_frag_data),
             frag_data_sublevel_token(_frag_data),
-            sample_pos + world_offset,
+            sample_pos - rt_camera_position,
             geo_normal,
             direct_sample_get_temporal_domain(reservoir.smple),
-            light.position + world_offset
-    )) {
+            light.position - rt_camera_position,
+            local_visible
+    );
+    if (local_visibility_handled && !local_visible) {
         reservoir.weight = 0.0f;
         return;
     }
 
-    if (same_receiver_domain)
+    if (same_receiver_domain && local_visibility_handled)
         return;
 
     vec3 to_light = light.position - sample_pos;
@@ -279,19 +282,23 @@ bool direct_sample_get_final_unweighted_color(
     ph_rand_sample_position(frag_rnd_state, trace_position, sample_pos);
 #endif
 
-    if (!ph_sable_same_sublevel_light_visible(
+    bool local_visible;
+    bool local_visibility_handled = ph_sable_same_sublevel_light_visibility(
             frag_data_sublevel_slot(_frag_data),
             frag_data_sublevel_token(_frag_data),
-            sample_pos + world_offset,
+            sample_pos - rt_camera_position,
             geo_normal,
             direct_sample_get_temporal_domain(smple),
-            light.position + world_offset
-    )) return false;
+            light.position - rt_camera_position,
+            local_visible
+    );
+    if (local_visibility_handled && !local_visible)
+        return false;
 
     if (direct_sample_matches_receiver_domain(
             smple,
             frag_data_sublevel_token(_frag_data)
-    )) {
+    ) && local_visibility_handled) {
         result = sampled_color;
         return true;
     }

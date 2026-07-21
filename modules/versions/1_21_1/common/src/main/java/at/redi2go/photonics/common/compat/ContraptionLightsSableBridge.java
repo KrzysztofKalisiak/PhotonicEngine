@@ -20,7 +20,9 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import org.joml.Matrix4d;
 import org.joml.Matrix4f;
+import org.joml.Quaterniondc;
 import org.joml.Vector3d;
+import org.joml.Vector3dc;
 import org.joml.Vector3i;
 
 import java.lang.reflect.Field;
@@ -62,6 +64,7 @@ public final class ContraptionLightsSableBridge {
     private static final Map<UUID, Matrix4d> previousWorldToMotionAnchor = new HashMap<>();
     private static final Map<UUID, Vector3i> motionAnchors = new HashMap<>();
     private static final Map<UUID, Integer> motionTokens = new HashMap<>();
+    private static Vector3d previousMotionCameraPosition;
     private static final Map<UUID, GeometryRevisionSnapshot> geometryRevisionSnapshots = new HashMap<>();
     private static final Map<SableLightIdentity, Vector3d> publishedLightPositions = new HashMap<>();
     private static final Map<SableLightIdentity, Vector3d> movementReferencePositions = new HashMap<>();
@@ -122,14 +125,13 @@ public final class ContraptionLightsSableBridge {
                 int minY = transformAccess.minY.getInt(state);
                 int minZ = transformAccess.minZ.getInt(state);
                 Object pose = transformAccess.renderPose.invoke(subLevel);
-                Matrix4f worldToGrid = new Matrix4f((Matrix4f) transformAccess.buildWorldToLocal.invoke(
-                        null,
+                Matrix4d worldToGrid = transformAccess.buildWorldToLocal(
                         pose,
                         minX,
                         minY,
                         minZ
-                ));
-                if (!worldToGrid.isFinite() || Math.abs(worldToGrid.determinant()) < 0.000001f)
+                );
+                if (!worldToGrid.isFinite() || Math.abs(worldToGrid.determinant()) < 0.000001d)
                     continue;
                 Matrix4d gridToWorld = new Matrix4d(worldToGrid).invert();
                 int temporalDomainToken = motionToken(uniqueId);
@@ -292,6 +294,7 @@ public final class ContraptionLightsSableBridge {
         previousWorldToMotionAnchor.clear();
         motionAnchors.clear();
         motionTokens.clear();
+        previousMotionCameraPosition = null;
         geometryRevisionSnapshots.clear();
         publishedLightPositions.clear();
         movementReferencePositions.clear();
@@ -322,6 +325,11 @@ public final class ContraptionLightsSableBridge {
             var level = Minecraft.getInstance().level;
             if (level == null)
                 return;
+            var camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+            var currentCameraPosition = new Vector3d(camera.x, camera.y, camera.z);
+            var previousCameraPosition = previousMotionCameraPosition == null
+                    ? new Vector3d(currentCameraPosition)
+                    : new Vector3d(previousMotionCameraPosition);
             var candidates = new ArrayList<MotionCandidate>();
             var currentWorldToMotionAnchor = new HashMap<UUID, Matrix4d>();
 
@@ -344,14 +352,13 @@ public final class ContraptionLightsSableBridge {
                 int minY = bridgeAccess.minY.getInt(state);
                 int minZ = bridgeAccess.minZ.getInt(state);
                 Object pose = bridgeAccess.renderPose.invoke(subLevel);
-                Matrix4f currentGrid = new Matrix4f((Matrix4f) bridgeAccess.buildWorldToLocal.invoke(
-                        null,
+                Matrix4d currentGrid = bridgeAccess.buildWorldToLocal(
                         pose,
                         minX,
                         minY,
                         minZ
-                ));
-                if (!currentGrid.isFinite() || Math.abs(currentGrid.determinant()) < 0.000001f)
+                );
+                if (!currentGrid.isFinite() || Math.abs(currentGrid.determinant()) < 0.000001d)
                     continue;
 
                 Vector3i anchor = motionAnchors.computeIfAbsent(
@@ -372,12 +379,27 @@ public final class ContraptionLightsSableBridge {
                         .mul(currentAnchor);
                 if (!currentToPreviousDouble.isFinite())
                     continue;
-                Matrix4f currentToPrevious = new Matrix4f(currentToPreviousDouble);
                 Matrix4d previousToCurrentGridDouble = new Matrix4d(currentGrid)
                         .mul(new Matrix4d(currentToPreviousDouble).invert());
                 if (!previousToCurrentGridDouble.isFinite())
                     continue;
-                Matrix4f previousToCurrentGrid = new Matrix4f(previousToCurrentGridDouble);
+
+                Matrix4d currentPlayerToGridDouble = new Matrix4d(currentGrid)
+                        .translate(currentCameraPosition);
+                Matrix4d currentPlayerToPreviousPlayerDouble = new Matrix4d()
+                        .translate(
+                                -previousCameraPosition.x,
+                                -previousCameraPosition.y,
+                                -previousCameraPosition.z
+                        )
+                        .mul(currentToPreviousDouble)
+                        .translate(currentCameraPosition);
+                Matrix4d previousPlayerToCurrentGridDouble = new Matrix4d(previousToCurrentGridDouble)
+                        .translate(previousCameraPosition);
+                if (!currentPlayerToGridDouble.isFinite()
+                        || !currentPlayerToPreviousPlayerDouble.isFinite()
+                        || !previousPlayerToCurrentGridDouble.isFinite())
+                    continue;
 
                 var emissiveCells = bridgeAccess.emissiveCells(
                         state,
@@ -391,9 +413,9 @@ public final class ContraptionLightsSableBridge {
 
                 candidates.add(new MotionCandidate(
                         uniqueId,
-                        currentGrid,
-                        currentToPrevious,
-                        previousToCurrentGrid,
+                        new Matrix4f(currentPlayerToGridDouble),
+                        new Matrix4f(currentPlayerToPreviousPlayerDouble),
+                        new Matrix4f(previousPlayerToCurrentGridDouble),
                         level,
                         minX,
                         minY,
@@ -417,9 +439,9 @@ public final class ContraptionLightsSableBridge {
                 MotionCandidate candidate = candidates.get(i);
                 subLevels.add(new ExternalSubLevelMotion.SubLevel(
                         motionToken(candidate.uniqueId()),
-                        candidate.currentWorldToGrid(),
-                        candidate.currentWorldToPreviousWorld(),
-                        candidate.previousWorldToCurrentGrid(),
+                        candidate.currentPlayerToGrid(),
+                        candidate.currentPlayerToPreviousPlayer(),
+                        candidate.previousPlayerToCurrentGrid(),
                         new Vector3i(candidate.sizeX(), candidate.sizeY(), candidate.sizeZ()),
                         atlasOffsets[i],
                         candidate.emissiveCells()
@@ -432,6 +454,7 @@ public final class ContraptionLightsSableBridge {
             ExternalSubLevelMotion.submit(occupancyTexture, subLevels);
             previousWorldToMotionAnchor.keySet().retainAll(currentWorldToMotionAnchor.keySet());
             previousWorldToMotionAnchor.putAll(currentWorldToMotionAnchor);
+            previousMotionCameraPosition = currentCameraPosition;
             motionAnchors.keySet().retainAll(currentWorldToMotionAnchor.keySet());
             geometryRevisionSnapshots.keySet().retainAll(currentWorldToMotionAnchor.keySet());
             logMotionCapture(subLevels.size());
@@ -440,6 +463,7 @@ public final class ContraptionLightsSableBridge {
             ExternalSubLevelMotion.clear();
             previousWorldToMotionAnchor.clear();
             motionAnchors.clear();
+            previousMotionCameraPosition = null;
             if (!motionTransientFailureLogged) {
                 motionTransientFailureLogged = true;
                 Photonics.LOGGER.warn(
@@ -452,6 +476,7 @@ public final class ContraptionLightsSableBridge {
             ExternalSubLevelMotion.clear();
             previousWorldToMotionAnchor.clear();
             motionAnchors.clear();
+            previousMotionCameraPosition = null;
             Photonics.LOGGER.warn(
                     "Photonics v24 disabled the optional Sable receiver-motion/geometry bridge",
                     exception
@@ -702,7 +727,7 @@ public final class ContraptionLightsSableBridge {
         if (!motionActiveLogged && subLevels > 0) {
             motionActiveLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v42 Sable receiver motion active: subLevels={}, classifier=receiver-cell-atlas+emissive-cells, emitterIdentity=explicit-sublevel-token, localVisibility=token-gated-surface-biased-solid-block-cell, temporalTransform=stable-anchor-double-compose",
+                    "Photonics v50 Sable receiver motion active: subLevels={}, classifier=normal-guided-receiver-cell-atlas+emissive-cells, emitterIdentity=explicit-sublevel-token, localVisibility=tri-state-token-gated-conservative-supercover-dda, temporalTransform=camera-relative-stable-anchor-double-compose",
                     subLevels
             );
         }
@@ -791,9 +816,9 @@ public final class ContraptionLightsSableBridge {
 
     private record MotionCandidate(
             UUID uniqueId,
-            Matrix4f currentWorldToGrid,
-            Matrix4f currentWorldToPreviousWorld,
-            Matrix4f previousWorldToCurrentGrid,
+            Matrix4f currentPlayerToGrid,
+            Matrix4f currentPlayerToPreviousPlayer,
+            Matrix4f previousPlayerToCurrentGrid,
             BlockGetter blockGetter,
             int minX,
             int minY,
@@ -873,12 +898,12 @@ public final class ContraptionLightsSableBridge {
         private final Field lightY;
         private final Field lightZ;
         private final Method renderPose;
-        private final Method buildWorldToLocal;
+        private final Method posePosition;
+        private final Method poseOrientation;
+        private final Method poseRotationPoint;
+        private final Method poseScale;
 
         private MotionAccess() throws ReflectiveOperationException {
-            var lightingClass = Class.forName(
-                    "xyz.atmerek.contraptionlights.veil.sublevel.SubLevelVeilLighting"
-            );
             var stateClass = Class.forName(
                     "xyz.atmerek.contraptionlights.veil.sublevel.SubLevelVeilLighting$State"
             );
@@ -897,13 +922,25 @@ public final class ContraptionLightsSableBridge {
             lightY = accessible(stateClass.getDeclaredField("lightY"));
             lightZ = accessible(stateClass.getDeclaredField("lightZ"));
             renderPose = subLevelClass.getMethod("renderPose");
-            buildWorldToLocal = accessible(lightingClass.getDeclaredMethod(
-                    "buildWorldToLocal",
-                    poseClass,
-                    int.class,
-                    int.class,
-                    int.class
-            ));
+            posePosition = poseClass.getMethod("position");
+            poseOrientation = poseClass.getMethod("orientation");
+            poseRotationPoint = poseClass.getMethod("rotationPoint");
+            poseScale = poseClass.getMethod("scale");
+        }
+
+        private Matrix4d buildWorldToLocal(Object pose, int minX, int minY, int minZ)
+                throws ReflectiveOperationException {
+            Vector3dc rotationPoint = (Vector3dc) poseRotationPoint.invoke(pose);
+            Matrix4d localToWorld = new Matrix4d()
+                    .translate((Vector3dc) posePosition.invoke(pose))
+                    .rotate((Quaterniondc) poseOrientation.invoke(pose))
+                    .scale((Vector3dc) poseScale.invoke(pose))
+                    .translate(
+                            -(rotationPoint.x() - minX),
+                            -(rotationPoint.y() - minY),
+                            -(rotationPoint.z() - minZ)
+                    );
+            return localToWorld.invert();
         }
 
         private List<Vector3i> emissiveCells(

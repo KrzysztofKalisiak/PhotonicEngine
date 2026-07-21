@@ -237,8 +237,8 @@ bool sample_history_light_relative_step(
         relative_step = ph_sable_receiver_relative_light_step(
             receiver_slot,
             receiver_token,
-            light.position + world_offset,
-            previous_position.xyz + world_offset
+            light.position - rt_camera_position,
+            previous_position.xyz - (previousCameraPosition - world_offset)
         );
     }
 

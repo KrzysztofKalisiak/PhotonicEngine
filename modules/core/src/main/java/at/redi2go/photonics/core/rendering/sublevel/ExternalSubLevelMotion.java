@@ -53,18 +53,18 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
             final int slot = i;
             uniforms.uniformMatrix(
                     IUniformUpdateFrequency.perFrame(),
-                    "ph_sable_current_world_to_grid[" + slot + "]",
-                    () -> snapshot.currentWorldToGrid[slot]
+                    "ph_sable_current_player_to_grid[" + slot + "]",
+                    () -> snapshot.currentPlayerToGrid[slot]
             );
             uniforms.uniformMatrix(
                     IUniformUpdateFrequency.perFrame(),
-                    "ph_sable_current_world_to_previous_world[" + slot + "]",
-                    () -> snapshot.currentWorldToPreviousWorld[slot]
+                    "ph_sable_current_player_to_previous_player[" + slot + "]",
+                    () -> snapshot.currentPlayerToPreviousPlayer[slot]
             );
             uniforms.uniformMatrix(
                     IUniformUpdateFrequency.perFrame(),
-                    "ph_sable_previous_world_to_current_grid[" + slot + "]",
-                    () -> snapshot.previousWorldToCurrentGrid[slot]
+                    "ph_sable_previous_player_to_current_grid[" + slot + "]",
+                    () -> snapshot.previousPlayerToCurrentGrid[slot]
             );
             uniforms.uniform4f(
                     IUniformUpdateFrequency.perFrame(),
@@ -99,9 +99,9 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
 
     public record SubLevel(
             int identityToken,
-            Matrix4fc currentWorldToGrid,
-            Matrix4fc currentWorldToPreviousWorld,
-            Matrix4fc previousWorldToCurrentGrid,
+            Matrix4fc currentPlayerToGrid,
+            Matrix4fc currentPlayerToPreviousPlayer,
+            Matrix4fc previousPlayerToCurrentGrid,
             Vector3ic gridSize,
             int atlasZOffset,
             List<Vector3i> emissiveCells
@@ -114,9 +114,9 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
         private final int occupancyTexture;
         private final int subLevelCount;
         private final int emissiveCellCount;
-        private final Matrix4f[] currentWorldToGrid;
-        private final Matrix4f[] currentWorldToPreviousWorld;
-        private final Matrix4f[] previousWorldToCurrentGrid;
+        private final Matrix4f[] currentPlayerToGrid;
+        private final Matrix4f[] currentPlayerToPreviousPlayer;
+        private final Matrix4f[] previousPlayerToCurrentGrid;
         private final Vector4f[] gridInfo;
         private final Vector4f[] identityTokens;
         private final Vector4f[] emissiveCells;
@@ -125,9 +125,9 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
                 int occupancyTexture,
                 int subLevelCount,
                 int emissiveCellCount,
-                Matrix4f[] currentWorldToGrid,
-                Matrix4f[] currentWorldToPreviousWorld,
-                Matrix4f[] previousWorldToCurrentGrid,
+                Matrix4f[] currentPlayerToGrid,
+                Matrix4f[] currentPlayerToPreviousPlayer,
+                Matrix4f[] previousPlayerToCurrentGrid,
                 Vector4f[] gridInfo,
                 Vector4f[] identityTokens,
                 Vector4f[] emissiveCells
@@ -135,9 +135,9 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
             this.occupancyTexture = occupancyTexture;
             this.subLevelCount = subLevelCount;
             this.emissiveCellCount = emissiveCellCount;
-            this.currentWorldToGrid = currentWorldToGrid;
-            this.currentWorldToPreviousWorld = currentWorldToPreviousWorld;
-            this.previousWorldToCurrentGrid = previousWorldToCurrentGrid;
+            this.currentPlayerToGrid = currentPlayerToGrid;
+            this.currentPlayerToPreviousPlayer = currentPlayerToPreviousPlayer;
+            this.previousPlayerToCurrentGrid = previousPlayerToCurrentGrid;
             this.gridInfo = gridInfo;
             this.identityTokens = identityTokens;
             this.emissiveCells = emissiveCells;
@@ -149,9 +149,9 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
 
         private static Snapshot create(int occupancyTexture, List<SubLevel> source) {
             int count = Math.min(source.size(), MAX_SUBLEVELS);
-            Matrix4f[] currentWorldToGrid = matrices(MAX_SUBLEVELS);
-            Matrix4f[] currentWorldToPreviousWorld = matrices(MAX_SUBLEVELS);
-            Matrix4f[] previousWorldToCurrentGrid = matrices(MAX_SUBLEVELS);
+            Matrix4f[] currentPlayerToGrid = matrices(MAX_SUBLEVELS);
+            Matrix4f[] currentPlayerToPreviousPlayer = matrices(MAX_SUBLEVELS);
+            Matrix4f[] previousPlayerToCurrentGrid = matrices(MAX_SUBLEVELS);
             Vector4f[] gridInfo = vectors(MAX_SUBLEVELS);
             Vector4f[] identityTokens = vectors(IDENTITY_TOKEN_GROUPS);
             Vector4f[] emissiveCells = vectors(MAX_EMISSIVE_CELLS);
@@ -159,9 +159,9 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
 
             for (int slot = 0; slot < count; slot++) {
                 SubLevel subLevel = source.get(slot);
-                currentWorldToGrid[slot].set(subLevel.currentWorldToGrid());
-                currentWorldToPreviousWorld[slot].set(subLevel.currentWorldToPreviousWorld());
-                previousWorldToCurrentGrid[slot].set(subLevel.previousWorldToCurrentGrid());
+                currentPlayerToGrid[slot].set(subLevel.currentPlayerToGrid());
+                currentPlayerToPreviousPlayer[slot].set(subLevel.currentPlayerToPreviousPlayer());
+                previousPlayerToCurrentGrid[slot].set(subLevel.previousPlayerToCurrentGrid());
                 gridInfo[slot].set(
                         subLevel.gridSize().x(),
                         subLevel.gridSize().y(),
@@ -183,9 +183,9 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
                     occupancyTexture,
                     count,
                     emissiveCount,
-                    currentWorldToGrid,
-                    currentWorldToPreviousWorld,
-                    previousWorldToCurrentGrid,
+                    currentPlayerToGrid,
+                    currentPlayerToPreviousPlayer,
+                    previousPlayerToCurrentGrid,
                     gridInfo,
                     identityTokens,
                     emissiveCells

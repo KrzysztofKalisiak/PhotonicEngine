@@ -76,20 +76,20 @@ void ph_encode_frag(out vec4 data0, out uvec4 data1, out vec4 motion_data) {
     data1.y = packSnorm2x16(ph_encode_normal(frag_geo_normal));
     data1.z = packSnorm2x16(ph_encode_normal(frag_tex_normal));
 
-    vec3 previous_world_pos;
+    vec3 previous_player_pos;
     vec3 previous_world_normal;
     int sublevel_slot;
     uint sublevel_token;
     if (!frag_is_hand && ph_sable_receiver_motion(
-            frag_rt_pos + world_offset,
+            frag_player_pos,
             frag_geo_normal,
-            previous_world_pos,
+            previous_player_pos,
             previous_world_normal,
             sublevel_slot,
             sublevel_token
     )) {
         frag_data_encode_sublevel(data1, sublevel_slot, sublevel_token);
-        motion_data.xyz = previous_world_pos - previousCameraPosition;
+        motion_data.xyz = previous_player_pos;
         motion_data.w = uintBitsToFloat(packSnorm2x16(ph_encode_normal(previous_world_normal)));
     }
 
