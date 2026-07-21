@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 public class BufferLightList extends AbstractLightList {
     // 16 floats per light struct (4 bytes per float)
     // position (vec3f) + block id, color (vec3f) + intensity, attenuation (vec2f) + falloff + radius in blocks
-    // previous position (vec3f) + temporal-validity flag
+    // previous position (vec3f) + signed (temporal-domain token + 1), where positive means valid
     private static final int LIGHT_DATA_SIZE = 16;
     private static final int LIGHT_BYTE_SIZE = LIGHT_DATA_SIZE * 4;
 

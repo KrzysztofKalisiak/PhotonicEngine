@@ -110,16 +110,12 @@ bool ph_spatial_direct_light_matches_receiver(DirectReservoir reservoir) {
     }
 
     // The priority prefix contains both moving and stationary external lights.
-    // The emissive-cell ownership test narrows it to this receiver's sublevel.
+    // Their explicit temporal-domain token identifies the owning sublevel.
     if (light_index >= priority_count)
         return false;
 
-    Light light = direct_sample_get_light(reservoir.smple);
-    return ph_sable_light_belongs_to_sublevel(
-        frag_data_sublevel_slot(_frag_data),
-        receiver_token,
-        light.position + world_offset
-    );
+    return direct_sample_get_temporal_domain(reservoir.smple)
+        == int(receiver_token);
 }
 
 bool ph_spatial_direct_reservoir_merge(

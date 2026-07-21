@@ -147,6 +147,7 @@ void direct_reservoir_validate_visiblity(inout DirectReservoir reservoir, vec3 s
             frag_data_sublevel_token(_frag_data),
             sample_pos + world_offset,
             geo_normal,
+            direct_sample_get_temporal_domain(reservoir.smple),
             light.position + world_offset
     )) {
         reservoir.weight = 0.0f;
@@ -229,6 +230,7 @@ vec3 direct_reservoir_get_final_color(
             frag_data_sublevel_token(_frag_data),
             sample_pos + world_offset,
             geo_normal,
+            direct_sample_get_temporal_domain(reservoir.smple),
             light.position + world_offset
     )) {
         reservoir.weight = 0.0f;

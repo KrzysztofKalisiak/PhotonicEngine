@@ -307,20 +307,14 @@ int sample_history_direct_provenance(
         bool current_same_sublevel = false;
         bool previous_same_sublevel = false;
         if (current_has_sample) {
-            Light current_light = direct_sample_get_light(current_reservoir.smple);
-            current_same_sublevel = ph_sable_light_belongs_to_sublevel(
-                receiver_slot,
-                receiver_token,
-                current_light.position + world_offset
-            );
+            current_same_sublevel = direct_sample_get_temporal_domain(
+                current_reservoir.smple
+            ) == int(receiver_token);
         }
         if (previous_has_sample) {
-            Light previous_light = direct_sample_get_light(previous_reservoir.smple);
-            previous_same_sublevel = ph_sable_light_belongs_to_sublevel(
-                receiver_slot,
-                receiver_token,
-                previous_light.position + world_offset
-            );
+            previous_same_sublevel = direct_sample_get_temporal_domain(
+                previous_reservoir.smple
+            ) == int(receiver_token);
         }
 
         same_sublevel_light = current_has_sample

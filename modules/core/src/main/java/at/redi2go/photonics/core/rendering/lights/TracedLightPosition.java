@@ -18,6 +18,7 @@ public final class TracedLightPosition {
     private final BlockLightInfo lightInfo;
     private final Object temporalIdentity;
     private final boolean temporallyMoving;
+    private final int temporalDomainToken;
 
     private int luminanceMod = 0;
     private double luminance = 0f;
@@ -28,7 +29,7 @@ public final class TracedLightPosition {
             IBlockState blockState,
             BlockLightInfo lightInfo
     ) {
-        this(blockId, pos, blockState, lightInfo, null, false, pos, true);
+        this(blockId, pos, blockState, lightInfo, null, false, pos, true, 0);
     }
 
     public TracedLightPosition(
@@ -38,7 +39,7 @@ public final class TracedLightPosition {
             BlockLightInfo lightInfo,
             Object temporalIdentity
     ) {
-        this(blockId, pos, blockState, lightInfo, temporalIdentity, false, pos, true);
+        this(blockId, pos, blockState, lightInfo, temporalIdentity, false, pos, true, 0);
     }
 
     public TracedLightPosition(
@@ -49,7 +50,7 @@ public final class TracedLightPosition {
             Object temporalIdentity,
             boolean temporallyMoving
     ) {
-        this(blockId, pos, blockState, lightInfo, temporalIdentity, temporallyMoving, pos, true);
+        this(blockId, pos, blockState, lightInfo, temporalIdentity, temporallyMoving, pos, true, 0);
     }
 
     public TracedLightPosition(
@@ -62,6 +63,30 @@ public final class TracedLightPosition {
             Vector3d previousPos,
             boolean previousPosValid
     ) {
+        this(
+                blockId,
+                pos,
+                blockState,
+                lightInfo,
+                temporalIdentity,
+                temporallyMoving,
+                previousPos,
+                previousPosValid,
+                0
+        );
+    }
+
+    public TracedLightPosition(
+            int blockId,
+            Vector3d pos,
+            IBlockState blockState,
+            BlockLightInfo lightInfo,
+            Object temporalIdentity,
+            boolean temporallyMoving,
+            Vector3d previousPos,
+            boolean previousPosValid,
+            int temporalDomainToken
+    ) {
         this.blockId = blockId;
         this.pos = pos;
         this.previousPos = previousPos;
@@ -70,6 +95,9 @@ public final class TracedLightPosition {
         this.lightInfo = lightInfo;
         this.temporalIdentity = temporalIdentity;
         this.temporallyMoving = temporalIdentity != null && temporallyMoving;
+        this.temporalDomainToken = temporalIdentity == null
+                ? 0
+                : Math.min(0xffff, Math.max(0, temporalDomainToken));
     }
 
     public int blockId() {
@@ -108,12 +136,17 @@ public final class TracedLightPosition {
         return temporallyMoving;
     }
 
+    int temporalDomainToken() {
+        return temporalDomainToken;
+    }
+
     Object temporalMappingKey() {
         if (temporalIdentity == null)
             return this;
 
         return new TemporalMappingKey(
                 temporalIdentity,
+                temporalDomainToken,
                 blockId,
                 blockState,
                 lightInfo
@@ -141,7 +174,8 @@ public final class TracedLightPosition {
                 Objects.equals(this.blockState, that.blockState) &&
                 Objects.equals(this.lightInfo, that.lightInfo) &&
                 Objects.equals(this.temporalIdentity, that.temporalIdentity) &&
-                this.temporallyMoving == that.temporallyMoving;
+                this.temporallyMoving == that.temporallyMoving &&
+                this.temporalDomainToken == that.temporalDomainToken;
     }
 
     @Override
@@ -154,7 +188,8 @@ public final class TracedLightPosition {
                 blockState,
                 lightInfo,
                 temporalIdentity,
-                temporallyMoving
+                temporallyMoving,
+                temporalDomainToken
         );
     }
 
@@ -168,11 +203,13 @@ public final class TracedLightPosition {
                 "blockState=" + blockState + ", " +
                 "lightInfo=" + lightInfo + ", " +
                 "temporalIdentity=" + temporalIdentity + ", " +
-                "temporallyMoving=" + temporallyMoving + ']';
+                "temporallyMoving=" + temporallyMoving + ", " +
+                "temporalDomainToken=" + temporalDomainToken + ']';
     }
 
     private record TemporalMappingKey(
             Object temporalIdentity,
+            int temporalDomainToken,
             int blockId,
             IBlockState blockState,
             BlockLightInfo lightInfo

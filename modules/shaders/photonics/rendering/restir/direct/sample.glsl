@@ -86,6 +86,13 @@ Light direct_sample_get_light(DirectSample smple) {
     return light_list_get(int(smple.light_index));
 }
 
+int direct_sample_get_temporal_domain(DirectSample smple) {
+    if (direct_sample_is_empty(smple))
+        return 0;
+
+    return light_list_get_temporal_domain(smple.light_index);
+}
+
 vec3 direct_sample_get_color(
     DirectSample smple,
     Light light,

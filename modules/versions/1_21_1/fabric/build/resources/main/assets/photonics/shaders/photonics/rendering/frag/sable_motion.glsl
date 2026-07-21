@@ -354,11 +354,15 @@ bool ph_sable_same_sublevel_light_visible(
     uint receiver_token,
     vec3 receiver_world_pos,
     vec3 receiver_world_normal,
+    int light_temporal_domain,
     vec3 light_world_pos
 ) {
     if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
             || receiver_token == 0u
             || receiver_token != ph_sable_identity_token(receiver_slot))
+        return true;
+    if (light_temporal_domain <= 0
+            || uint(light_temporal_domain) != receiver_token)
         return true;
 
     vec3 light_grid_pos;

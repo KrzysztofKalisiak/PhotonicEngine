@@ -409,7 +409,8 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                     ),
                     new Vector4f(
                             toVector3f(worldOrigin.applyOffset(light.previousPos())),
-                            light.previousPosValid() ? 1.0f : 0.0f
+                            (light.previousPosValid() ? 1.0f : -1.0f)
+                                    * (light.temporalDomainToken() + 1.0f)
                     )
             );
         }

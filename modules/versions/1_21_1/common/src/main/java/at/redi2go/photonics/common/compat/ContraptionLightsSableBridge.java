@@ -127,6 +127,7 @@ public final class ContraptionLightsSableBridge {
                 if (!worldToGrid.isFinite() || Math.abs(worldToGrid.determinant()) < 0.000001f)
                     continue;
                 Matrix4d gridToWorld = new Matrix4d(worldToGrid).invert();
+                int temporalDomainToken = motionToken(uniqueId);
 
                 int[] lightX = (int[]) bridgeAccess.lightX.get(state);
                 int[] lightY = (int[]) bridgeAccess.lightY.get(state);
@@ -207,7 +208,8 @@ public final class ContraptionLightsSableBridge {
                             identity,
                             movingFrames > 0,
                             previousWorldPosition,
-                            previousPositionValid
+                            previousPositionValid,
+                            temporalDomainToken
                     ));
                     replacedBlockPositions.add(new Vector3i(lightX[i], lightY[i], lightZ[i]));
                 }
@@ -388,7 +390,7 @@ public final class ContraptionLightsSableBridge {
             for (int i = 0; i < candidates.size(); i++) {
                 MotionCandidate candidate = candidates.get(i);
                 subLevels.add(new ExternalSubLevelMotion.SubLevel(
-                        motionToken(candidate),
+                        motionToken(candidate.uniqueId()),
                         candidate.currentWorldToGrid(),
                         candidate.currentWorldToPreviousWorld(),
                         candidate.previousWorldToCurrentGrid(),
@@ -651,23 +653,30 @@ public final class ContraptionLightsSableBridge {
         );
     }
 
-    private static int motionToken(MotionCandidate candidate) {
-        Integer current = motionTokens.get(candidate.uniqueId());
+    private static int motionToken(UUID uniqueId) {
+        Integer current = motionTokens.get(uniqueId);
         if (current != null)
             return current;
 
-        int token = nextMotionToken++;
-        if (nextMotionToken > 0xffff)
-            nextMotionToken = 1;
-        motionTokens.put(candidate.uniqueId(), token);
-        return token;
+        for (int attempt = 0; attempt < 0xffff; attempt++) {
+            int token = nextMotionToken++;
+            if (nextMotionToken > 0xffff)
+                nextMotionToken = 1;
+            if (motionTokens.containsValue(token))
+                continue;
+
+            motionTokens.put(uniqueId, token);
+            return token;
+        }
+
+        throw new IllegalStateException("No free Sable temporal-domain token");
     }
 
     private static void logMotionCapture(int subLevels) {
         if (!motionActiveLogged && subLevels > 0) {
             motionActiveLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v35 Sable receiver motion active: subLevels={}, classifier=receiver-cell-atlas+emissive-cells, localVisibility=surface-biased-solid-block-cell, temporalTransform=stable-anchor-double-compose",
+                    "Photonics v42 Sable receiver motion active: subLevels={}, classifier=receiver-cell-atlas+emissive-cells, emitterIdentity=explicit-sublevel-token, localVisibility=token-gated-surface-biased-solid-block-cell, temporalTransform=stable-anchor-double-compose",
                     subLevels
             );
         }
@@ -694,7 +703,7 @@ public final class ContraptionLightsSableBridge {
         if (!activeLogged && structures > 0) {
             activeLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v28 frame-aligned Contraption Lights/Sable moving-light bridge active: structures={}, sourceLights={}, uploadedLights={}, proposalBudget=adaptive-half-candidates",
+                    "Photonics v42 frame-aligned Contraption Lights/Sable light bridge active: structures={}, sourceLights={}, uploadedLights={}, identity=sublevel-uuid-token, proposalBudget=adaptive-half-candidates",
                     structures,
                     sourceLights,
                     uploadedLights

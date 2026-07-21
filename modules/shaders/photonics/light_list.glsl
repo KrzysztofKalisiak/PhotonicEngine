@@ -8,7 +8,8 @@ layout (std140) restrict readonly buffer ph_light_list {
 // vec 1: position (xyz) + block_id (w)
 // vec 2: color (xyz) + intensity (w)
 // vec 3: attenutation (xy) + falloff (z) + block_radius (w)
-// vec 4: previous position (xyz) + temporal-validity flag (w)
+// vec 4: previous position (xyz) + signed (temporal-domain token + 1) (w)
+//        positive means the previous position is valid
     vec4 ph_lights_array[];
 };
 
@@ -35,7 +36,16 @@ vec4 light_list_get_previous_position(int index) {
     int offset = index * ph_light_size;
     vec4 previous = ph_lights_array[offset + 3];
     previous.xyz-= light_list_offset;
+    previous.w = previous.w > 0.5f ? 1.0f : 0.0f;
     return previous;
+}
+
+int light_list_get_temporal_domain(int index) {
+    if (index < 0 || index >= light_list_size)
+        return 0;
+
+    float metadata = ph_lights_array[index * ph_light_size + 3].w;
+    return max(0, int(abs(metadata) + 0.5f) - 1);
 }
 
 int light_list_map_index(int old_index) {
