@@ -61,7 +61,10 @@ void main() {
         frag_is_hand ? frag_geo_normal : frag_tex_normal
     );
     if (direct_reservoir_has_sample(direct_reservoir)
-            && direct_sample_get_temporal_domain(direct_reservoir.smple) != 0)
+            && direct_sample_uses_external_history(
+                direct_reservoir.smple,
+                frag_data_sublevel_token(_frag_data)
+            ))
         external_lighting.rgb = direct_lighting;
     else
         lighting.rgb += direct_lighting;

@@ -260,6 +260,9 @@ int sample_history_direct_provenance(
     relative_light_step_valid = false;
 
 #if defined PH_ENABLE_BLOCKLIGHT
+    int receiver_slot = frag_data_sublevel_slot(_frag_data);
+    uint receiver_token = frag_data_sublevel_token(_frag_data);
+
     DirectReservoir current_reservoir = direct_reservoir_empty();
     bool current_loaded = direct_reservoir_load(
         current_reservoir,
@@ -270,9 +273,10 @@ int sample_history_direct_provenance(
     bool current_has_sample = current_loaded
         && direct_reservoir_has_sample(current_reservoir);
     if (current_has_sample) {
-        bool current_is_external = direct_sample_get_temporal_domain(
-            current_reservoir.smple
-        ) != 0;
+        bool current_is_external = direct_sample_uses_external_history(
+            current_reservoir.smple,
+            receiver_token
+        );
         current_has_sample = current_is_external == external_stream;
     }
 
@@ -294,9 +298,10 @@ int sample_history_direct_provenance(
     bool previous_has_sample = previous_loaded
         && direct_reservoir_has_sample(previous_reservoir);
     if (previous_has_sample) {
-        bool previous_is_external = direct_sample_get_temporal_domain(
-            previous_reservoir.smple
-        ) != 0;
+        bool previous_is_external = direct_sample_uses_external_history(
+            previous_reservoir.smple,
+            receiver_token
+        );
         previous_has_sample = previous_is_external == external_stream;
     }
 
@@ -307,8 +312,6 @@ int sample_history_direct_provenance(
         involves_moving_light = involves_moving_light
             || previous_reservoir.smple.light_index < ph_moving_light_count;
 
-    int receiver_slot = frag_data_sublevel_slot(_frag_data);
-    uint receiver_token = frag_data_sublevel_token(_frag_data);
     if (current_has_sample) {
         relative_light_step_valid = sample_history_light_relative_step(
             current_reservoir.smple.light_index,
@@ -346,7 +349,7 @@ int sample_history_direct_provenance(
             relative_light_step = max(relative_light_step, previous_step);
     }
 
-    if (external_stream && receiver_token != 0u) {
+    if (receiver_token != 0u) {
         bool current_same_sublevel = false;
         bool previous_same_sublevel = false;
         if (current_has_sample) {
@@ -360,14 +363,17 @@ int sample_history_direct_provenance(
             ) == int(receiver_token);
         }
 
-        same_sublevel_light = current_has_sample
+        same_sublevel_light = !external_stream
+            && current_has_sample
             && previous_has_sample
             && current_same_sublevel
             && previous_same_sublevel;
-        sable_representative_mismatch = !current_has_sample
-            || !previous_has_sample
-            || current_reservoir.smple.light_index
-                != previous_reservoir.smple.light_index;
+        if (external_stream) {
+            sable_representative_mismatch = !current_has_sample
+                || !previous_has_sample
+                || current_reservoir.smple.light_index
+                    != previous_reservoir.smple.light_index;
+        }
     }
 
     // A reservoir stores one stochastic representative of total direct light.
