@@ -12,9 +12,10 @@ import java.nio.ByteBuffer;
 import java.util.function.Supplier;
 
 public class BufferLightList extends AbstractLightList {
-    // 12 floats per light struct (4 bytes per float)
+    // 16 floats per light struct (4 bytes per float)
     // position (vec3f) + block id, color (vec3f) + intensity, attenuation (vec2f) + falloff + radius in blocks
-    private static final int LIGHT_DATA_SIZE = 12;
+    // previous position (vec3f) + temporal-validity flag
+    private static final int LIGHT_DATA_SIZE = 16;
     private static final int LIGHT_BYTE_SIZE = LIGHT_DATA_SIZE * 4;
 
     private final IGpuBufferHeap listHeap;
@@ -51,7 +52,7 @@ public class BufferLightList extends AbstractLightList {
     }
 
     @Override
-    protected void storeLight(int index, Vector4f[] light) {
+    protected void storeLight(int index, Vector4f[] light, Vector4f previousPosition) {
         ByteBuffer buffer = listView.buffer().position(index * LIGHT_BYTE_SIZE);
 
         for (var vec : light) {
@@ -60,6 +61,11 @@ public class BufferLightList extends AbstractLightList {
             buffer.putFloat(vec.z);
             buffer.putFloat(vec.w);
         }
+
+        buffer.putFloat(previousPosition.x);
+        buffer.putFloat(previousPosition.y);
+        buffer.putFloat(previousPosition.z);
+        buffer.putFloat(previousPosition.w);
     }
 
     @Override

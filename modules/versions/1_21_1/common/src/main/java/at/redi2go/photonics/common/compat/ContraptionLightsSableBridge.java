@@ -177,7 +177,11 @@ public final class ContraptionLightsSableBridge {
                     seenLightIdentities.add(identity);
 
                     Vector3d publishedPosition = publishedLightPositions.get(identity);
-                    boolean moved = publishedPosition == null
+                    boolean previousPositionValid = publishedPosition != null;
+                    Vector3d previousWorldPosition = previousPositionValid
+                            ? new Vector3d(publishedPosition)
+                            : new Vector3d(worldPosition);
+                    boolean moved = !previousPositionValid
                             || publishedPosition.distanceSquared(worldPosition)
                             > STATIC_LIGHT_POSITION_EPSILON_SQUARED;
                     if (!moved)
@@ -201,7 +205,9 @@ public final class ContraptionLightsSableBridge {
                             apiBlockState,
                             lightInfo,
                             identity,
-                            movingFrames > 0
+                            movingFrames > 0,
+                            previousWorldPosition,
+                            previousPositionValid
                     ));
                     replacedBlockPositions.add(new Vector3i(lightX[i], lightY[i], lightZ[i]));
                 }
@@ -339,6 +345,11 @@ public final class ContraptionLightsSableBridge {
                 if (!currentToPreviousDouble.isFinite())
                     continue;
                 Matrix4f currentToPrevious = new Matrix4f(currentToPreviousDouble);
+                Matrix4d previousToCurrentGridDouble = new Matrix4d(currentGrid)
+                        .mul(new Matrix4d(currentToPreviousDouble).invert());
+                if (!previousToCurrentGridDouble.isFinite())
+                    continue;
+                Matrix4f previousToCurrentGrid = new Matrix4f(previousToCurrentGridDouble);
 
                 var emissiveCells = bridgeAccess.emissiveCells(
                         state,
@@ -354,6 +365,7 @@ public final class ContraptionLightsSableBridge {
                         uniqueId,
                         currentGrid,
                         currentToPrevious,
+                        previousToCurrentGrid,
                         level,
                         minX,
                         minY,
@@ -379,6 +391,7 @@ public final class ContraptionLightsSableBridge {
                         motionToken(candidate),
                         candidate.currentWorldToGrid(),
                         candidate.currentWorldToPreviousWorld(),
+                        candidate.previousWorldToCurrentGrid(),
                         new Vector3i(candidate.sizeX(), candidate.sizeY(), candidate.sizeZ()),
                         atlasOffsets[i],
                         candidate.emissiveCells()
@@ -741,6 +754,7 @@ public final class ContraptionLightsSableBridge {
             UUID uniqueId,
             Matrix4f currentWorldToGrid,
             Matrix4f currentWorldToPreviousWorld,
+            Matrix4f previousWorldToCurrentGrid,
             BlockGetter blockGetter,
             int minX,
             int minY,

@@ -183,13 +183,47 @@ bool sample_history_reproject_nearest_texel(out ivec2 texel) {
 const int DIRECT_HISTORY_UNKNOWN = 0;
 const int DIRECT_HISTORY_MISMATCH = 1;
 const int DIRECT_HISTORY_VERIFIED = 2;
+const float PH_RELATIVE_LIGHT_MAX_TRAIL_BLOCKS = 0.15f;
+const float PH_RELATIVE_LIGHT_MIN_HISTORY_FRAMES = 2.0f;
+const float PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES = 4.0f;
+
+bool sample_history_light_relative_step(
+    int light_index,
+    int receiver_slot,
+    uint receiver_token,
+    out float relative_step
+) {
+    vec4 previous_position = light_list_get_previous_position(light_index);
+    if (previous_position.w < 0.5f) {
+        relative_step = 0.0f;
+        return false;
+    }
+
+    Light light = light_list_get(light_index);
+    if (receiver_token == 0u) {
+        relative_step = length(light.position - previous_position.xyz);
+    } else {
+        relative_step = ph_sable_receiver_relative_light_step(
+            receiver_slot,
+            receiver_token,
+            light.position + world_offset,
+            previous_position.xyz + world_offset
+        );
+    }
+
+    return !isnan(relative_step) && !isinf(relative_step);
+}
 
 int sample_history_direct_provenance(
     out bool involves_moving_light,
-    out bool same_sublevel_light
+    out bool same_sublevel_light,
+    out float relative_light_step,
+    out bool relative_light_step_valid
 ) {
     involves_moving_light = false;
     same_sublevel_light = false;
+    relative_light_step = 0.0f;
+    relative_light_step_valid = false;
 
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir current_reservoir = direct_reservoir_empty();
@@ -227,9 +261,42 @@ int sample_history_direct_provenance(
         involves_moving_light = involves_moving_light
             || previous_reservoir.smple.light_index < ph_moving_light_count;
 
+    int receiver_slot = frag_data_sublevel_slot(_frag_data);
     uint receiver_token = frag_data_sublevel_token(_frag_data);
+    bool saw_motion_sample = false;
+    bool all_motion_samples_valid = true;
+    if (current_has_sample) {
+        float current_step;
+        bool current_step_valid = sample_history_light_relative_step(
+            current_reservoir.smple.light_index,
+            receiver_slot,
+            receiver_token,
+            current_step
+        );
+        saw_motion_sample = true;
+        all_motion_samples_valid = current_step_valid;
+        if (current_step_valid)
+            relative_light_step = max(relative_light_step, current_step);
+    }
+    if (previous_has_sample && (!current_has_sample
+            || previous_reservoir.smple.light_index
+                != current_reservoir.smple.light_index)) {
+        float previous_step;
+        bool previous_step_valid = sample_history_light_relative_step(
+            previous_reservoir.smple.light_index,
+            receiver_slot,
+            receiver_token,
+            previous_step
+        );
+        saw_motion_sample = true;
+        all_motion_samples_valid = all_motion_samples_valid
+            && previous_step_valid;
+        if (previous_step_valid)
+            relative_light_step = max(relative_light_step, previous_step);
+    }
+    relative_light_step_valid = saw_motion_sample && all_motion_samples_valid;
+
     if (receiver_token != 0u && current_has_sample && previous_has_sample) {
-        int receiver_slot = frag_data_sublevel_slot(_frag_data);
         Light current_light = direct_sample_get_light(current_reservoir.smple);
         Light previous_light = direct_sample_get_light(previous_reservoir.smple);
         same_sublevel_light = ph_sable_light_belongs_to_sublevel(
@@ -265,9 +332,13 @@ int sample_history_direct_provenance(
 float sample_history_accumulation_limit(SampleHistory history, SampleHistory smple) {
     bool involves_moving_light;
     bool same_sublevel_light;
+    float relative_light_step;
+    bool relative_light_step_valid;
     int direct_history = sample_history_direct_provenance(
         involves_moving_light,
-        same_sublevel_light
+        same_sublevel_light,
+        relative_light_step,
+        relative_light_step_valid
     );
     if (direct_history == DIRECT_HISTORY_MISMATCH)
         return 0.0f;
@@ -288,20 +359,48 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
             || normal_alignment < 0.9999f;
     }
 
-    bool reactive = moving_receiver || involves_moving_light;
+    bool reactive = moving_receiver
+        || involves_moving_light
+        || (relative_light_step_valid && relative_light_step > 1e-6f);
     if (!reactive)
         return float(PH_RESTIR_ACCUMULATION_FRAMES);
 
-    if (history.lighting.a < 0.5f)
-        return min(float(PH_RESTIR_ACCUMULATION_FRAMES), 4.0f);
+    float maximum_history = float(PH_RESTIR_ACCUMULATION_FRAMES);
+    if (same_sublevel_light && relative_light_step_valid)
+        return maximum_history;
 
-    // A single ReSTIR representative is stochastic, so its frame-to-frame
-    // brightness is not a reliable motion detector. Real receiver/source
-    // motion and verified visibility transitions provide the reactive signal.
-    float verified_history_limit = same_sublevel_light
-        ? float(PH_RESTIR_ACCUMULATION_FRAMES)
-        : (direct_history == DIRECT_HISTORY_VERIFIED ? 12.0f : 8.0f);
-    return min(float(PH_RESTIR_ACCUMULATION_FRAMES), verified_history_limit);
+    float history_limit;
+    if (relative_light_step_valid) {
+        history_limit = clamp(
+            PH_RELATIVE_LIGHT_MAX_TRAIL_BLOCKS
+                / max(relative_light_step, 1e-6f),
+            PH_RELATIVE_LIGHT_MIN_HISTORY_FRAMES,
+            maximum_history
+        );
+
+        // The CPU keeps a moving light reactive briefly after it stops. World
+        // receivers use that window to drain the old footprint before growing
+        // full history again. Receiver-local motion remains authoritative for
+        // Sable receivers so co-moving sublevels retain stable accumulation.
+        if (!sable_receiver && involves_moving_light
+                && relative_light_step <= 1e-6f)
+            history_limit = min(
+                history_limit,
+                PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES
+            );
+    } else {
+        history_limit = involves_moving_light
+            ? PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES
+            : (direct_history == DIRECT_HISTORY_VERIFIED ? 12.0f : 8.0f);
+    }
+
+    if (history.lighting.a < 0.5f)
+        history_limit = min(
+            history_limit,
+            PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES
+        );
+
+    return min(maximum_history, history_limit);
 }
 
 void sample_history_combine_lighting(inout SampleHistory history, in SampleHistory smple) {

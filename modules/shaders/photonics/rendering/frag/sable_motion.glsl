@@ -9,6 +9,7 @@ const float PH_SABLE_VISIBILITY_BIAS = 0.001f;
 //ph_required: uniform int ph_sable_emissive_cell_count;
 //ph_required: uniform mat4 ph_sable_current_world_to_grid[16];
 //ph_required: uniform mat4 ph_sable_current_world_to_previous_world[16];
+//ph_required: uniform mat4 ph_sable_previous_world_to_current_grid[16];
 //ph_required: uniform vec4 ph_sable_grid_info[16];
 //ph_required: uniform vec4 ph_sable_identity_tokens[4];
 //ph_required: uniform vec4 ph_sable_emissive_cells[64];
@@ -19,6 +20,10 @@ mat4 ph_sable_world_to_grid_matrix(int slot) {
 
 mat4 ph_sable_world_to_previous_world_matrix(int slot) {
     return ph_sable_current_world_to_previous_world[slot];
+}
+
+mat4 ph_sable_previous_world_to_current_grid_matrix(int slot) {
+    return ph_sable_previous_world_to_current_grid[slot];
 }
 
 mat3 ph_sable_normal_to_previous_normal_matrix(int slot) {
@@ -32,6 +37,32 @@ uint ph_sable_identity_token(int slot) {
 
 bool ph_sable_finite_vec3(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
+}
+
+float ph_sable_receiver_relative_light_step(
+    int receiver_slot,
+    uint receiver_token,
+    vec3 current_world_pos,
+    vec3 previous_world_pos
+) {
+    if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
+            || receiver_token == 0u
+            || receiver_token != ph_sable_identity_token(receiver_slot))
+        return length(current_world_pos - previous_world_pos);
+
+    vec3 current_grid_pos = (
+        ph_sable_world_to_grid_matrix(receiver_slot)
+            * vec4(current_world_pos, 1.0f)
+    ).xyz;
+    vec3 previous_grid_pos = (
+        ph_sable_previous_world_to_current_grid_matrix(receiver_slot)
+            * vec4(previous_world_pos, 1.0f)
+    ).xyz;
+    if (!ph_sable_finite_vec3(current_grid_pos)
+            || !ph_sable_finite_vec3(previous_grid_pos))
+        return length(current_world_pos - previous_world_pos);
+
+    return length(current_grid_pos - previous_grid_pos);
 }
 
 float ph_sable_cell_flags(ivec3 cell, ivec3 size, int atlas_z) {

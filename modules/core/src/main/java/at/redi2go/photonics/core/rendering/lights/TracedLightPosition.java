@@ -12,6 +12,8 @@ import java.util.Objects;
 public final class TracedLightPosition {
     private final int blockId;
     private final Vector3d pos;
+    private final Vector3d previousPos;
+    private final boolean previousPosValid;
     private final IBlockState blockState;
     private final BlockLightInfo lightInfo;
     private final Object temporalIdentity;
@@ -26,7 +28,7 @@ public final class TracedLightPosition {
             IBlockState blockState,
             BlockLightInfo lightInfo
     ) {
-        this(blockId, pos, blockState, lightInfo, null, false);
+        this(blockId, pos, blockState, lightInfo, null, false, pos, true);
     }
 
     public TracedLightPosition(
@@ -36,7 +38,7 @@ public final class TracedLightPosition {
             BlockLightInfo lightInfo,
             Object temporalIdentity
     ) {
-        this(blockId, pos, blockState, lightInfo, temporalIdentity, false);
+        this(blockId, pos, blockState, lightInfo, temporalIdentity, false, pos, true);
     }
 
     public TracedLightPosition(
@@ -47,8 +49,23 @@ public final class TracedLightPosition {
             Object temporalIdentity,
             boolean temporallyMoving
     ) {
+        this(blockId, pos, blockState, lightInfo, temporalIdentity, temporallyMoving, pos, true);
+    }
+
+    public TracedLightPosition(
+            int blockId,
+            Vector3d pos,
+            IBlockState blockState,
+            BlockLightInfo lightInfo,
+            Object temporalIdentity,
+            boolean temporallyMoving,
+            Vector3d previousPos,
+            boolean previousPosValid
+    ) {
         this.blockId = blockId;
         this.pos = pos;
+        this.previousPos = previousPos;
+        this.previousPosValid = previousPosValid;
         this.blockState = blockState;
         this.lightInfo = lightInfo;
         this.temporalIdentity = temporalIdentity;
@@ -61,6 +78,14 @@ public final class TracedLightPosition {
 
     public Vector3d pos() {
         return pos;
+    }
+
+    public Vector3d previousPos() {
+        return previousPos;
+    }
+
+    public boolean previousPosValid() {
+        return previousPosValid;
     }
 
     public Vector3i blockPos() {
@@ -111,6 +136,8 @@ public final class TracedLightPosition {
         var that = (TracedLightPosition) obj;
         return this.blockId == that.blockId &&
                 Objects.equals(this.pos, that.pos) &&
+                Objects.equals(this.previousPos, that.previousPos) &&
+                this.previousPosValid == that.previousPosValid &&
                 Objects.equals(this.blockState, that.blockState) &&
                 Objects.equals(this.lightInfo, that.lightInfo) &&
                 Objects.equals(this.temporalIdentity, that.temporalIdentity) &&
@@ -119,7 +146,16 @@ public final class TracedLightPosition {
 
     @Override
     public int hashCode() {
-        return Objects.hash(blockId, pos, blockState, lightInfo, temporalIdentity, temporallyMoving);
+        return Objects.hash(
+                blockId,
+                pos,
+                previousPos,
+                previousPosValid,
+                blockState,
+                lightInfo,
+                temporalIdentity,
+                temporallyMoving
+        );
     }
 
     @Override
@@ -127,6 +163,8 @@ public final class TracedLightPosition {
         return "TracedLightPosition[" +
                 "blockId=" + blockId + ", " +
                 "pos=" + pos + ", " +
+                "previousPos=" + previousPos + ", " +
+                "previousPosValid=" + previousPosValid + ", " +
                 "blockState=" + blockState + ", " +
                 "lightInfo=" + lightInfo + ", " +
                 "temporalIdentity=" + temporalIdentity + ", " +

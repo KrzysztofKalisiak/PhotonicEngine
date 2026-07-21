@@ -287,7 +287,11 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         );
     }
 
-    protected abstract void storeLight(int index, Vector4f[] light);
+    protected abstract void storeLight(
+            int index,
+            Vector4f[] light,
+            Vector4f previousPosition
+    );
 
     protected abstract void storeMapping(int beforeIndex, int afterIndex);
 
@@ -402,6 +406,10 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                     light.lightInfo().toVector4Array(
                             toVector3f(worldOrigin.applyOffset(light.pos())),
                             light.blockId()
+                    ),
+                    new Vector4f(
+                            toVector3f(worldOrigin.applyOffset(light.previousPos())),
+                            light.previousPosValid() ? 1.0f : 0.0f
                     )
             );
         }

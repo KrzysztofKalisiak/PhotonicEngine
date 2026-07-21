@@ -8,6 +8,7 @@ layout (std140) restrict readonly buffer ph_light_list {
 // vec 1: position (xyz) + block_id (w)
 // vec 2: color (xyz) + intensity (w)
 // vec 3: attenutation (xy) + falloff (z) + block_radius (w)
+// vec 4: previous position (xyz) + temporal-validity flag (w)
     vec4 ph_lights_array[];
 };
 
@@ -15,7 +16,7 @@ layout (std430) restrict readonly buffer ph_light_mapping {
     int ph_light_mapping_array[];
 };
 
-const int ph_light_size = 3; // 3 vec4s per light
+const int ph_light_size = 4; // 4 vec4s per light
 
 Light light_list_get(int index) {
     int real_index = index;
@@ -28,6 +29,13 @@ Light light_list_get(int index) {
         real_index,
         LIGHT_TYPE_TRACED
     );
+}
+
+vec4 light_list_get_previous_position(int index) {
+    int offset = index * ph_light_size;
+    vec4 previous = ph_lights_array[offset + 3];
+    previous.xyz-= light_list_offset;
+    return previous;
 }
 
 int light_list_map_index(int old_index) {

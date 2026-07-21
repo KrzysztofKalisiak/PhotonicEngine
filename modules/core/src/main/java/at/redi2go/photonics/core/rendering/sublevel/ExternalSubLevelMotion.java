@@ -61,6 +61,11 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
                     "ph_sable_current_world_to_previous_world[" + slot + "]",
                     () -> snapshot.currentWorldToPreviousWorld[slot]
             );
+            uniforms.uniformMatrix(
+                    IUniformUpdateFrequency.perFrame(),
+                    "ph_sable_previous_world_to_current_grid[" + slot + "]",
+                    () -> snapshot.previousWorldToCurrentGrid[slot]
+            );
             uniforms.uniform4f(
                     IUniformUpdateFrequency.perFrame(),
                     "ph_sable_grid_info[" + slot + "]",
@@ -96,6 +101,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
             int identityToken,
             Matrix4fc currentWorldToGrid,
             Matrix4fc currentWorldToPreviousWorld,
+            Matrix4fc previousWorldToCurrentGrid,
             Vector3ic gridSize,
             int atlasZOffset,
             List<Vector3i> emissiveCells
@@ -110,6 +116,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
         private final int emissiveCellCount;
         private final Matrix4f[] currentWorldToGrid;
         private final Matrix4f[] currentWorldToPreviousWorld;
+        private final Matrix4f[] previousWorldToCurrentGrid;
         private final Vector4f[] gridInfo;
         private final Vector4f[] identityTokens;
         private final Vector4f[] emissiveCells;
@@ -120,6 +127,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
                 int emissiveCellCount,
                 Matrix4f[] currentWorldToGrid,
                 Matrix4f[] currentWorldToPreviousWorld,
+                Matrix4f[] previousWorldToCurrentGrid,
                 Vector4f[] gridInfo,
                 Vector4f[] identityTokens,
                 Vector4f[] emissiveCells
@@ -129,6 +137,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
             this.emissiveCellCount = emissiveCellCount;
             this.currentWorldToGrid = currentWorldToGrid;
             this.currentWorldToPreviousWorld = currentWorldToPreviousWorld;
+            this.previousWorldToCurrentGrid = previousWorldToCurrentGrid;
             this.gridInfo = gridInfo;
             this.identityTokens = identityTokens;
             this.emissiveCells = emissiveCells;
@@ -142,6 +151,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
             int count = Math.min(source.size(), MAX_SUBLEVELS);
             Matrix4f[] currentWorldToGrid = matrices(MAX_SUBLEVELS);
             Matrix4f[] currentWorldToPreviousWorld = matrices(MAX_SUBLEVELS);
+            Matrix4f[] previousWorldToCurrentGrid = matrices(MAX_SUBLEVELS);
             Vector4f[] gridInfo = vectors(MAX_SUBLEVELS);
             Vector4f[] identityTokens = vectors(IDENTITY_TOKEN_GROUPS);
             Vector4f[] emissiveCells = vectors(MAX_EMISSIVE_CELLS);
@@ -151,6 +161,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
                 SubLevel subLevel = source.get(slot);
                 currentWorldToGrid[slot].set(subLevel.currentWorldToGrid());
                 currentWorldToPreviousWorld[slot].set(subLevel.currentWorldToPreviousWorld());
+                previousWorldToCurrentGrid[slot].set(subLevel.previousWorldToCurrentGrid());
                 gridInfo[slot].set(
                         subLevel.gridSize().x(),
                         subLevel.gridSize().y(),
@@ -174,6 +185,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
                     emissiveCount,
                     currentWorldToGrid,
                     currentWorldToPreviousWorld,
+                    previousWorldToCurrentGrid,
                     gridInfo,
                     identityTokens,
                     emissiveCells
