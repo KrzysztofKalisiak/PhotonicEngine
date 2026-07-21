@@ -14,6 +14,13 @@
 
 #define RESTIR_LIGHTING_OUT 0
 #define RESTIR_LIGHTING_VARIANCE_OUT 1
+#if defined PH_ENABLE_BLOCKLIGHT
+#if defined PH_ENABLE_RESTIR_GI
+#define RESTIR_EXTERNAL_LIGHTING_OUT 7
+#else
+#define RESTIR_EXTERNAL_LIGHTING_OUT 4
+#endif
+#endif
 
 //ph_required: uniform sampler2D restir_lighting;
 //ph_required: uniform sampler2D restir_lighting_variance;
@@ -21,13 +28,23 @@
 //ph_required: uniform sampler2D prev_restir_lighting;
 //ph_required: uniform sampler2D prev_restir_lighting_variance;
 
+#if defined PH_ENABLE_BLOCKLIGHT
+//ph_required: uniform sampler2D restir_external_lighting;
+//ph_required: uniform sampler2D prev_restir_external_lighting;
+#endif
+
 struct SampleHistory {
     vec4 lighting;
+    vec4 external_lighting;
     vec4 variance;
 };
 
 const float INVALID_SAMPLE_COMPONENT = -999.0f;
-const SampleHistory INVALID_HISTORY = SampleHistory(vec4(INVALID_SAMPLE_COMPONENT), vec4(INVALID_SAMPLE_COMPONENT));
+const SampleHistory INVALID_HISTORY = SampleHistory(
+    vec4(INVALID_SAMPLE_COMPONENT),
+    vec4(INVALID_SAMPLE_COMPONENT),
+    vec4(INVALID_SAMPLE_COMPONENT)
+);
 const float PH_HISTORY_POSITION_ERROR_SQ = 0.3f;
 
 bool sample_history_is_valid(SampleHistory history) {
@@ -35,7 +52,12 @@ bool sample_history_is_valid(SampleHistory history) {
 }
 
 void sample_history_load(out SampleHistory smple) {
-    smple.lighting = texelFetch(restir_lighting, frag_tex_coord, 0),
+    smple.lighting = texelFetch(restir_lighting, frag_tex_coord, 0);
+#if defined PH_ENABLE_BLOCKLIGHT
+    smple.external_lighting = texelFetch(restir_external_lighting, frag_tex_coord, 0);
+#else
+    smple.external_lighting = vec4(0.0f, 0.0f, 0.0f, smple.lighting.a);
+#endif
     smple.variance = vec4(0f);
 }
 
@@ -50,6 +72,7 @@ SampleHistory sample_history_mix(SampleHistory s1, SampleHistory s2, float a) {
 
     return SampleHistory(
         mix(s1.lighting, s2.lighting, a),
+        mix(s1.external_lighting, s2.external_lighting, a),
         mix(s1.variance, s2.variance, a)
     );
 }
@@ -84,10 +107,17 @@ SampleHistory sample_history_reproject_single(
     vec4 lighting = texelFetch(prev_restir_lighting, ivec2(texel), 0);
     if (any(isnan(lighting)) || any(isinf(lighting))) return INVALID_HISTORY;
 
+#if defined PH_ENABLE_BLOCKLIGHT
+    vec4 external_lighting = texelFetch(prev_restir_external_lighting, ivec2(texel), 0);
+    if (any(isnan(external_lighting)) || any(isinf(external_lighting))) return INVALID_HISTORY;
+#else
+    vec4 external_lighting = vec4(0.0f, 0.0f, 0.0f, lighting.a);
+#endif
+
     vec4 variance = texelFetch(prev_restir_lighting_variance, ivec2(texel), 0);
     if (any(isnan(variance)) || any(isinf(variance))) return INVALID_HISTORY;
 
-    return SampleHistory(lighting, variance);
+    return SampleHistory(lighting, external_lighting, variance);
 }
 
 SampleHistory sample_history_reproject_mixed(
@@ -111,7 +141,7 @@ SampleHistory sample_history_reproject_mixed(
     );
 
     if (!sample_history_is_valid(result))
-        return SampleHistory(vec4(0.0f), vec4(0.0f));
+        return SampleHistory(vec4(0.0f), vec4(0.0f), vec4(0.0f));
 
     return result;
 }
@@ -216,6 +246,7 @@ bool sample_history_light_relative_step(
 }
 
 int sample_history_direct_provenance(
+    bool external_stream,
     out bool involves_moving_light,
     out bool same_sublevel_light,
     out bool sable_representative_mismatch,
@@ -238,6 +269,12 @@ int sample_history_direct_provenance(
     bool current_visible = direct_history_load(current_state, frag_tex_coord);
     bool current_has_sample = current_loaded
         && direct_reservoir_has_sample(current_reservoir);
+    if (current_has_sample) {
+        bool current_is_external = direct_sample_get_temporal_domain(
+            current_reservoir.smple
+        ) != 0;
+        current_has_sample = current_is_external == external_stream;
+    }
 
     DirectReservoir previous_reservoir = direct_reservoir_empty();
     bool previous_loaded = false;
@@ -256,6 +293,12 @@ int sample_history_direct_provenance(
     }
     bool previous_has_sample = previous_loaded
         && direct_reservoir_has_sample(previous_reservoir);
+    if (previous_has_sample) {
+        bool previous_is_external = direct_sample_get_temporal_domain(
+            previous_reservoir.smple
+        ) != 0;
+        previous_has_sample = previous_is_external == external_stream;
+    }
 
     if (current_has_sample)
         involves_moving_light = current_reservoir.smple.light_index
@@ -303,7 +346,7 @@ int sample_history_direct_provenance(
             relative_light_step = max(relative_light_step, previous_step);
     }
 
-    if (receiver_token != 0u) {
+    if (external_stream && receiver_token != 0u) {
         bool current_same_sublevel = false;
         bool previous_same_sublevel = false;
         if (current_has_sample) {
@@ -346,13 +389,14 @@ int sample_history_direct_provenance(
 #endif
 }
 
-float sample_history_accumulation_limit(SampleHistory history, SampleHistory smple) {
+float sample_history_accumulation_limit(vec4 stream_history, bool external_stream) {
     bool involves_moving_light;
     bool same_sublevel_light;
     bool sable_representative_mismatch;
     float relative_light_step;
     bool relative_light_step_valid;
     int direct_history = sample_history_direct_provenance(
+        external_stream,
         involves_moving_light,
         same_sublevel_light,
         sable_representative_mismatch,
@@ -381,6 +425,10 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
     bool reactive = moving_receiver
         || involves_moving_light
         || (relative_light_step_valid && relative_light_step > 1e-6f);
+#if defined PH_ENABLE_BLOCKLIGHT
+    reactive = reactive
+        || (external_stream && ph_moving_light_count > 0);
+#endif
     if (!reactive)
         return float(PH_RESTIR_ACCUMULATION_FRAMES);
 
@@ -389,7 +437,7 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
         return maximum_history;
 
     float history_limit;
-    if (sable_receiver && sable_representative_mismatch) {
+    if (external_stream && sable_receiver && sable_representative_mismatch) {
         // Reservoir identity changes are sampling noise, not a measured
         // emitter/receiver velocity. Match v39's bounded ambiguity behavior
         // until the same external representative persists for another frame.
@@ -416,12 +464,17 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
                 PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES
             );
     } else {
-        history_limit = involves_moving_light
+        bool moving_external_stream = involves_moving_light;
+#if defined PH_ENABLE_BLOCKLIGHT
+        moving_external_stream = moving_external_stream
+            || (external_stream && ph_moving_light_count > 0);
+#endif
+        history_limit = moving_external_stream
             ? PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES
             : (direct_history == DIRECT_HISTORY_VERIFIED ? 12.0f : 8.0f);
     }
 
-    if (history.lighting.a < 0.5f)
+    if (stream_history.a < 0.5f)
         history_limit = min(
             history_limit,
             PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES
@@ -430,33 +483,63 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
     return min(maximum_history, history_limit);
 }
 
-void sample_history_combine_lighting(inout SampleHistory history, in SampleHistory smple) {
-    float accumulation_limit = sample_history_accumulation_limit(history, smple);
+void sample_history_combine_component(
+    inout vec4 history,
+    vec4 smple,
+    float accumulation_limit
+) {
 #if PH_RESTIR_DENOISER_PASSES != 0
-    history.lighting.w = min(history.lighting.w, accumulation_limit);
-    history.lighting.rgb = mix(history.lighting.rgb, smple.lighting.rgb, 1f / (++history.lighting.w));
+    history.w = min(history.w, accumulation_limit);
+    history.rgb = mix(history.rgb, smple.rgb, 1f / (++history.w));
 #else
-    if (history.lighting.a > accumulation_limit) {
-        history.lighting.rgb *= accumulation_limit / history.lighting.a;
-        history.lighting.a = accumulation_limit;
+    if (history.a > accumulation_limit) {
+        history.rgb *= accumulation_limit / history.a;
+        history.a = accumulation_limit;
     }
-    if (history.lighting.a >= PH_RESTIR_ACCUMULATION_FRAMES - 1f)
-        history.lighting *= ((PH_RESTIR_ACCUMULATION_FRAMES - 1f) / history.lighting.a);
+    if (history.a >= PH_RESTIR_ACCUMULATION_FRAMES - 1f)
+        history *= ((PH_RESTIR_ACCUMULATION_FRAMES - 1f) / history.a);
 
-    history.lighting.rgb+= smple.lighting.rgb;
-    history.lighting.a++;
+    history.rgb += smple.rgb;
+    history.a++;
 #endif
 }
 
+void sample_history_combine_lighting(inout SampleHistory history, in SampleHistory smple) {
+    float stable_limit = sample_history_accumulation_limit(
+        history.lighting,
+        false
+    );
+    float external_limit = sample_history_accumulation_limit(
+        history.external_lighting,
+        true
+    );
+
+    sample_history_combine_component(
+        history.lighting,
+        smple.lighting,
+        stable_limit
+    );
+    sample_history_combine_component(
+        history.external_lighting,
+        smple.external_lighting,
+        external_limit
+    );
+}
+
 void sample_history_combine_moment(inout SampleHistory history, in SampleHistory smple) {
-    float moment_alpha = 1f / history.lighting.a;
+    float samples = max(
+        1.0f,
+        min(history.lighting.a, history.external_lighting.a)
+    );
+    float moment_alpha = 1f / samples;
     vec2 moments = vec2(0f);
 
-    moments.x = dot(smple.lighting.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 combined_lighting = smple.lighting.rgb + smple.external_lighting.rgb;
+    moments.x = dot(combined_lighting, vec3(0.299, 0.587, 0.114));
     moments.y = moments.x * moments.x;
 
     history.variance.xy = mix(history.variance.xy, moments, moment_alpha);
-    history.variance.w = 1f;
+    history.variance.w = samples;
 }
 
 void sample_history_compute_variance(inout SampleHistory history, in SampleHistory smple) {
@@ -466,7 +549,7 @@ void sample_history_compute_variance(inout SampleHistory history, in SampleHisto
     #define PH_MIN_VARIANCE (samples < 4f) ? 0.1f : 0.01f
 #endif
 
-    float samples = history.lighting.a;
+    float samples = max(history.variance.w, 1.0f);
     float sample_variance = max(
         history.variance.y - (history.variance.x * history.variance.x),
 

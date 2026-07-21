@@ -64,7 +64,9 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
         try (MemoryStack stack = MemoryStack.stackPush()) {
             for (int i = 0; i < attachments.size(); i++) {
                 String name = attachments.get(i).name();
-                float invalidComponent = name.equals("restir_lighting") || name.equals("restir_lighting_variance")
+                float invalidComponent = name.equals("restir_lighting")
+                        || name.equals("restir_lighting_variance")
+                        || name.equals("restir_external_lighting")
                         ? -999.0f
                         : 0.0f;
                 float directLightIndex = name.equals("restir_direct_reservoirs0") ? -1.0f : invalidComponent;

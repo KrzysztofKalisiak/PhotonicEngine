@@ -8,6 +8,14 @@
 
 layout(location = 0) out vec4 denoise_out;
 
+vec3 ph_accumulated_lighting(ivec2 texel) {
+    vec3 result = texelFetch(restir_lighting, texel, 0).rgb;
+#if defined PH_ENABLE_BLOCKLIGHT
+    result += texelFetch(restir_external_lighting, texel, 0).rgb;
+#endif
+    return result;
+}
+
 bool ph_matches_denoise_receiver(
     ivec2 texel,
     bool center_has_direct_sample,
@@ -61,8 +69,8 @@ void main() {
     ivec2 max_texel = textureSize(restir_lighting, 0) - ivec2(1);
 
     // Firefly rejection
-    vec4 center = texelFetch(restir_lighting, frag_tex_coord, 0);
-    denoise_out = vec4(center.rgb, 10.0f);
+    vec3 center = ph_accumulated_lighting(frag_tex_coord);
+    denoise_out = vec4(center, 10.0f);
     if (!frag_is_in_world) return;
 
     bool center_has_direct_sample = false;
@@ -93,14 +101,14 @@ void main() {
                     center_direct_visible
             )) continue;
 
-            vec3 color = texelFetch(restir_lighting, pos, 0).rgb;
+            vec3 color = ph_accumulated_lighting(pos);
             maxNeighbour = max(maxNeighbour, color);
             hasNeighbour = true;
         }
     }
 
     if (hasNeighbour)
-        denoise_out.rgb = min(center.rgb, maxNeighbour);
+        denoise_out.rgb = min(center, maxNeighbour);
 
     if (frag_is_hand) return;
 

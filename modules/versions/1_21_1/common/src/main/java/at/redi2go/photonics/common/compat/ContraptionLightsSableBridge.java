@@ -51,6 +51,7 @@ public final class ContraptionLightsSableBridge {
     private static int lastUploadedLights = -1;
     private static int lastZeroLuminanceTracedLights = -1;
     private static int lastRejectedMaterials = -1;
+    private static int lastRecoveredMaterials = -1;
     private static int lastActuallyMovingLights = -1;
     private static MotionAccess motionAccess;
     private static boolean motionUnavailable;
@@ -64,6 +65,7 @@ public final class ContraptionLightsSableBridge {
     private static final Map<UUID, GeometryRevisionSnapshot> geometryRevisionSnapshots = new HashMap<>();
     private static final Map<SableLightIdentity, Vector3d> publishedLightPositions = new HashMap<>();
     private static final Map<SableLightIdentity, Integer> movingLightHoldFrames = new HashMap<>();
+    private static final Map<SableLightIdentity, BlockState> lastValidLightStates = new HashMap<>();
 
     private static IGpuTexture3D geometryTexture;
     private static List<GeometryKey> geometryKeys = List.of();
@@ -101,6 +103,7 @@ public final class ContraptionLightsSableBridge {
             int sourceLights = 0;
             int zeroLuminanceTracedLights = 0;
             int rejectedMaterials = 0;
+            int recoveredMaterials = 0;
             int actuallyMovingLights = 0;
             String firstValidationIssue = null;
 
@@ -145,17 +148,33 @@ public final class ContraptionLightsSableBridge {
 
                 for (int i = 0; i < count; i++) {
                     var localPos = new BlockPos(lightX[i], lightY[i], lightZ[i]);
-                    var blockState = level.getBlockState(localPos);
-                    var apiBlockState = (IBlockState) (Object) blockState;
+                    var identity = new SableLightIdentity(uniqueId, lightX[i], lightY[i], lightZ[i]);
+                    seenLightIdentities.add(identity);
+
+                    BlockState blockState = level.getBlockState(localPos);
+                    IBlockState apiBlockState = (IBlockState) (Object) blockState;
                     var lightInfo = lightRegistry.get(apiBlockState);
 
                     if (lightInfo == null || !lightInfo.isTraced()) {
-                        rejectedMaterials++;
-                        if (firstValidationIssue == null)
-                            firstValidationIssue = "rejectedMaterial id=" + uniqueId
-                                    + " local=" + localPos + " sourceLuminance=" + lightLum[i]
-                                    + " state=" + blockState;
-                        continue;
+                        BlockState cachedState = lastValidLightStates.get(identity);
+                        if (cachedState != null) {
+                            blockState = cachedState;
+                            apiBlockState = (IBlockState) (Object) cachedState;
+                            lightInfo = lightRegistry.get(apiBlockState);
+                            if (lightInfo != null && lightInfo.isTraced())
+                                recoveredMaterials++;
+                        }
+
+                        if (lightInfo == null || !lightInfo.isTraced()) {
+                            rejectedMaterials++;
+                            if (firstValidationIssue == null)
+                                firstValidationIssue = "rejectedMaterial id=" + uniqueId
+                                        + " local=" + localPos + " sourceLuminance=" + lightLum[i]
+                                        + " state=" + level.getBlockState(localPos);
+                            continue;
+                        }
+                    } else {
+                        lastValidLightStates.put(identity, blockState);
                     }
 
                     // Photonics' state-aware material registry is authoritative.
@@ -174,9 +193,6 @@ public final class ContraptionLightsSableBridge {
                             lightZ[i] - minZ + 0.5d,
                             new Vector3d()
                     );
-                    var identity = new SableLightIdentity(uniqueId, lightX[i], lightY[i], lightZ[i]);
-                    seenLightIdentities.add(identity);
-
                     Vector3d publishedPosition = publishedLightPositions.get(identity);
                     boolean previousPositionValid = publishedPosition != null;
                     Vector3d previousWorldPosition = previousPositionValid
@@ -217,6 +233,7 @@ public final class ContraptionLightsSableBridge {
 
             publishedLightPositions.keySet().retainAll(seenLightIdentities);
             movingLightHoldFrames.keySet().retainAll(seenLightIdentities);
+            lastValidLightStates.keySet().retainAll(seenLightIdentities);
             ExternalLightList.submit(lights, replacedBlockPositions);
             logCapture(
                     states.size(),
@@ -225,6 +242,7 @@ public final class ContraptionLightsSableBridge {
                     actuallyMovingLights,
                     zeroLuminanceTracedLights,
                     rejectedMaterials,
+                    recoveredMaterials,
                     firstValidationIssue
             );
             transientFailureLogged = false;
@@ -272,6 +290,7 @@ public final class ContraptionLightsSableBridge {
         geometryRevisionSnapshots.clear();
         publishedLightPositions.clear();
         movingLightHoldFrames.clear();
+        lastValidLightStates.clear();
         nextMotionToken = 1;
         if (lastUploadedLights > 0)
             Photonics.LOGGER.info("Photonics v24 Sable moving lights: {} -> 0", lastUploadedLights);
@@ -282,6 +301,7 @@ public final class ContraptionLightsSableBridge {
         lastMotionSubLevels = 0;
         lastZeroLuminanceTracedLights = -1;
         lastRejectedMaterials = -1;
+        lastRecoveredMaterials = -1;
         resetGeometryAtlas();
     }
 
@@ -698,6 +718,7 @@ public final class ContraptionLightsSableBridge {
             int actuallyMovingLights,
             int zeroLuminanceTracedLights,
             int rejectedMaterials,
+            int recoveredMaterials,
             String firstValidationIssue
     ) {
         if (!activeLogged && structures > 0) {
@@ -732,15 +753,18 @@ public final class ContraptionLightsSableBridge {
         }
 
         if (zeroLuminanceTracedLights != lastZeroLuminanceTracedLights
-                || rejectedMaterials != lastRejectedMaterials) {
+                || rejectedMaterials != lastRejectedMaterials
+                || recoveredMaterials != lastRecoveredMaterials) {
             Photonics.LOGGER.info(
-                    "Photonics v28 Sable source validation: zeroLuminanceButTraced={}, rejectedMaterial={}, firstIssue={}",
+                    "Photonics v43 Sable source validation: zeroLuminanceButTraced={}, rejectedMaterial={}, recoveredStaleMaterial={}, firstIssue={}",
                     zeroLuminanceTracedLights,
                     rejectedMaterials,
+                    recoveredMaterials,
                     firstValidationIssue == null ? "none" : firstValidationIssue
             );
             lastZeroLuminanceTracedLights = zeroLuminanceTracedLights;
             lastRejectedMaterials = rejectedMaterials;
+            lastRecoveredMaterials = recoveredMaterials;
         }
     }
 

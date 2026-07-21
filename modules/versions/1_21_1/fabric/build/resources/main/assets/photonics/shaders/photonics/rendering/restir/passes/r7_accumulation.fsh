@@ -8,10 +8,16 @@
 
 layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting_frag_out;
 layout(location = RESTIR_LIGHTING_VARIANCE_OUT) out vec4 lighting_variance_frag_out;
+#if defined PH_ENABLE_BLOCKLIGHT
+layout(location = RESTIR_EXTERNAL_LIGHTING_OUT) out vec4 external_lighting_frag_out;
+#endif
 
 void main() {
     lighting_frag_out = vec4(0.0f);
     lighting_variance_frag_out = vec4(0.0f);
+#if defined PH_ENABLE_BLOCKLIGHT
+    external_lighting_frag_out = vec4(0.0f);
+#endif
 
     setup_frag_data(0);
     if (!frag_is_in_world) return;
@@ -31,4 +37,7 @@ void main() {
 
     lighting_frag_out = accumulator.lighting;
     lighting_variance_frag_out = accumulator.variance;
+#if defined PH_ENABLE_BLOCKLIGHT
+    external_lighting_frag_out = accumulator.external_lighting;
+#endif
 }

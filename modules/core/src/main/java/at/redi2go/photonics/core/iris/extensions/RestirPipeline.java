@@ -32,14 +32,14 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         registerComponent(ExternalSubLevelMotion.instance());
 
-        Photonics.LOGGER.info("Photonics feature set: direct-light-v42 explicit emitter motion-domain identity, motion-domain-stable receiver-relative light-history limits, previous-light position metadata, rotation-correct cross-sublevel motion, guarded ordinary-world all-light and rigid same-sublevel Sable single-neighbor spatial reuse, immutable spatial input, current-receiver visibility validation, bounded spatial history, independent spatial random stream, bounded reservoirs, zero-contribution batch accounting, actual-motion reactive lights, stable-anchor Sable reprojection, surface-plane SVGF, visibility-transition provenance, stable Sable identity, current-visible temporal reuse, Sable plot-section isolation, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, duplicate Veil point-light suppression, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; Sable-receiver world/cross-sublevel spatial reuse and combined GI compatibility gates active");
+        Photonics.LOGGER.info("Photonics feature set: direct-light-v43 split stable/external accumulation histories and stale Sable material recovery, explicit emitter motion-domain identity, motion-domain-stable receiver-relative light-history limits, previous-light position metadata, rotation-correct cross-sublevel motion, guarded ordinary-world all-light and rigid same-sublevel Sable single-neighbor spatial reuse, immutable spatial input, current-receiver visibility validation, bounded spatial history, independent spatial random stream, bounded reservoirs, zero-contribution batch accounting, actual-motion reactive lights, stable-anchor Sable reprojection, surface-plane SVGF, visibility-transition provenance, stable Sable identity, current-visible temporal reuse, Sable plot-section isolation, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, duplicate Veil point-light suppression, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; Sable-receiver world/cross-sublevel spatial reuse and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
         int requestedDenoiserPasses = properties.getRestirDenoiserPasses();
         this.denoiserPasses = requestedDenoiserPasses != 0 ? Math.max(requestedDenoiserPasses, 7) : 0;
 
         Photonics.LOGGER.info(
-                "Photonics ReSTIR configuration v42: directCandidatesPerPixel={}, directTemporalSampleCap={}, spatialCandidates={}, spatialRadiusPixels={}, spatialPolicy=ordinary-world-all-lights+explicit-token-rigid-same-sublevel/current-visibility/immutable-input/initial-batch-cap, historyPolicy=receiver-relative/explicit-emitter-domain/0.15-block-trail/2-frame-floor+same-sublevel-domain-hysteresis, requestedDenoiserPasses={}, effectiveDenoiserPasses={}, softShadows={}, combinedGi={}",
+                "Photonics ReSTIR configuration v43: directCandidatesPerPixel={}, directTemporalSampleCap={}, spatialCandidates={}, spatialRadiusPixels={}, spatialPolicy=ordinary-world-all-lights+explicit-token-rigid-same-sublevel/current-visibility/immutable-input/initial-batch-cap, historyPolicy=split-stable-external/receiver-relative/explicit-emitter-domain/0.15-block-trail/2-frame-floor+same-sublevel-domain-hysteresis, requestedDenoiserPasses={}, effectiveDenoiserPasses={}, softShadows={}, combinedGi={}",
                 properties.getRestirInitialSamples(),
                 20 * properties.getRestirInitialSamples(),
                 properties.getRestirSpatialReuseSamples(),
@@ -58,6 +58,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs2", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
+                .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
                 .build(this::registerComponent);
 
         var directReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
@@ -80,11 +81,13 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "restir_direct_state",
                 "restir_indirect_reservoirs0",
                 "restir_indirect_reservoirs1",
-                "restir_indirect_reservoirs2"
+                "restir_indirect_reservoirs2",
+                "restir_external_lighting"
         );
         var accumulationFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_lighting",
-                "restir_lighting_variance"
+                "restir_lighting_variance",
+                "restir_external_lighting"
         );
 
         var denoiseFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
