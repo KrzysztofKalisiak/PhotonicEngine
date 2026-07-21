@@ -7,13 +7,17 @@
 #endif
 #endif
 
+#if defined PH_ENABLE_BLOCKLIGHT
+//ph_required: uniform sampler2D restir_local_lighting;
+#endif
+
 #if defined PH_ENABLE_HANDHELD_LIGHT
 //ph_required: uniform sampler2D other_handheld;
 #endif
 
 vec3 sample_photonics_direct(vec2 tex_coord) {
     #if PH_RESTIR_DENOISER_PASSES != 0
-    return texture(denoise_result, tex_coord).rgb;
+    vec3 result = texture(denoise_result, tex_coord).rgb;
     #else
     vec4 lighting = texture(restir_lighting, tex_coord);
     vec3 result = lighting.rgb / max(lighting.a, 1.0f);
@@ -21,8 +25,12 @@ vec3 sample_photonics_direct(vec2 tex_coord) {
     vec4 external_lighting = texture(restir_external_lighting, tex_coord);
     result += external_lighting.rgb / max(external_lighting.a, 1.0f);
     #endif
-    return result;
     #endif
+
+    #if defined PH_ENABLE_BLOCKLIGHT
+    result += texture(restir_local_lighting, tex_coord).rgb;
+    #endif
+    return result;
 }
 
 vec3 sample_photonics_handheld(vec2 tex_coord) {

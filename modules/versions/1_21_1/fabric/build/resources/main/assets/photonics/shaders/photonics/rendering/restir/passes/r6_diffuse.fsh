@@ -53,6 +53,7 @@ void main() {
 
 #if defined PH_ENABLE_BLOCKLIGHT
     uint receiver_token = frag_data_sublevel_token(_frag_data);
+#ifdef PH_RESTIR_SOFT_SHADOWS
     int local_light_count = 0;
     int local_visible_light_count = 0;
     if (receiver_token != 0u) {
@@ -82,8 +83,10 @@ void main() {
                 local_visible_light_count++;
             }
         }
+        // Area-light samples still need temporal accumulation and SVGF.
         lighting.rgb += local_direct_lighting;
     }
+#endif
 
     DirectReservoir direct_reservoir = direct_reservoir_empty();
     direct_reservoir_load(direct_reservoir, frag_tex_coord);
@@ -113,13 +116,15 @@ void main() {
     if (receiver_token != 0u) {
 #ifdef PH_RESTIR_SOFT_SHADOWS
         int local_visibility_signature = 0;
-#else
-        int local_visibility_signature = min(local_visible_light_count, 4095);
-#endif
         di_history_state.y = float(
             min(local_light_count, 4095) * 4096
                 + local_visibility_signature
         );
+#else
+        // Exact local hard shadows have no temporal state. Do not let the
+        // stochastic external-reservoir confidence become a false signature.
+        di_history_state.y = 0.0f;
+#endif
     }
 #endif
 }

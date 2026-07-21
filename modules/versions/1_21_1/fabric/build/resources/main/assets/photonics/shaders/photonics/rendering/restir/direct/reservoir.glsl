@@ -190,13 +190,19 @@ void direct_reservoir_validate_visiblity(inout DirectReservoir reservoir, vec3 s
             light.position - rt_camera_position,
             local_visible
     );
+    if (same_receiver_domain) {
+        // The ordinary world tracer has no live Sable occupancy. Falling back
+        // after a same-domain local evaluation failure makes edge pixels see
+        // through the contraption, so same-domain visibility must fail closed.
+        if (!local_visibility_handled || !local_visible)
+            reservoir.weight = 0.0f;
+        return;
+    }
+
     if (local_visibility_handled && !local_visible) {
         reservoir.weight = 0.0f;
         return;
     }
-
-    if (same_receiver_domain && local_visibility_handled)
-        return;
 
     vec3 to_light = light.position - sample_pos;
 
@@ -292,16 +298,19 @@ bool direct_sample_get_final_unweighted_color(
             light.position - rt_camera_position,
             local_visible
     );
-    if (local_visibility_handled && !local_visible)
-        return false;
-
-    if (direct_sample_matches_receiver_domain(
-            smple,
-            frag_data_sublevel_token(_frag_data)
-    ) && local_visibility_handled) {
+    bool same_receiver_domain = direct_sample_matches_receiver_domain(
+        smple,
+        frag_data_sublevel_token(_frag_data)
+    );
+    if (same_receiver_domain) {
+        if (!local_visibility_handled || !local_visible)
+            return false;
         result = sampled_color;
         return true;
     }
+
+    if (local_visibility_handled && !local_visible)
+        return false;
 
     vec3 to_light = trace_position - sample_pos;
     vec3 tint_color;
