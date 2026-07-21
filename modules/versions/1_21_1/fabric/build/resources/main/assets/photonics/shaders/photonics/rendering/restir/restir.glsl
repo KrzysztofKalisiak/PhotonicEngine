@@ -186,6 +186,7 @@ const int DIRECT_HISTORY_VERIFIED = 2;
 const float PH_RELATIVE_LIGHT_MAX_TRAIL_BLOCKS = 0.15f;
 const float PH_RELATIVE_LIGHT_MIN_HISTORY_FRAMES = 2.0f;
 const float PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES = 4.0f;
+const float PH_SABLE_AMBIGUOUS_HISTORY_FRAMES = 8.0f;
 
 bool sample_history_light_relative_step(
     int light_index,
@@ -217,11 +218,13 @@ bool sample_history_light_relative_step(
 int sample_history_direct_provenance(
     out bool involves_moving_light,
     out bool same_sublevel_light,
+    out bool sable_representative_mismatch,
     out float relative_light_step,
     out bool relative_light_step_valid
 ) {
     involves_moving_light = false;
     same_sublevel_light = false;
+    sable_representative_mismatch = false;
     relative_light_step = 0.0f;
     relative_light_step_valid = false;
 
@@ -263,24 +266,30 @@ int sample_history_direct_provenance(
 
     int receiver_slot = frag_data_sublevel_slot(_frag_data);
     uint receiver_token = frag_data_sublevel_token(_frag_data);
-    bool saw_motion_sample = false;
-    bool all_motion_samples_valid = true;
     if (current_has_sample) {
-        float current_step;
-        bool current_step_valid = sample_history_light_relative_step(
+        relative_light_step_valid = sample_history_light_relative_step(
             current_reservoir.smple.light_index,
             receiver_slot,
             receiver_token,
-            current_step
+            relative_light_step
         );
-        saw_motion_sample = true;
-        all_motion_samples_valid = current_step_valid;
-        if (current_step_valid)
-            relative_light_step = max(relative_light_step, current_step);
+    } else if (previous_has_sample) {
+        relative_light_step_valid = sample_history_light_relative_step(
+            previous_reservoir.smple.light_index,
+            receiver_slot,
+            receiver_token,
+            relative_light_step
+        );
     }
-    if (previous_has_sample && (!current_has_sample
-            || previous_reservoir.smple.light_index
-                != current_reservoir.smple.light_index)) {
+
+    // A world receiver needs the most reactive of the two representatives so
+    // a moving footprint cannot survive a stochastic representative switch.
+    // A Sable receiver instead follows the current representative's motion
+    // domain; mixing two unrelated domains here caused co-moving histories to
+    // collapse to the two-frame floor whenever ReSTIR changed representatives.
+    if (receiver_token == 0u && current_has_sample && previous_has_sample
+            && previous_reservoir.smple.light_index
+                != current_reservoir.smple.light_index) {
         float previous_step;
         bool previous_step_valid = sample_history_light_relative_step(
             previous_reservoir.smple.light_index,
@@ -288,26 +297,40 @@ int sample_history_direct_provenance(
             receiver_token,
             previous_step
         );
-        saw_motion_sample = true;
-        all_motion_samples_valid = all_motion_samples_valid
+        relative_light_step_valid = relative_light_step_valid
             && previous_step_valid;
-        if (previous_step_valid)
+        if (relative_light_step_valid)
             relative_light_step = max(relative_light_step, previous_step);
     }
-    relative_light_step_valid = saw_motion_sample && all_motion_samples_valid;
 
-    if (receiver_token != 0u && current_has_sample && previous_has_sample) {
-        Light current_light = direct_sample_get_light(current_reservoir.smple);
-        Light previous_light = direct_sample_get_light(previous_reservoir.smple);
-        same_sublevel_light = ph_sable_light_belongs_to_sublevel(
-            receiver_slot,
-            receiver_token,
-            current_light.position + world_offset
-        ) && ph_sable_light_belongs_to_sublevel(
-            receiver_slot,
-            receiver_token,
-            previous_light.position + world_offset
-        );
+    if (receiver_token != 0u) {
+        bool current_same_sublevel = false;
+        bool previous_same_sublevel = false;
+        if (current_has_sample) {
+            Light current_light = direct_sample_get_light(current_reservoir.smple);
+            current_same_sublevel = ph_sable_light_belongs_to_sublevel(
+                receiver_slot,
+                receiver_token,
+                current_light.position + world_offset
+            );
+        }
+        if (previous_has_sample) {
+            Light previous_light = direct_sample_get_light(previous_reservoir.smple);
+            previous_same_sublevel = ph_sable_light_belongs_to_sublevel(
+                receiver_slot,
+                receiver_token,
+                previous_light.position + world_offset
+            );
+        }
+
+        same_sublevel_light = current_has_sample
+            && previous_has_sample
+            && current_same_sublevel
+            && previous_same_sublevel;
+        sable_representative_mismatch = !current_has_sample
+            || !previous_has_sample
+            || current_reservoir.smple.light_index
+                != previous_reservoir.smple.light_index;
     }
 
     // A reservoir stores one stochastic representative of total direct light.
@@ -332,11 +355,13 @@ int sample_history_direct_provenance(
 float sample_history_accumulation_limit(SampleHistory history, SampleHistory smple) {
     bool involves_moving_light;
     bool same_sublevel_light;
+    bool sable_representative_mismatch;
     float relative_light_step;
     bool relative_light_step_valid;
     int direct_history = sample_history_direct_provenance(
         involves_moving_light,
         same_sublevel_light,
+        sable_representative_mismatch,
         relative_light_step,
         relative_light_step_valid
     );
@@ -366,11 +391,19 @@ float sample_history_accumulation_limit(SampleHistory history, SampleHistory smp
         return float(PH_RESTIR_ACCUMULATION_FRAMES);
 
     float maximum_history = float(PH_RESTIR_ACCUMULATION_FRAMES);
-    if (same_sublevel_light && relative_light_step_valid)
+    if (same_sublevel_light)
         return maximum_history;
 
     float history_limit;
-    if (relative_light_step_valid) {
+    if (sable_receiver && sable_representative_mismatch) {
+        // Reservoir identity changes are sampling noise, not a measured
+        // emitter/receiver velocity. Match v39's bounded ambiguity behavior
+        // until the same external representative persists for another frame.
+        history_limit = min(
+            maximum_history,
+            PH_SABLE_AMBIGUOUS_HISTORY_FRAMES
+        );
+    } else if (relative_light_step_valid) {
         history_limit = clamp(
             PH_RELATIVE_LIGHT_MAX_TRAIL_BLOCKS
                 / max(relative_light_step, 1e-6f),
