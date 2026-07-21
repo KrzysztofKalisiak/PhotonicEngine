@@ -20,6 +20,8 @@ layout(location = INDIRECT_RESERVOIR_2) out vec4 gi_reservoir_2;
 const float ph_spatial_max_receiver_distance_sq = 0.5625f;
 const float ph_spatial_max_plane_distance = 0.05f;
 const float ph_spatial_min_normal_alignment = 0.99f;
+const float ph_spatial_max_sable_motion_sq = 1e-6f;
+const float ph_spatial_min_sable_motion_normal_alignment = 0.9999f;
 
 bool ph_spatial_is_finite(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
@@ -37,11 +39,31 @@ bool ph_spatial_current_receiver_can_reuse() {
     if (receiver_token == 0u)
         return receiver_slot < 0;
 
-    // Spatial candidates come from this frame. Rigid world motion therefore
-    // does not invalidate two receivers carrying the same live Sable identity.
-    return receiver_slot >= 0
-        && receiver_slot < ph_sable_sublevel_count
-        && receiver_token == ph_sable_identity_token(receiver_slot);
+    if (receiver_slot < 0
+            || receiver_slot >= ph_sable_sublevel_count
+            || receiver_token != ph_sable_identity_token(receiver_slot))
+        return false;
+
+    // A screen-space neighbour changes receiver identity as a Sable surface
+    // moves across pixels. Keep spatial reuse for stationary Sable geometry;
+    // motion-reprojected temporal reuse remains active while it is moving.
+    FragMotion motion;
+    frag_motion_load(motion, frag_tex_coord);
+    vec3 current_world_pos = frag_player_pos + cameraPosition;
+    vec3 previous_world_pos = motion.previous_player_pos
+        + previousCameraPosition;
+    if (!ph_spatial_is_finite(current_world_pos)
+            || !ph_spatial_is_finite(previous_world_pos)
+            || !ph_spatial_is_finite(motion.previous_geo_normal))
+        return false;
+
+    vec3 world_motion = current_world_pos - previous_world_pos;
+    float normal_alignment = dot(
+        frag_geo_normal,
+        motion.previous_geo_normal
+    );
+    return dot(world_motion, world_motion) <= ph_spatial_max_sable_motion_sq
+        && normal_alignment >= ph_spatial_min_sable_motion_normal_alignment;
 }
 
 bool ph_spatial_receiver_matches(FragData sample_frag) {
@@ -180,7 +202,21 @@ bool ph_spatial_direct_reservoir_merge(
 
 void main() {
     setup_frag_data(31);
-    if (!frag_is_in_world) discard;
+    if (!frag_is_in_world) {
+#if defined PH_ENABLE_BLOCKLIGHT
+        direct_reservoir_encode(direct_reservoir_empty(), di_reservoir_0);
+#endif
+#if defined PH_ENABLE_RESTIR_GI
+        IndirectReservoir empty_indirect = indirect_reservoir_empty();
+        indirect_reservoir_encode(
+            empty_indirect,
+            gi_reservoir_0,
+            gi_reservoir_1,
+            gi_reservoir_2
+        );
+#endif
+        return;
+    }
 
 #if defined PH_ENABLE_BLOCKLIGHT
     float direct_sample_weight = 0.0f;
