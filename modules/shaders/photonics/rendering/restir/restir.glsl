@@ -425,10 +425,6 @@ float sample_history_accumulation_limit(vec4 stream_history, bool external_strea
     bool reactive = moving_receiver
         || involves_moving_light
         || (relative_light_step_valid && relative_light_step > 1e-6f);
-#if defined PH_ENABLE_BLOCKLIGHT
-    reactive = reactive
-        || (external_stream && ph_moving_light_count > 0);
-#endif
     if (!reactive)
         return float(PH_RESTIR_ACCUMULATION_FRAMES);
 
@@ -464,12 +460,10 @@ float sample_history_accumulation_limit(vec4 stream_history, bool external_strea
                 PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES
             );
     } else {
-        bool moving_external_stream = involves_moving_light;
-#if defined PH_ENABLE_BLOCKLIGHT
-        moving_external_stream = moving_external_stream
-            || (external_stream && ph_moving_light_count > 0);
-#endif
-        history_limit = moving_external_stream
+        // Motion from an unrelated Sable domain must not shorten this pixel's
+        // external history. The current and reprojected representatives carry
+        // the motion-domain evidence used here.
+        history_limit = involves_moving_light
             ? PH_RELATIVE_LIGHT_FALLBACK_HISTORY_FRAMES
             : (direct_history == DIRECT_HISTORY_VERIFIED ? 12.0f : 8.0f);
     }

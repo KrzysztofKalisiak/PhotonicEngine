@@ -89,8 +89,10 @@ void main() {
     if (direct_reservoir_is_reusable(direct_result))
         direct_reservoir_finalize_weight(direct_result, direct_sample_weight);
     if (!direct_reservoir_is_reusable(direct_result)
-            && direct_reservoir_has_sample(direct_fallback))
+            && direct_reservoir_has_sample(direct_fallback)) {
         direct_result = direct_fallback;
+        direct_reservoir_clamp_samples(direct_result);
+    }
 
     direct_reservoir_encode(direct_result, di_reservoir_0);
 
