@@ -175,6 +175,10 @@ void direct_reservoir_validate_visiblity(inout DirectReservoir reservoir, vec3 s
     if (direct_sample_is_empty(reservoir.smple)) return;
 
     Light light = direct_sample_get_light(reservoir.smple);
+    bool same_receiver_domain = direct_sample_matches_receiver_domain(
+        reservoir.smple,
+        frag_data_sublevel_token(_frag_data)
+    );
 
     if (!ph_sable_same_sublevel_light_visible(
             frag_data_sublevel_slot(_frag_data),
@@ -187,6 +191,9 @@ void direct_reservoir_validate_visiblity(inout DirectReservoir reservoir, vec3 s
         reservoir.weight = 0.0f;
         return;
     }
+
+    if (same_receiver_domain)
+        return;
 
     vec3 to_light = light.position - sample_pos;
 
@@ -280,6 +287,14 @@ bool direct_sample_get_final_unweighted_color(
             direct_sample_get_temporal_domain(smple),
             light.position + world_offset
     )) return false;
+
+    if (direct_sample_matches_receiver_domain(
+            smple,
+            frag_data_sublevel_token(_frag_data)
+    )) {
+        result = sampled_color;
+        return true;
+    }
 
     vec3 to_light = trace_position - sample_pos;
     vec3 tint_color;
