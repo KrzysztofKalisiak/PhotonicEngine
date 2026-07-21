@@ -93,14 +93,15 @@ int direct_sample_get_temporal_domain(DirectSample smple) {
     return light_list_get_temporal_domain(smple.light_index);
 }
 
-// History motion is receiver-relative. A light attached to the receiver's
-// rigid sublevel is stable even though both move through world space.
+// History motion is receiver-relative. Only lights in the receiver's motion
+// domain are stable: world lights are stable for world receivers, while a
+// Sable receiver keeps only lights attached to its own rigid sublevel here.
 bool direct_sample_uses_external_history(
     DirectSample smple,
     uint receiver_token
 ) {
     int light_domain = direct_sample_get_temporal_domain(smple);
-    return light_domain > 0 && uint(light_domain) != receiver_token;
+    return uint(max(light_domain, 0)) != receiver_token;
 }
 
 vec3 direct_sample_get_color(

@@ -409,10 +409,21 @@ float sample_history_accumulation_limit(vec4 stream_history, bool external_strea
         relative_light_step,
         relative_light_step_valid
     );
+    bool sable_receiver = frag_data_sublevel_token(_frag_data) != 0u;
+
     if (direct_history == DIRECT_HISTORY_MISMATCH)
         return 0.0f;
 
-    bool sable_receiver = frag_data_sublevel_token(_frag_data) != 0u;
+#if !defined PH_ENABLE_RESTIR_GI
+    // The stable stream of a Sable receiver now contains only samples whose
+    // motion-domain token matches that receiver. Its local lighting is rigidly
+    // invariant even when ReSTIR selects an external representative for one or
+    // more frames. In combined-GI mode this target also carries world-relative
+    // bounced light, so that mode keeps the conservative evidence-based limit.
+    if (sable_receiver && !external_stream)
+        return float(PH_RESTIR_ACCUMULATION_FRAMES);
+#endif
+
     bool moving_receiver = false;
     if (sable_receiver) {
         FragMotion motion;
