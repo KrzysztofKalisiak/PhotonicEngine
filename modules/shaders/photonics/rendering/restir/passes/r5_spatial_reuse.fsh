@@ -103,8 +103,11 @@ bool ph_spatial_direct_light_matches_receiver(DirectReservoir reservoir) {
         light_list_size
     );
     uint receiver_token = frag_data_sublevel_token(_frag_data);
-    if (receiver_token == 0u)
-        return light_index >= priority_count;
+    if (receiver_token == 0u) {
+        // Receiver matching remains world-only. Any current-generation light
+        // can therefore be reused here, including moving external Sable lights.
+        return true;
+    }
 
     // The priority prefix contains both moving and stationary external lights.
     // The emissive-cell ownership test narrows it to this receiver's sublevel.
