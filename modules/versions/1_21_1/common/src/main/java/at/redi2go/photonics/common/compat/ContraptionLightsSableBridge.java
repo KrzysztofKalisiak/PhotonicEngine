@@ -41,7 +41,7 @@ public final class ContraptionLightsSableBridge {
     private static final int MAX_GEOMETRY_VOLUME = 300_000;
     private static final int MAX_GEOMETRY_ATLAS_DEPTH = 512;
     private static final double STATIC_LIGHT_POSITION_EPSILON_SQUARED = 1.0e-6;
-    private static final int MOVING_LIGHT_HOLD_FRAMES = 3;
+    private static final long MOVING_LIGHT_HOLD_NANOS = 250_000_000L;
 
     private static Access access;
     private static boolean unavailable;
@@ -64,7 +64,8 @@ public final class ContraptionLightsSableBridge {
     private static final Map<UUID, Integer> motionTokens = new HashMap<>();
     private static final Map<UUID, GeometryRevisionSnapshot> geometryRevisionSnapshots = new HashMap<>();
     private static final Map<SableLightIdentity, Vector3d> publishedLightPositions = new HashMap<>();
-    private static final Map<SableLightIdentity, Integer> movingLightHoldFrames = new HashMap<>();
+    private static final Map<SableLightIdentity, Vector3d> movementReferencePositions = new HashMap<>();
+    private static final Map<SableLightIdentity, Long> movingLightHoldUntilNanos = new HashMap<>();
     private static final Map<SableLightIdentity, BlockState> lastValidLightStates = new HashMap<>();
 
     private static IGpuTexture3D geometryTexture;
@@ -106,6 +107,7 @@ public final class ContraptionLightsSableBridge {
             int recoveredMaterials = 0;
             int actuallyMovingLights = 0;
             String firstValidationIssue = null;
+            long captureTimeNanos = System.nanoTime();
 
             for (var mapEntry : states.entrySet()) {
                 if (!(mapEntry.getKey() instanceof UUID uniqueId))
@@ -198,20 +200,22 @@ public final class ContraptionLightsSableBridge {
                     Vector3d previousWorldPosition = previousPositionValid
                             ? new Vector3d(publishedPosition)
                             : new Vector3d(worldPosition);
-                    boolean moved = !previousPositionValid
-                            || publishedPosition.distanceSquared(worldPosition)
+                    Vector3d movementReference = movementReferencePositions.get(identity);
+                    boolean moved = movementReference == null
+                            || movementReference.distanceSquared(worldPosition)
                             > STATIC_LIGHT_POSITION_EPSILON_SQUARED;
-                    if (!moved)
-                        worldPosition.set(publishedPosition);
+                    if (moved)
+                        movementReferencePositions.put(identity, new Vector3d(worldPosition));
 
-                    int movingFrames = moved
-                            ? MOVING_LIGHT_HOLD_FRAMES
-                            : Math.max(0, movingLightHoldFrames.getOrDefault(identity, 0) - 1);
-                    if (movingFrames > 0) {
-                        movingLightHoldFrames.put(identity, movingFrames);
+                    long movingUntilNanos = moved
+                            ? captureTimeNanos + MOVING_LIGHT_HOLD_NANOS
+                            : movingLightHoldUntilNanos.getOrDefault(identity, 0L);
+                    boolean moving = moved || captureTimeNanos < movingUntilNanos;
+                    if (moving) {
+                        movingLightHoldUntilNanos.put(identity, movingUntilNanos);
                         actuallyMovingLights++;
                     } else {
-                        movingLightHoldFrames.remove(identity);
+                        movingLightHoldUntilNanos.remove(identity);
                     }
                     publishedLightPositions.put(identity, new Vector3d(worldPosition));
 
@@ -222,7 +226,7 @@ public final class ContraptionLightsSableBridge {
                             apiBlockState,
                             lightInfo,
                             identity,
-                            movingFrames > 0,
+                            moving,
                             previousWorldPosition,
                             previousPositionValid,
                             temporalDomainToken
@@ -232,7 +236,8 @@ public final class ContraptionLightsSableBridge {
             }
 
             publishedLightPositions.keySet().retainAll(seenLightIdentities);
-            movingLightHoldFrames.keySet().retainAll(seenLightIdentities);
+            movementReferencePositions.keySet().retainAll(seenLightIdentities);
+            movingLightHoldUntilNanos.keySet().retainAll(seenLightIdentities);
             lastValidLightStates.keySet().retainAll(seenLightIdentities);
             ExternalLightList.submit(lights, replacedBlockPositions);
             logCapture(
@@ -289,7 +294,8 @@ public final class ContraptionLightsSableBridge {
         motionTokens.clear();
         geometryRevisionSnapshots.clear();
         publishedLightPositions.clear();
-        movingLightHoldFrames.clear();
+        movementReferencePositions.clear();
+        movingLightHoldUntilNanos.clear();
         lastValidLightStates.clear();
         nextMotionToken = 1;
         if (lastUploadedLights > 0)

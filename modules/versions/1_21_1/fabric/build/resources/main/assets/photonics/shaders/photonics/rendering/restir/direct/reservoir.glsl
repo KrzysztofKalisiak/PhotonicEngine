@@ -43,6 +43,11 @@ bool direct_reservoir_has_sample(DirectReservoir reservoir) {
         && !direct_reservoir_is_nan(reservoir);
 }
 
+bool direct_reservoir_has_batch(DirectReservoir reservoir) {
+    return reservoir.total_samples > 0.0f
+        && !direct_reservoir_is_nan(reservoir);
+}
+
 // Zero is the explicit final-visibility rejection marker. Positive weights,
 // including very dim valid samples, remain eligible for reuse.
 bool direct_reservoir_is_reusable(DirectReservoir reservoir) {
@@ -84,8 +89,11 @@ bool direct_reservoir_update(
     float weight,
     float samples
 ) {
-    reservoir.weight += weight;
     reservoir.total_samples += samples;
+    if (weight <= 0.0f || isnan(weight) || isinf(weight))
+        return false;
+
+    reservoir.weight += weight;
 
     float required_rng = weight / reservoir.weight;
     if (ph_rand_next_float(frag_rnd_state) < required_rng) {
@@ -103,6 +111,15 @@ bool direct_reservoir_merge(
 ) {
     if (!direct_reservoir_has_sample(other))
         return false;
+
+    // A Sable receiver's reservoir estimates only lights outside its own
+    // motion domain. Reject stale representatives produced while that pixel
+    // was unclassified or belonged to another receiver; their all-light
+    // normalization cannot be converted into an external-only batch.
+    if (direct_sample_matches_receiver_domain(
+            other.smple,
+            frag_data_sublevel_token(_frag_data)
+    )) return false;
 
     // A visibility-rejected reservoir represents a valid zero-contribution
     // batch. Its M must remain in the estimator denominator; dropping it lets
@@ -127,6 +144,23 @@ bool direct_reservoir_merge(
         return true;
     }
 
+    return false;
+}
+
+bool direct_reservoir_merge_current_batch(
+    inout DirectReservoir result,
+    DirectReservoir current,
+    inout float sample_weight
+) {
+    if (direct_reservoir_has_sample(current))
+        return direct_reservoir_merge(result, current, sample_weight);
+
+    // The fresh same-pixel proposal batch can legitimately contain only
+    // zero-target candidates after the receiver-domain partition. Its M still
+    // belongs in this frame's estimator denominator. Identity-less batches
+    // are deliberately not transferred from temporal or spatial neighbors.
+    if (direct_reservoir_has_batch(current))
+        result.total_samples += current.total_samples;
     return false;
 }
 
@@ -169,6 +203,13 @@ void direct_reservoir_finalize_weight(
 ) {
     if (sample_weight <= 0.0f || isnan(sample_weight) || isinf(sample_weight) ||
         reservoir.total_samples <= 0.0f || direct_reservoir_is_nan(reservoir)) {
+        if (reservoir.total_samples > 0.0f
+                && reservoir.weight == 0.0f
+                && !isnan(reservoir.total_samples)
+                && !isinf(reservoir.total_samples)) {
+            reservoir.smple = direct_sample_empty();
+            return;
+        }
         reservoir = direct_reservoir_empty();
         return;
     }
@@ -199,6 +240,69 @@ vec3 direct_reservoir_get_unshadowed_color(
     return direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal) * reservoir.weight;
 }
 
+bool direct_sample_get_final_unweighted_color(
+    DirectSample smple,
+    vec3 sample_pos,
+    vec3 geo_normal,
+    vec3 tex_normal,
+    out vec3 result
+) {
+    result = vec3(0.0f);
+    if (direct_sample_is_empty(smple))
+        return false;
+
+    Light light = direct_sample_get_light(smple);
+    vec3 sampled_color = direct_sample_get_color(
+        smple,
+        light,
+        sample_pos,
+        geo_normal,
+        tex_normal
+    );
+    if (!direct_color_is_finite(sampled_color)
+            || direct_sample_weight(sampled_color) <= 0.0f)
+        return false;
+
+#ifdef PH_DISABLE_RESTIR_VISIBILITY
+    result = sampled_color;
+    return true;
+#else
+    vec3 trace_position = light.position;
+#ifdef PH_RESTIR_SOFT_SHADOWS
+    ph_rand_sample_position(frag_rnd_state, trace_position, sample_pos);
+#endif
+
+    if (!ph_sable_same_sublevel_light_visible(
+            frag_data_sublevel_slot(_frag_data),
+            frag_data_sublevel_token(_frag_data),
+            sample_pos + world_offset,
+            geo_normal,
+            direct_sample_get_temporal_domain(smple),
+            light.position + world_offset
+    )) return false;
+
+    vec3 to_light = trace_position - sample_pos;
+    vec3 tint_color;
+    float light_transmittance;
+    if (!trace_light_vis(
+            sample_pos,
+            geo_normal,
+            to_light,
+            trace_position,
+            PH_DIRECT_VISIBILITY_ITERATIONS,
+            tint_color,
+            light_transmittance
+    )) return false;
+
+    result = sampled_color * tint_color * light_transmittance;
+    if (!direct_color_is_finite(result)) {
+        result = vec3(0.0f);
+        return false;
+    }
+    return true;
+#endif
+}
+
 vec3 direct_reservoir_get_final_color(
     inout DirectReservoir reservoir,
     vec3 sample_pos,
@@ -208,47 +312,17 @@ vec3 direct_reservoir_get_final_color(
     if (direct_sample_is_empty(reservoir.smple))
         return vec3(0.0f);
 
-    Light light = direct_sample_get_light(reservoir.smple);
-
-#ifdef PH_DISABLE_RESTIR_VISIBILITY
-    vec3 result = direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal) * reservoir.weight;
-    if (!direct_color_is_finite(result)) {
-        reservoir = direct_reservoir_empty();
-        return vec3(0.0f);
-    }
-    return result;
-#else
-#ifdef PH_RESTIR_SOFT_SHADOWS
-    vec3 trace_position = light.position;
-    ph_rand_sample_position(frag_rnd_state, trace_position, sample_pos);
-#else
-#define trace_position light.position
-#endif
-
-    if (!ph_sable_same_sublevel_light_visible(
-            frag_data_sublevel_slot(_frag_data),
-            frag_data_sublevel_token(_frag_data),
-            sample_pos + world_offset,
+    vec3 final_color;
+    if (!direct_sample_get_final_unweighted_color(
+            reservoir.smple,
+            sample_pos,
             geo_normal,
-            direct_sample_get_temporal_domain(reservoir.smple),
-            light.position + world_offset
+            tex_normal,
+            final_color
     )) {
         reservoir.weight = 0.0f;
         return vec3(0.0f);
     }
-
-    vec3 to_light = trace_position - sample_pos;
-
-    vec3 tint_color;
-    float light_transmittance;
-
-    if (!trace_light_vis(sample_pos, geo_normal, to_light, trace_position, PH_DIRECT_VISIBILITY_ITERATIONS, tint_color, light_transmittance)) {
-        reservoir.weight = 0.0f;
-        return vec3(0.0f);
-    }
-
-    vec3 sampled_color = direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal);
-    vec3 final_color = sampled_color * tint_color.rgb * light_transmittance;
 
     vec3 result = final_color * reservoir.weight;
     if (!direct_color_is_finite(result)) {
@@ -256,7 +330,6 @@ vec3 direct_reservoir_get_final_color(
         return vec3(0.0f);
     }
     return result;
-#endif
 }
 
 void direct_reservoir_encode(DirectReservoir reservoir, out vec3 data0) {

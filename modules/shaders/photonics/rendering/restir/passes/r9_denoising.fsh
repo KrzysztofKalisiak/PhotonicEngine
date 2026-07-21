@@ -56,14 +56,16 @@ void main() {
     bool center_has_direct_sample = false;
     int center_direct_light = -1;
     bool center_direct_visible = false;
+    float center_local_signature = 0.0f;
 #if defined PH_ENABLE_BLOCKLIGHT
     DirectReservoir center_reservoir = direct_reservoir_empty();
     center_has_direct_sample = direct_reservoir_load(center_reservoir, frag_tex_coord)
         && direct_reservoir_has_sample(center_reservoir);
+    vec2 center_state;
+    center_direct_visible = direct_history_load(center_state, frag_tex_coord);
+    center_local_signature = center_state.y;
     if (center_has_direct_sample) {
         center_direct_light = center_reservoir.smple.light_index;
-        vec2 center_state;
-        center_direct_visible = direct_history_load(center_state, frag_tex_coord);
     }
 #endif
 
@@ -86,7 +88,13 @@ void main() {
             continue;
 
 #if defined PH_ENABLE_BLOCKLIGHT
-        if (center_has_direct_sample) {
+        if (frag_data_sublevel_token(_frag_data) != 0u) {
+            vec2 sample_state;
+            direct_history_load(sample_state, p);
+            if (any(isnan(sample_state)) || any(isinf(sample_state))
+                    || abs(sample_state.y - center_local_signature) > 0.5f)
+                continue;
+        } else if (center_has_direct_sample) {
             DirectReservoir sample_reservoir = direct_reservoir_empty();
             if (direct_reservoir_load(sample_reservoir, p)
                     && direct_reservoir_has_sample(sample_reservoir)

@@ -283,17 +283,19 @@ int sample_history_direct_provenance(
     DirectReservoir previous_reservoir = direct_reservoir_empty();
     bool previous_loaded = false;
     bool previous_visible = false;
+    bool previous_state_loaded = false;
+    vec2 previous_state = vec2(0.0f);
     ivec2 previous_texel;
     if (sample_history_reproject_nearest_texel(previous_texel)) {
         previous_loaded = direct_reservoir_load_previous(
             previous_reservoir,
             previous_texel
         );
-        vec2 previous_state;
         previous_visible = direct_history_load_previous(
             previous_state,
             previous_texel
         );
+        previous_state_loaded = true;
     }
     bool previous_has_sample = previous_loaded
         && direct_reservoir_has_sample(previous_reservoir);
@@ -304,6 +306,13 @@ int sample_history_direct_provenance(
         );
         previous_has_sample = previous_is_external == external_stream;
     }
+
+    if (receiver_token != 0u && !external_stream
+            && previous_state_loaded
+            && (any(isnan(current_state)) || any(isinf(current_state))
+                || any(isnan(previous_state)) || any(isinf(previous_state))
+                || abs(current_state.y - previous_state.y) > 0.5f))
+        return DIRECT_HISTORY_MISMATCH;
 
     if (current_has_sample)
         involves_moving_light = current_reservoir.smple.light_index

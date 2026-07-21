@@ -68,7 +68,11 @@ void main() {
         direct_fallback = temp_direct;
         direct_fallback.weight = 0.0f;
     }
-    direct_reservoir_merge(direct_result, temp_direct, direct_sample_weight);
+    direct_reservoir_merge_current_batch(
+        direct_result,
+        temp_direct,
+        direct_sample_weight
+    );
 
     // Only reuse a reservoir that survived the final visibility check in the
     // previous frame. A zero-weight reservoir retains identity for the

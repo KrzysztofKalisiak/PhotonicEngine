@@ -93,6 +93,14 @@ int direct_sample_get_temporal_domain(DirectSample smple) {
     return light_list_get_temporal_domain(smple.light_index);
 }
 
+bool direct_sample_matches_receiver_domain(
+    DirectSample smple,
+    uint receiver_token
+) {
+    return receiver_token != 0u
+        && direct_sample_get_temporal_domain(smple) == int(receiver_token);
+}
+
 // History motion is receiver-relative. Only lights in the receiver's motion
 // domain are stable: world lights are stable for world receivers, while a
 // Sable receiver keeps only lights attached to its own rigid sublevel here.

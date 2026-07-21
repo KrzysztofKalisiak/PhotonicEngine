@@ -52,8 +52,47 @@ void main() {
 #endif
 
 #if defined PH_ENABLE_BLOCKLIGHT
+    uint receiver_token = frag_data_sublevel_token(_frag_data);
+    int local_light_count = 0;
+    int local_visible_light_count = 0;
+    if (receiver_token != 0u) {
+        vec3 local_direct_lighting = vec3(0.0f);
+        int priority_count = clamp(
+            ph_priority_light_count,
+            0,
+            light_list_size
+        );
+        for (int light_index = 0; light_index < priority_count; light_index++) {
+            DirectSample local_sample = DirectSample(light_index);
+            if (!direct_sample_matches_receiver_domain(
+                    local_sample,
+                    receiver_token
+            )) continue;
+            local_light_count++;
+
+            vec3 local_sample_color;
+            if (direct_sample_get_final_unweighted_color(
+                    local_sample,
+                    frag_rt_pos,
+                    frag_geo_normal,
+                    frag_is_hand ? frag_geo_normal : frag_tex_normal,
+                    local_sample_color
+            )) {
+                local_direct_lighting += local_sample_color;
+                local_visible_light_count++;
+            }
+        }
+        lighting.rgb += local_direct_lighting;
+    }
+
     DirectReservoir direct_reservoir = direct_reservoir_empty();
     direct_reservoir_load(direct_reservoir, frag_tex_coord);
+    if (direct_reservoir_has_sample(direct_reservoir)
+            && direct_sample_matches_receiver_domain(
+                direct_reservoir.smple,
+                receiver_token
+            )) direct_reservoir = direct_reservoir_empty();
+
     vec3 direct_lighting = direct_reservoir_get_final_color(
         direct_reservoir,
         frag_rt_pos,
@@ -63,7 +102,7 @@ void main() {
     if (direct_reservoir_has_sample(direct_reservoir)
             && direct_sample_uses_external_history(
                 direct_reservoir.smple,
-                frag_data_sublevel_token(_frag_data)
+                receiver_token
             ))
         external_lighting.rgb = direct_lighting;
     else
@@ -71,5 +110,16 @@ void main() {
 
     direct_reservoir_encode(direct_reservoir, di_reservoir_0);
     direct_history_encode(direct_reservoir, di_history_state);
+    if (receiver_token != 0u) {
+#ifdef PH_RESTIR_SOFT_SHADOWS
+        int local_visibility_signature = 0;
+#else
+        int local_visibility_signature = min(local_visible_light_count, 4095);
+#endif
+        di_history_state.y = float(
+            min(local_light_count, 4095) * 4096
+                + local_visibility_signature
+        );
+    }
 #endif
 }

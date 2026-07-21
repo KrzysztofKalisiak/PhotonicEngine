@@ -99,11 +99,6 @@ bool ph_spatial_direct_light_matches_receiver(DirectReservoir reservoir) {
     if (light_index < 0 || light_index >= light_list_size)
         return false;
 
-    int priority_count = clamp(
-        ph_priority_light_count,
-        0,
-        light_list_size
-    );
     uint receiver_token = frag_data_sublevel_token(_frag_data);
     if (receiver_token == 0u) {
         // Receiver matching remains world-only. Any current-generation light
@@ -111,13 +106,12 @@ bool ph_spatial_direct_light_matches_receiver(DirectReservoir reservoir) {
         return true;
     }
 
-    // The priority prefix contains both moving and stationary external lights.
-    // Their explicit temporal-domain token identifies the owning sublevel.
-    if (light_index >= priority_count)
-        return false;
-
-    return direct_sample_get_temporal_domain(reservoir.smple)
-        == int(receiver_token);
+    // Same-domain lights are evaluated exactly in r6. Every reservoir built
+    // for this receiver therefore estimates the same external-only target.
+    return !direct_sample_matches_receiver_domain(
+        reservoir.smple,
+        receiver_token
+    );
 }
 
 bool ph_spatial_direct_reservoir_merge(
@@ -125,6 +119,11 @@ bool ph_spatial_direct_reservoir_merge(
     DirectReservoir other,
     inout float sample_weight
 ) {
+    if (direct_sample_matches_receiver_domain(
+            other.smple,
+            frag_data_sublevel_token(_frag_data)
+    )) return false;
+
     float effective_samples = min(
         other.total_samples,
         float(PH_RESTIR_INITIAL_SAMPLES)
@@ -213,7 +212,11 @@ void main() {
         direct_fallback = temp_direct;
         direct_fallback.weight = 0.0f;
     }
-    direct_reservoir_merge(direct_result, temp_direct, direct_sample_weight);
+    direct_reservoir_merge_current_batch(
+        direct_result,
+        temp_direct,
+        direct_sample_weight
+    );
 #endif
 
 
