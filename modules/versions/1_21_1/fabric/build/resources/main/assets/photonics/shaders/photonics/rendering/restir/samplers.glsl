@@ -1,18 +1,14 @@
-// v54 diagnostic: isolate temporal accumulation from SVGF while keeping
-// baseline and exact Sable-local controls in the same capture.
+// v55 diagnostic: isolate the current ReSTIR estimate from temporal
+// accumulation while keeping baseline and exact Sable-local controls.
 #define PH_RESTIR_STREAM_SPLIT_DIAGNOSTIC
 
+//ph_required: uniform sampler2D restir_lighting;
 #if PH_RESTIR_DENOISER_PASSES != 0
 //ph_required: uniform sampler2D denoise_result;
-//ph_required: uniform sampler2D restir_lighting;
+#endif
 #if defined PH_ENABLE_BLOCKLIGHT
 //ph_required: uniform sampler2D restir_external_lighting;
-#endif
-#else
-//ph_required: uniform sampler2D restir_lighting;
-#if defined PH_ENABLE_BLOCKLIGHT
-//ph_required: uniform sampler2D restir_external_lighting;
-#endif
+//ph_required: uniform sampler2D restir_current_lighting;
 #endif
 
 #if defined PH_ENABLE_BLOCKLIGHT
@@ -37,20 +33,20 @@ vec3 sample_photonics_direct(vec2 tex_coord) {
     vec4 external_lighting = texture(restir_external_lighting, tex_coord);
     result += external_lighting.rgb / max(external_lighting.a, 1.0f);
     #endif
+    vec3 accumulated_result = result;
     #endif
 
     #if defined PH_ENABLE_BLOCKLIGHT
+    vec3 current_result = texture(restir_current_lighting, tex_coord).rgb;
     vec3 local_lighting = texture(restir_local_lighting, tex_coord).rgb;
 
     #ifdef PH_RESTIR_STREAM_SPLIT_DIAGNOSTIC
     if (tex_coord.x < 0.25f)
         return vec3(0.0f);
-    #if PH_RESTIR_DENOISER_PASSES != 0
     if (tex_coord.x < 0.5f)
-        return accumulated_result;
-    #endif
+        return current_result;
     if (tex_coord.x < 0.75f)
-        return result;
+        return accumulated_result;
     return local_lighting;
     #else
     result += local_lighting;
