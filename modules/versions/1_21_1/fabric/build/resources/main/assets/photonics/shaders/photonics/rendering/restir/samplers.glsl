@@ -15,6 +15,10 @@
 //ph_required: uniform sampler2D other_handheld;
 #endif
 
+// v53 diagnostic: compare post-Photon lighting against the accumulated and
+// current-frame Sable-local Photonics streams in one capture.
+#define PH_RESTIR_STREAM_SPLIT_DIAGNOSTIC
+
 vec3 sample_photonics_direct(vec2 tex_coord) {
     #if PH_RESTIR_DENOISER_PASSES != 0
     vec3 result = texture(denoise_result, tex_coord).rgb;
@@ -28,7 +32,17 @@ vec3 sample_photonics_direct(vec2 tex_coord) {
     #endif
 
     #if defined PH_ENABLE_BLOCKLIGHT
-    result += texture(restir_local_lighting, tex_coord).rgb;
+    vec3 local_lighting = texture(restir_local_lighting, tex_coord).rgb;
+
+    #ifdef PH_RESTIR_STREAM_SPLIT_DIAGNOSTIC
+    if (tex_coord.x < (1.0f / 3.0f))
+        return vec3(0.0f);
+    if (tex_coord.x < (2.0f / 3.0f))
+        return result;
+    return local_lighting;
+    #else
+    result += local_lighting;
+    #endif
     #endif
     return result;
 }

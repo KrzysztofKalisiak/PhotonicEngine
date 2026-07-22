@@ -35,7 +35,7 @@ public abstract class SableClientSubLevelSkyLightMixin {
         if (this.photonics$frozenSkyLightScale == Integer.MIN_VALUE) {
             this.photonics$frozenSkyLightScale = cir.getReturnValue();
             Photonics.LOGGER.info(
-                    "Photonics v52 diagnostic froze one Sable sublevel skylight getter at {}",
+                    "Photonics v53 diagnostic froze one Sable sublevel skylight getter at {}",
                     this.photonics$frozenSkyLightScale
             );
         }

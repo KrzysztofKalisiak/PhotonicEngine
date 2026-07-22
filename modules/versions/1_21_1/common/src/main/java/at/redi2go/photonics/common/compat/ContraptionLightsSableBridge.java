@@ -771,7 +771,7 @@ public final class ContraptionLightsSableBridge {
         if (!skyLightDiagnosticsLogged) {
             skyLightDiagnosticsLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v52 Sable skylight diagnostics active: source=ClientSubLevel.latestSkyLightScale, freezeGetter={}",
+                    "Photonics v53 Sable skylight diagnostics active: source=ClientSubLevel.latestSkyLightScale, freezeGetter={}",
                     Boolean.getBoolean(FREEZE_SABLE_SKYLIGHT_PROPERTY)
             );
         }
@@ -781,7 +781,7 @@ public final class ContraptionLightsSableBridge {
             return;
 
         Photonics.LOGGER.info(
-                "Photonics v52 Sable skylight transition: subLevel={}, scale={} -> {}, logicalY={} (cell {}), renderY={} (cell {}), cameraY={} (cell {})",
+                "Photonics v53 Sable skylight transition: subLevel={}, scale={} -> {}, logicalY={} (cell {}), renderY={} (cell {}), cameraY={} (cell {})",
                 uniqueId,
                 previous == null ? "initial" : previous,
                 scale,
