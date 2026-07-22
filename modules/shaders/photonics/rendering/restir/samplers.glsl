@@ -1,4 +1,4 @@
-// v56 diagnostic: verify systematic world-light proposals in the current
+// v57 diagnostic: verify extended Sable temporal reservoirs in the current
 // ReSTIR estimate while keeping temporal and exact Sable-local controls.
 #define PH_RESTIR_STREAM_SPLIT_DIAGNOSTIC
 

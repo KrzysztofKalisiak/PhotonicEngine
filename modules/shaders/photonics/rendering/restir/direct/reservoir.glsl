@@ -164,11 +164,21 @@ bool direct_reservoir_merge_current_batch(
     return false;
 }
 
-void direct_reservoir_clamp_samples(inout DirectReservoir reservoir) {
-    if (reservoir.total_samples <= max_direct_reservoir_samples) return;
+void direct_reservoir_clamp_samples_to(
+    inout DirectReservoir reservoir,
+    float maximum_samples
+) {
+    if (reservoir.total_samples <= maximum_samples) return;
 
-    reservoir.weight *= max_direct_reservoir_samples / reservoir.total_samples;
-    reservoir.total_samples = max_direct_reservoir_samples;
+    reservoir.weight *= maximum_samples / reservoir.total_samples;
+    reservoir.total_samples = maximum_samples;
+}
+
+void direct_reservoir_clamp_samples(inout DirectReservoir reservoir) {
+    direct_reservoir_clamp_samples_to(
+        reservoir,
+        max_direct_reservoir_samples
+    );
 }
 
 void direct_reservoir_validate_visiblity(inout DirectReservoir reservoir, vec3 sample_pos, vec3 geo_normal) {

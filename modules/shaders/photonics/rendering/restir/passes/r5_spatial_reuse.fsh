@@ -272,7 +272,18 @@ void main() {
 
 #if defined PH_ENABLE_BLOCKLIGHT
     if (direct_reservoir_is_reusable(direct_result)) {
-        direct_reservoir_clamp_samples(direct_result);
+        // Temporal reuse re-evaluates the representative light and visibility
+        // at the current receiver, so retaining more of that reservoir does
+        // not trail old radiance. Sable receivers need the full temporal cap
+        // because their final external-light accumulation is intentionally
+        // short while moving. World receivers keep the upstream spatial cap.
+        float output_sample_cap = frag_data_sublevel_token(_frag_data) != 0u
+            ? max_direct_temporal_samples
+            : max_direct_reservoir_samples;
+        direct_reservoir_clamp_samples_to(
+            direct_result,
+            output_sample_cap
+        );
         direct_reservoir_finalize_weight(direct_result, direct_sample_weight);
     }
     if (!direct_reservoir_is_reusable(direct_result)
