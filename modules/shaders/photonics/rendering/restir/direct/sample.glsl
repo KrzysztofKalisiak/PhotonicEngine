@@ -29,9 +29,9 @@ int direct_priority_sample_count() {
 }
 
 DirectSample direct_sample_stratified(
-    inout uint rnd_state,
     int candidate_index,
-    int priority_offset
+    int priority_offset,
+    float suffix_phase
 ) {
     int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
     int priority_samples = direct_priority_sample_count();
@@ -39,7 +39,24 @@ DirectSample direct_sample_stratified(
         return DirectSample((priority_offset + candidate_index) % priority_count);
 
     int suffix_count = light_list_size - priority_count;
-    return DirectSample(priority_count + ph_rand_next_int(rnd_state, 0, suffix_count));
+    int suffix_samples = PH_RESTIR_INITIAL_SAMPLES - priority_samples;
+    if (suffix_count <= 0 || suffix_samples <= 0)
+        return direct_sample_empty();
+
+    // The suffix is sorted by approximate camera contribution. A randomized
+    // systematic sweep covers that full ordering without replacement when
+    // there are at least as many lights as candidates. Independent draws
+    // frequently duplicated lights and left whole luminance ranges unseen,
+    // producing a coherent pulse whenever moving receivers lost short-term
+    // history. Every suffix light still has aggregate inclusion probability
+    // suffix_samples / suffix_count, as used by direct_sample_probability().
+    int suffix_candidate = candidate_index - priority_samples;
+    float systematic_position = (
+        float(suffix_candidate) + clamp(suffix_phase, 0.0f, 0.99999994f)
+    ) * float(suffix_count) / float(suffix_samples);
+    int suffix_index = min(int(systematic_position), suffix_count - 1);
+
+    return DirectSample(priority_count + suffix_index);
 }
 
 float direct_sample_probability(DirectSample smple) {

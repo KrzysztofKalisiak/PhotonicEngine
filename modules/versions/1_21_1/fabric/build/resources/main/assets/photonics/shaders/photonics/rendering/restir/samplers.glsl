@@ -1,5 +1,5 @@
-// v55 diagnostic: isolate the current ReSTIR estimate from temporal
-// accumulation while keeping baseline and exact Sable-local controls.
+// v56 diagnostic: verify systematic world-light proposals in the current
+// ReSTIR estimate while keeping temporal and exact Sable-local controls.
 #define PH_RESTIR_STREAM_SPLIT_DIAGNOSTIC
 
 //ph_required: uniform sampler2D restir_lighting;

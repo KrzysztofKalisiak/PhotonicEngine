@@ -22,8 +22,16 @@ void main() {
         int priority_offset = priority_count > 0
             ? ph_rand_next_int(frag_rnd_state, 0, priority_count)
             : 0;
+        int suffix_count = light_list_size - priority_count;
+        float suffix_phase = suffix_count > 0
+            ? ph_rand_next_float(frag_rnd_state)
+            : 0.0f;
         for (int i = 0; i < PH_RESTIR_INITIAL_SAMPLES; i++) {
-            DirectSample smple = direct_sample_stratified(frag_rnd_state, i, priority_offset);
+            DirectSample smple = direct_sample_stratified(
+                i,
+                priority_offset,
+                suffix_phase
+            );
             // A Sable receiver evaluates lights from its own rigid motion
             // domain directly in r6. Keeping them out of this reservoir makes
             // its estimator external-only instead of partitioning one random
