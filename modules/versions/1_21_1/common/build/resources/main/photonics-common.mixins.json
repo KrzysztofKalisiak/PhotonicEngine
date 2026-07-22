@@ -12,6 +12,7 @@
     "iris.extension.LevelRendererMixin",
     "iris.extension.RenderSectionManagerMixin",
     "iris.compat.ContraptionLightsSubLevelVeilLightingMixin",
+    "iris.compat.SableClientSubLevelSkyLightMixin",
     "iris.compat.SectionCompilerMixin",
     "iris.compat.SableSingleSubLevelRenderDataMixin",
 

@@ -35,6 +35,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -44,6 +45,8 @@ public final class ContraptionLightsSableBridge {
     private static final int MAX_GEOMETRY_ATLAS_DEPTH = 512;
     private static final double STATIC_LIGHT_POSITION_EPSILON_SQUARED = 1.0e-6;
     private static final long MOVING_LIGHT_HOLD_NANOS = 250_000_000L;
+    private static final String FREEZE_SABLE_SKYLIGHT_PROPERTY =
+            "photonics.debug.freezeSableSkyLight";
 
     private static Access access;
     private static boolean unavailable;
@@ -70,6 +73,8 @@ public final class ContraptionLightsSableBridge {
     private static final Map<SableLightIdentity, Vector3d> movementReferencePositions = new HashMap<>();
     private static final Map<SableLightIdentity, Long> movingLightHoldUntilNanos = new HashMap<>();
     private static final Map<SableLightIdentity, BlockState> lastValidLightStates = new HashMap<>();
+    private static final Map<UUID, Integer> lastSkyLightScales = new HashMap<>();
+    private static boolean skyLightDiagnosticsLogged;
 
     private static IGpuTexture3D geometryTexture;
     private static List<GeometryKey> geometryKeys = List.of();
@@ -300,6 +305,7 @@ public final class ContraptionLightsSableBridge {
         movementReferencePositions.clear();
         movingLightHoldUntilNanos.clear();
         lastValidLightStates.clear();
+        lastSkyLightScales.clear();
         nextMotionToken = 1;
         if (lastUploadedLights > 0)
             Photonics.LOGGER.info("Photonics v24 Sable moving lights: {} -> 0", lastUploadedLights);
@@ -352,6 +358,18 @@ public final class ContraptionLightsSableBridge {
                 int minY = bridgeAccess.minY.getInt(state);
                 int minZ = bridgeAccess.minZ.getInt(state);
                 Object pose = bridgeAccess.renderPose.invoke(subLevel);
+                bridgeAccess.getLatestSkyLightScale.invoke(subLevel);
+                int sampledSkyLightScale = bridgeAccess.latestSkyLightScale.getInt(subLevel);
+                Object logicalPose = bridgeAccess.logicalPose.invoke(subLevel);
+                Vector3dc renderPosition = (Vector3dc) bridgeAccess.posePosition.invoke(pose);
+                Vector3dc logicalPosition = (Vector3dc) bridgeAccess.posePosition.invoke(logicalPose);
+                logSkyLightScale(
+                        uniqueId,
+                        sampledSkyLightScale,
+                        logicalPosition.y(),
+                        renderPosition.y(),
+                        currentCameraPosition.y
+                );
                 Matrix4d currentGrid = bridgeAccess.buildWorldToLocal(
                         pose,
                         minX,
@@ -457,6 +475,7 @@ public final class ContraptionLightsSableBridge {
             previousMotionCameraPosition = currentCameraPosition;
             motionAnchors.keySet().retainAll(currentWorldToMotionAnchor.keySet());
             geometryRevisionSnapshots.keySet().retainAll(currentWorldToMotionAnchor.keySet());
+            lastSkyLightScales.keySet().retainAll(currentWorldToMotionAnchor.keySet());
             logMotionCapture(subLevels.size());
             motionTransientFailureLogged = false;
         } catch (InvocationTargetException | RuntimeException exception) {
@@ -742,6 +761,43 @@ public final class ContraptionLightsSableBridge {
         }
     }
 
+    private static void logSkyLightScale(
+            UUID uniqueId,
+            int scale,
+            double logicalY,
+            double renderY,
+            double cameraY
+    ) {
+        if (!skyLightDiagnosticsLogged) {
+            skyLightDiagnosticsLogged = true;
+            Photonics.LOGGER.info(
+                    "Photonics v52 Sable skylight diagnostics active: source=ClientSubLevel.latestSkyLightScale, freezeGetter={}",
+                    Boolean.getBoolean(FREEZE_SABLE_SKYLIGHT_PROPERTY)
+            );
+        }
+
+        Integer previous = lastSkyLightScales.put(uniqueId, scale);
+        if (previous != null && previous == scale)
+            return;
+
+        Photonics.LOGGER.info(
+                "Photonics v52 Sable skylight transition: subLevel={}, scale={} -> {}, logicalY={} (cell {}), renderY={} (cell {}), cameraY={} (cell {})",
+                uniqueId,
+                previous == null ? "initial" : previous,
+                scale,
+                formatCoordinate(logicalY),
+                (long) Math.floor(logicalY),
+                formatCoordinate(renderY),
+                (long) Math.floor(renderY),
+                formatCoordinate(cameraY),
+                (long) Math.floor(cameraY)
+        );
+    }
+
+    private static String formatCoordinate(double value) {
+        return String.format(Locale.ROOT, "%.5f", value);
+    }
+
     private static void logCapture(
             int structures,
             int sourceLights,
@@ -897,7 +953,10 @@ public final class ContraptionLightsSableBridge {
         private final Field lightX;
         private final Field lightY;
         private final Field lightZ;
+        private final Field latestSkyLightScale;
         private final Method renderPose;
+        private final Method logicalPose;
+        private final Method getLatestSkyLightScale;
         private final Method posePosition;
         private final Method poseOrientation;
         private final Method poseRotationPoint;
@@ -921,7 +980,10 @@ public final class ContraptionLightsSableBridge {
             lightX = accessible(stateClass.getDeclaredField("lightX"));
             lightY = accessible(stateClass.getDeclaredField("lightY"));
             lightZ = accessible(stateClass.getDeclaredField("lightZ"));
+            latestSkyLightScale = accessible(subLevelClass.getDeclaredField("latestSkyLightScale"));
             renderPose = subLevelClass.getMethod("renderPose");
+            logicalPose = subLevelClass.getMethod("logicalPose");
+            getLatestSkyLightScale = subLevelClass.getMethod("getLatestSkyLightScale");
             posePosition = poseClass.getMethod("position");
             poseOrientation = poseClass.getMethod("orientation");
             poseRotationPoint = poseClass.getMethod("rotationPoint");
