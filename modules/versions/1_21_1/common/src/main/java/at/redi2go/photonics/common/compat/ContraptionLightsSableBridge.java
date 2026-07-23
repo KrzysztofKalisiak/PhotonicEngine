@@ -37,6 +37,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public final class ContraptionLightsSableBridge {
@@ -139,6 +140,17 @@ public final class ContraptionLightsSableBridge {
                 if (!worldToGrid.isFinite() || Math.abs(worldToGrid.determinant()) < 0.000001d)
                     continue;
                 Matrix4d gridToWorld = new Matrix4d(worldToGrid).invert();
+                Object logicalPose = transformAccess.logicalPose.invoke(subLevel);
+                Matrix4d logicalWorldToGrid = transformAccess.buildWorldToLocal(
+                        logicalPose,
+                        minX,
+                        minY,
+                        minZ
+                );
+                Matrix4d logicalGridToWorld = logicalWorldToGrid.isFinite()
+                        && Math.abs(logicalWorldToGrid.determinant()) >= 0.000001d
+                        ? logicalWorldToGrid.invert()
+                        : null;
                 int temporalDomainToken = motionToken(uniqueId);
 
                 int[] lightX = (int[]) bridgeAccess.lightX.get(state);
@@ -202,6 +214,14 @@ public final class ContraptionLightsSableBridge {
                             lightZ[i] - minZ + 0.5d,
                             new Vector3d()
                     );
+                    var logicalWorldPosition = logicalGridToWorld == null
+                            ? worldPosition
+                            : logicalGridToWorld.transformPosition(
+                                    lightX[i] - minX + 0.5d,
+                                    lightY[i] - minY + 0.5d,
+                                    lightZ[i] - minZ + 0.5d,
+                                    new Vector3d()
+                            );
                     Vector3d publishedPosition = publishedLightPositions.get(identity);
                     boolean previousPositionValid = publishedPosition != null;
                     Vector3d previousWorldPosition = previousPositionValid
@@ -238,7 +258,13 @@ public final class ContraptionLightsSableBridge {
                             previousPositionValid,
                             temporalDomainToken
                     ));
+                    // Section notifications can expose the same Sable block in
+                    // plot, interpolated render, or logical world coordinates.
                     replacedBlockPositions.add(new Vector3i(lightX[i], lightY[i], lightZ[i]));
+                    addReplacementAlias(replacedBlockPositions, worldPosition);
+                    addReplacementAlias(replacedBlockPositions, logicalWorldPosition);
+                    if (previousPositionValid)
+                        addReplacementAlias(replacedBlockPositions, previousWorldPosition);
                 }
             }
 
@@ -275,6 +301,14 @@ public final class ContraptionLightsSableBridge {
                     exception
             );
         }
+    }
+
+    private static void addReplacementAlias(Set<Vector3i> replacementAliases, Vector3dc position) {
+        replacementAliases.add(new Vector3i(
+                (int) Math.floor(position.x()),
+                (int) Math.floor(position.y()),
+                (int) Math.floor(position.z())
+        ));
     }
 
     public static float filterVeilPointLightBrightness(float brightness) {

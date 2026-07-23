@@ -69,6 +69,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     private int lastDiagnosticSections = -1;
     private int lastDiagnosticPriorityLights = -1;
     private int lastDiagnosticMovingLights = -1;
+    private int lastDiagnosticSuppressedSectionLights = -1;
 
     @SuppressWarnings("UnstableApiUsage")
     public AbstractLightList(
@@ -325,16 +326,33 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                 (sectionLights == null ? 0 : sectionLights.size()) + externalLights.size()
         ];
         int size = 0;
+        int suppressedSectionLights = 0;
+        Vector3i firstSuppressedPosition = null;
         Set<TracedLightPosition> knownLights = new HashSet<>();
 
         if (sectionLights != null) {
             for (var light : sectionLights) {
-                if (replacedBlockPositions.contains(light.blockPos()))
+                if (replacedBlockPositions.contains(light.blockPos())) {
+                    suppressedSectionLights++;
+                    if (firstSuppressedPosition == null)
+                        firstSuppressedPosition = light.blockPos();
                     continue;
+                }
 
                 combined[size++] = light;
                 knownLights.add(light);
             }
+        }
+
+        if (suppressedSectionLights != lastDiagnosticSuppressedSectionLights) {
+            Photonics.LOGGER.info(
+                    "Photonics v59 external-light de-duplication: suppressedSectionLights={}, replacementAliases={}, externalLights={}, firstSuppressed={}",
+                    suppressedSectionLights,
+                    replacedBlockPositions.size(),
+                    externalLights.size(),
+                    firstSuppressedPosition == null ? "none" : firstSuppressedPosition
+            );
+            lastDiagnosticSuppressedSectionLights = suppressedSectionLights;
         }
 
         for (var light : externalLights) {
