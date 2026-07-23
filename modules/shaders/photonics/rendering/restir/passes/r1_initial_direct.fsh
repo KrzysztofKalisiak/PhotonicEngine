@@ -42,7 +42,7 @@ void main() {
                     smple,
                     frag_rt_pos,
                     frag_geo_normal,
-                    frag_is_hand ? frag_geo_normal : frag_tex_normal
+                    frag_tex_normal
                 );
             }
             float proposal_probability = direct_sample_probability(smple);

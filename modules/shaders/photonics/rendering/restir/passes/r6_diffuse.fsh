@@ -87,7 +87,7 @@ void main() {
                     local_sample,
                     frag_rt_pos,
                     frag_geo_normal,
-                    frag_is_hand ? frag_geo_normal : frag_tex_normal,
+                    frag_tex_normal,
                     receiver_grid_pos,
                     local_sample_color
                 );
@@ -96,7 +96,7 @@ void main() {
                     local_sample,
                     frag_rt_pos,
                     frag_geo_normal,
-                    frag_is_hand ? frag_geo_normal : frag_tex_normal,
+                    frag_tex_normal,
                     local_sample_color
                 );
             }
@@ -122,7 +122,7 @@ void main() {
         direct_reservoir,
         frag_rt_pos,
         frag_geo_normal,
-        frag_is_hand ? frag_geo_normal : frag_tex_normal
+        frag_tex_normal
     );
     if (direct_reservoir_has_sample(direct_reservoir)
             && direct_sample_uses_external_history(
