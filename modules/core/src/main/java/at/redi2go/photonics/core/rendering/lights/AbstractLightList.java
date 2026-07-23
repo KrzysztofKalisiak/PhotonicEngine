@@ -31,8 +31,10 @@ import org.joml.Vector4f;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
@@ -40,6 +42,11 @@ import java.util.function.Supplier;
 
 public abstract class AbstractLightList implements Runnable, RenderingComponent {
     private static final int MAX_SECTIONS_PER_RUN = 48;
+    private static final long EXTERNAL_PROXY_SETTLE_NANOS = 125_000_000L;
+    private static final long EXTERNAL_PROXY_SETTLE_FRAMES = 2L;
+    private static final long EXTERNAL_PROXY_OWNERSHIP_GRACE_NANOS = 250_000_000L;
+    private static final int EXTERNAL_PROXY_ALIAS_RADIUS = 3;
+    private static final String EXTERNAL_PROXY_BLOCK_ID = "minecraft:light";
     private static final IBlock BLOCK_LAVA = IBlock.fromIdOrThrow(Id.fromNamespaceAndPath("minecraft", "lava"));
 
     private final Thread compilerThread;
@@ -72,9 +79,13 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     private int lastDiagnosticPriorityLights = -1;
     private int lastDiagnosticMovingLights = -1;
     private int lastDiagnosticSuppressedSectionLights = -1;
-    private int lastDiagnosticBlockIdMatches = -1;
-    private int lastDiagnosticLightProfileMatches = -1;
-    private int lastDiagnosticPositionFallbacks = -1;
+    private final Map<SectionLightCell, ProxyCandidateState> proxyCandidates = new HashMap<>();
+    private final Map<SectionLightCell, ProxyOwnershipClaim> confirmedExternalProxyClaims = new HashMap<>();
+    private final Set<SectionLightCell> distantProxyCells = new HashSet<>();
+    private long nextProxyReleaseNanos = Long.MAX_VALUE;
+    private long quarantinedProxyEvents;
+    private long distantProxyEvents;
+    private long renderFrameSequence;
 
     @SuppressWarnings("UnstableApiUsage")
     public AbstractLightList(
@@ -316,14 +327,21 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         }
     }
 
-    private LightList combineLights(LightList sectionLights, ExternalLightList.Snapshot externalSnapshot) {
+    private LightList combineLights(
+            LightList sectionLights,
+            long currentSectionLightsRevision,
+            ExternalLightList.Snapshot externalSnapshot,
+            long nowNanos
+    ) {
         var externalLights = externalSnapshot.lights();
         var replacementAliases = externalSnapshot.replacementAliases();
 
-        if (externalLights.isEmpty() && replacementAliases.isEmpty())
+        if (externalLights.isEmpty() && replacementAliases.isEmpty()) {
+            clearProxyOwnership();
             return sectionLights == null
                     ? new LightList(new TracedLightPosition[0], WorldOrigin.get())
                     : sectionLights;
+        }
 
         var combined = new TracedLightPosition[
                 (sectionLights == null ? 0 : sectionLights.size()) + externalLights.size()
@@ -333,16 +351,52 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         int blockIdMatches = 0;
         int lightProfileMatches = 0;
         int positionFallbacks = 0;
+        int confirmedProxySuppressions = 0;
+        int quarantinedProxyLights = 0;
         Vector3i firstSuppressedPosition = null;
         Set<TracedLightPosition> knownLights = new HashSet<>();
+        Set<SectionLightCell> presentProxyCells = new HashSet<>();
+        boolean proxyOwnershipActive = !externalLights.isEmpty() && !replacementAliases.isEmpty();
+        nextProxyReleaseNanos = Long.MAX_VALUE;
+        if (!proxyOwnershipActive) {
+            proxyCandidates.clear();
+            confirmedExternalProxyClaims.clear();
+            distantProxyCells.clear();
+        }
 
         if (sectionLights != null) {
             for (var light : sectionLights) {
                 var sectionAlias = ExternalLightList.ReplacementAlias.from(light);
+                boolean externalProxy = proxyOwnershipActive
+                        && EXTERNAL_PROXY_BLOCK_ID.equals(sectionAlias.blockId());
+                SectionLightCell proxyCell = externalProxy
+                        ? new SectionLightCell(sectionAlias.x(), sectionAlias.y(), sectionAlias.z())
+                        : null;
+                if (proxyCell != null)
+                    presentProxyCells.add(proxyCell);
+
                 boolean positionMatched = false;
                 boolean blockIdMatched = false;
                 boolean lightProfileMatched = false;
+                boolean proxyAliasNearby = false;
+                ExternalLightList.ReplacementAlias nearestAlias = null;
+                long nearestAliasDistanceSquared = Long.MAX_VALUE;
                 for (var alias : replacementAliases) {
+                    if (externalProxy) {
+                        long dx = (long) sectionAlias.x() - alias.x();
+                        long dy = (long) sectionAlias.y() - alias.y();
+                        long dz = (long) sectionAlias.z() - alias.z();
+                        long distanceSquared = dx * dx + dy * dy + dz * dz;
+                        if (distanceSquared < nearestAliasDistanceSquared) {
+                            nearestAliasDistanceSquared = distanceSquared;
+                            nearestAlias = alias;
+                        }
+                        if (Math.abs(dx) <= EXTERNAL_PROXY_ALIAS_RADIUS
+                                && Math.abs(dy) <= EXTERNAL_PROXY_ALIAS_RADIUS
+                                && Math.abs(dz) <= EXTERNAL_PROXY_ALIAS_RADIUS)
+                            proxyAliasNearby = true;
+                    }
+
                     if (!alias.matchesPosition(sectionAlias))
                         continue;
 
@@ -358,6 +412,14 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                 // Sable's mirrored section may expose a different state wrapper.
                 // An exact cell match still denotes the same block emitter.
                 if (positionMatched) {
+                    if (proxyCell != null) {
+                        distantProxyCells.remove(proxyCell);
+                        proxyCandidates.remove(proxyCell);
+                        confirmedExternalProxyClaims.put(
+                                proxyCell,
+                                new ProxyOwnershipClaim(Long.MAX_VALUE)
+                        );
+                    }
                     suppressedSectionLights++;
                     if (blockIdMatched)
                         blockIdMatches++;
@@ -370,29 +432,126 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                     continue;
                 }
 
+                // Contraption Lights publishes a vanilla Light block at the
+                // server-logical cell before the client render-pose alias can
+                // reach that cell. Quarantine only nearby proxy-shaped cells;
+                // an exact match owns its cell until a bounded grace period
+                // after the first unmatched observation.
+                if (proxyCell != null) {
+                    ProxyOwnershipClaim confirmedClaim =
+                            confirmedExternalProxyClaims.get(proxyCell);
+                    if (confirmedClaim != null) {
+                        long claimUntilNanos = confirmedClaim.untilNanos();
+                        if (claimUntilNanos == Long.MAX_VALUE) {
+                            claimUntilNanos =
+                                    nowNanos + EXTERNAL_PROXY_OWNERSHIP_GRACE_NANOS;
+                            confirmedExternalProxyClaims.put(
+                                    proxyCell,
+                                    new ProxyOwnershipClaim(claimUntilNanos)
+                            );
+                        }
+                        if (nowNanos < claimUntilNanos) {
+                            ProxyCandidateState candidate = proxyCandidates.get(proxyCell);
+                            if (candidate == null || candidate.light() != light)
+                                proxyCandidates.put(
+                                        proxyCell,
+                                        new ProxyCandidateState(
+                                                nowNanos,
+                                                renderFrameSequence,
+                                                light
+                                        )
+                                );
+                            suppressedSectionLights++;
+                            confirmedProxySuppressions++;
+                            nextProxyReleaseNanos = Math.min(
+                                    nextProxyReleaseNanos,
+                                    claimUntilNanos
+                            );
+                            if (firstSuppressedPosition == null)
+                                firstSuppressedPosition = light.blockPos();
+                            continue;
+                        }
+                        confirmedExternalProxyClaims.remove(proxyCell);
+                    }
+
+                    if (!proxyAliasNearby) {
+                        proxyCandidates.remove(proxyCell);
+                        if (distantProxyCells.add(proxyCell))
+                            logDistantProxy(
+                                    sectionAlias,
+                                    nearestAlias,
+                                    nearestAliasDistanceSquared,
+                                    currentSectionLightsRevision,
+                                    externalSnapshot.revision()
+                            );
+                        combined[size++] = light;
+                        knownLights.add(light);
+                        continue;
+                    }
+                    distantProxyCells.remove(proxyCell);
+
+                    ProxyCandidateState candidate = proxyCandidates.get(proxyCell);
+                    boolean newlySeen = candidate == null || candidate.light() != light;
+                    if (newlySeen) {
+                        candidate = new ProxyCandidateState(
+                                nowNanos,
+                                renderFrameSequence,
+                                light
+                        );
+                        proxyCandidates.put(proxyCell, candidate);
+                    }
+
+                    long releaseNanos = candidate.firstSeenNanos() + EXTERNAL_PROXY_SETTLE_NANOS;
+                    boolean observedEnoughFrames =
+                            renderFrameSequence - candidate.firstSeenFrame()
+                                    >= EXTERNAL_PROXY_SETTLE_FRAMES;
+                    if (nowNanos < releaseNanos || !observedEnoughFrames) {
+                        suppressedSectionLights++;
+                        quarantinedProxyLights++;
+                        nextProxyReleaseNanos = Math.min(
+                                nextProxyReleaseNanos,
+                                Math.max(nowNanos, releaseNanos)
+                        );
+                        if (firstSuppressedPosition == null)
+                            firstSuppressedPosition = light.blockPos();
+                        if (newlySeen)
+                            logProxyQuarantine(
+                                    sectionAlias,
+                                    nearestAlias,
+                                    nearestAliasDistanceSquared,
+                                    currentSectionLightsRevision,
+                                    externalSnapshot.revision()
+                            );
+                        continue;
+                    }
+                }
+
                 combined[size++] = light;
                 knownLights.add(light);
             }
         }
 
-        if (suppressedSectionLights != lastDiagnosticSuppressedSectionLights
-                || blockIdMatches != lastDiagnosticBlockIdMatches
-                || lightProfileMatches != lastDiagnosticLightProfileMatches
-                || positionFallbacks != lastDiagnosticPositionFallbacks) {
+        if (proxyOwnershipActive) {
+            proxyCandidates.keySet().retainAll(presentProxyCells);
+            confirmedExternalProxyClaims.keySet().retainAll(presentProxyCells);
+            distantProxyCells.retainAll(presentProxyCells);
+        }
+
+        if (suppressedSectionLights != lastDiagnosticSuppressedSectionLights) {
             Photonics.LOGGER.info(
-                    "Photonics v63 external-light de-duplication: suppressedSectionLights={}, blockIdMatches={}, lightProfileMatches={}, positionFallbacks={}, replacementAliases={}, externalLights={}, firstSuppressed={}",
+                    "Photonics v64 external-light de-duplication: suppressedSectionLights={}, aliasBlockIdMatches={}, aliasLightProfileMatches={}, aliasPositionFallbacks={}, confirmedProxySuppressions={}, quarantinedProxyLights={}, trackedProxyCells={}, replacementAliases={}, externalLights={}, firstSuppressed={}",
                     suppressedSectionLights,
                     blockIdMatches,
                     lightProfileMatches,
                     positionFallbacks,
+                    confirmedProxySuppressions,
+                    quarantinedProxyLights,
+                    presentProxyCells.size(),
                     replacementAliases.size(),
                     externalLights.size(),
                     firstSuppressedPosition == null ? "none" : firstSuppressedPosition
             );
             lastDiagnosticSuppressedSectionLights = suppressedSectionLights;
-            lastDiagnosticBlockIdMatches = blockIdMatches;
-            lastDiagnosticLightProfileMatches = lightProfileMatches;
-            lastDiagnosticPositionFallbacks = positionFallbacks;
         }
 
         for (var light : externalLights) {
@@ -430,6 +589,78 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                 movingLightCount,
                 priorityLightCount
         );
+    }
+
+    private void logProxyQuarantine(
+            ExternalLightList.ReplacementAlias proxy,
+            ExternalLightList.ReplacementAlias nearestAlias,
+            long nearestAliasDistanceSquared,
+            long currentSectionLightsRevision,
+            long currentExternalLightsRevision
+    ) {
+        quarantinedProxyEvents++;
+        if (Long.bitCount(quarantinedProxyEvents) != 1)
+            return;
+
+        String nearestOffset = nearestAlias == null
+                ? "none"
+                : "("
+                + (proxy.x() - nearestAlias.x()) + ","
+                + (proxy.y() - nearestAlias.y()) + ","
+                + (proxy.z() - nearestAlias.z()) + ")";
+        Photonics.LOGGER.info(
+                "Photonics v64 quarantined unmatched Contraption Lights proxy: events={}, proxy=({}, {}, {}), nearestAliasOffset={}, nearestAliasDistanceSquared={}, settleMs={}, settleFrames={}, aliasRadius={}, sectionRevision={}, externalRevision={}",
+                quarantinedProxyEvents,
+                proxy.x(),
+                proxy.y(),
+                proxy.z(),
+                nearestOffset,
+                nearestAlias == null ? "n/a" : nearestAliasDistanceSquared,
+                EXTERNAL_PROXY_SETTLE_NANOS / 1_000_000L,
+                EXTERNAL_PROXY_SETTLE_FRAMES,
+                EXTERNAL_PROXY_ALIAS_RADIUS,
+                currentSectionLightsRevision,
+                currentExternalLightsRevision
+        );
+    }
+
+    private void logDistantProxy(
+            ExternalLightList.ReplacementAlias proxy,
+            ExternalLightList.ReplacementAlias nearestAlias,
+            long nearestAliasDistanceSquared,
+            long currentSectionLightsRevision,
+            long currentExternalLightsRevision
+    ) {
+        distantProxyEvents++;
+        if (Long.bitCount(distantProxyEvents) != 1)
+            return;
+
+        String nearestOffset = nearestAlias == null
+                ? "none"
+                : "("
+                + (proxy.x() - nearestAlias.x()) + ","
+                + (proxy.y() - nearestAlias.y()) + ","
+                + (proxy.z() - nearestAlias.z()) + ")";
+        Photonics.LOGGER.info(
+                "Photonics v64 left distant vanilla Light candidate unsuppressed: events={}, proxy=({}, {}, {}), nearestAliasOffset={}, nearestAliasDistanceSquared={}, aliasRadius={}, sectionRevision={}, externalRevision={}",
+                distantProxyEvents,
+                proxy.x(),
+                proxy.y(),
+                proxy.z(),
+                nearestOffset,
+                nearestAlias == null ? "n/a" : nearestAliasDistanceSquared,
+                EXTERNAL_PROXY_ALIAS_RADIUS,
+                currentSectionLightsRevision,
+                currentExternalLightsRevision
+        );
+    }
+
+    private void clearProxyOwnership() {
+        proxyCandidates.clear();
+        confirmedExternalProxyClaims.clear();
+        distantProxyCells.clear();
+        nextProxyReleaseNanos = Long.MAX_VALUE;
+        lastDiagnosticSuppressedSectionLights = -1;
     }
 
     private void storeLightsLocked(LightList lights) {
@@ -490,12 +721,20 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         lock.lock();
 
         try {
+            renderFrameSequence++;
             var externalSnapshot = ExternalLightList.snapshot();
+            long nowNanos = System.nanoTime();
             if (sectionLightsRevision != combinedSectionLightsRevision
-                    || externalSnapshot.revision() != externalLightsRevision) {
+                    || externalSnapshot.revision() != externalLightsRevision
+                    || nowNanos >= nextProxyReleaseNanos) {
                 combinedSectionLightsRevision = sectionLightsRevision;
                 externalLightsRevision = externalSnapshot.revision();
-                storeLightsLocked(combineLights(sectionLights, externalSnapshot));
+                storeLightsLocked(combineLights(
+                        sectionLights,
+                        sectionLightsRevision,
+                        externalSnapshot,
+                        nowNanos
+                ));
             }
 
             upload();
@@ -568,6 +807,19 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     private static Vector3f toVector3f(Vector3dc vector) {
         return new Vector3f((float) vector.x(), (float) vector.y(), (float) vector.z());
+    }
+
+    private record SectionLightCell(int x, int y, int z) {
+    }
+
+    private record ProxyCandidateState(
+            long firstSeenNanos,
+            long firstSeenFrame,
+            TracedLightPosition light
+    ) {
+    }
+
+    private record ProxyOwnershipClaim(long untilNanos) {
     }
 
 }

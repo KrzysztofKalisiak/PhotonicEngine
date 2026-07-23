@@ -380,7 +380,7 @@ public final class ContraptionLightsSableBridge {
 
         replacementAliasTrailLogged = true;
         Photonics.LOGGER.info(
-                "Photonics v63 stale section-light suppression active: lights={}, aliases={}, aliasHoldMs={}, maxAliasesPerLight={}, matching=position+(registry-id/profile diagnostics), mergeOwner=render-thread",
+                "Photonics v64 stale section-light suppression active: lights={}, aliases={}, aliasHoldMs={}, maxAliasesPerLight={}, matching=position+(registry-id/profile diagnostics)+after-loss-owned-nearby-Light-proxy-quarantine, mergeOwner=render-thread",
                 lights,
                 aliases,
                 REPLACEMENT_ALIAS_HOLD_NANOS / 1_000_000L,
