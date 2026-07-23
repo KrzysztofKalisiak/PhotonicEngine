@@ -1,6 +1,6 @@
 package at.redi2go.photonics.core.rendering.lights;
 
-import org.joml.Vector3i;
+import at.redi2go.photonics.api.mc.world.level.IBlockState;
 
 import java.util.List;
 import java.util.Set;
@@ -18,13 +18,13 @@ public final class ExternalLightList {
         submit(lights, Set.of());
     }
 
-    public static void submit(List<TracedLightPosition> lights, Set<Vector3i> replacedBlockPositions) {
+    public static void submit(List<TracedLightPosition> lights, Set<ReplacementAlias> replacementAliases) {
         var copy = List.copyOf(lights);
-        var replacedCopy = Set.copyOf(replacedBlockPositions);
+        var replacementCopy = Set.copyOf(replacementAliases);
         var current = snapshot;
 
-        if (!current.lights().equals(copy) || !current.replacedBlockPositions().equals(replacedCopy))
-            snapshot = new Snapshot(copy, replacedCopy, current.revision() + 1L);
+        if (!current.lights().equals(copy) || !current.replacementAliases().equals(replacementCopy))
+            snapshot = new Snapshot(copy, replacementCopy, current.revision() + 1L);
     }
 
     public static void clear() {
@@ -37,8 +37,20 @@ public final class ExternalLightList {
 
     public record Snapshot(
             List<TracedLightPosition> lights,
-            Set<Vector3i> replacedBlockPositions,
+            Set<ReplacementAlias> replacementAliases,
             long revision
     ) {
+    }
+
+    public record ReplacementAlias(int x, int y, int z, IBlockState blockState) {
+        public static ReplacementAlias from(TracedLightPosition light) {
+            var blockPos = light.blockPos();
+            return new ReplacementAlias(
+                    blockPos.x,
+                    blockPos.y,
+                    blockPos.z,
+                    light.blockState()
+            );
+        }
     }
 }

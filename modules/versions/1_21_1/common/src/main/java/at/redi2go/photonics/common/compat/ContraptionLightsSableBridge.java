@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -46,6 +47,8 @@ public final class ContraptionLightsSableBridge {
     private static final int MAX_GEOMETRY_ATLAS_DEPTH = 512;
     private static final double STATIC_LIGHT_POSITION_EPSILON_SQUARED = 1.0e-6;
     private static final long MOVING_LIGHT_HOLD_NANOS = 250_000_000L;
+    private static final long REPLACEMENT_ALIAS_HOLD_NANOS = 250_000_000L;
+    private static final int MAX_REPLACEMENT_ALIASES_PER_LIGHT = 24;
     private static final String FREEZE_SABLE_SKYLIGHT_PROPERTY =
             "photonics.debug.freezeSableSkyLight";
 
@@ -54,6 +57,7 @@ public final class ContraptionLightsSableBridge {
     private static boolean activeLogged;
     private static boolean transientFailureLogged;
     private static boolean veilPointLightSuppressionLogged;
+    private static boolean replacementAliasTrailLogged;
     private static int lastUploadedLights = -1;
     private static int lastZeroLuminanceTracedLights = -1;
     private static int lastRejectedMaterials = -1;
@@ -74,6 +78,10 @@ public final class ContraptionLightsSableBridge {
     private static final Map<SableLightIdentity, Vector3d> movementReferencePositions = new HashMap<>();
     private static final Map<SableLightIdentity, Long> movingLightHoldUntilNanos = new HashMap<>();
     private static final Map<SableLightIdentity, BlockState> lastValidLightStates = new HashMap<>();
+    private static final Map<
+            SableLightIdentity,
+            LinkedHashMap<ExternalLightList.ReplacementAlias, Long>
+            > replacementAliasHistory = new HashMap<>();
     private static final Map<UUID, Integer> lastSkyLightScales = new HashMap<>();
     private static boolean skyLightDiagnosticsLogged;
 
@@ -108,7 +116,7 @@ public final class ContraptionLightsSableBridge {
             var shaderPack = IShaderPack.getCurrentPack().orElse(null);
             var lightRegistry = PhConfig.getLightRegistry();
             var lights = new ArrayList<TracedLightPosition>();
-            var replacedBlockPositions = new HashSet<Vector3i>();
+            var replacementAliases = new HashSet<ExternalLightList.ReplacementAlias>();
             var seenLightIdentities = new HashSet<SableLightIdentity>();
             int sourceLights = 0;
             int zeroLuminanceTracedLights = 0;
@@ -259,12 +267,23 @@ public final class ContraptionLightsSableBridge {
                             temporalDomainToken
                     ));
                     // Section notifications can expose the same Sable block in
-                    // plot, interpolated render, or logical world coordinates.
-                    replacedBlockPositions.add(new Vector3i(lightX[i], lightY[i], lightZ[i]));
-                    addReplacementAlias(replacedBlockPositions, worldPosition);
-                    addReplacementAlias(replacedBlockPositions, logicalWorldPosition);
-                    if (previousPositionValid)
-                        addReplacementAlias(replacedBlockPositions, previousWorldPosition);
+                    // plot, interpolated render, logical, or recently stale
+                    // render coordinates.
+                    replacementAliases.add(new ExternalLightList.ReplacementAlias(
+                            lightX[i],
+                            lightY[i],
+                            lightZ[i],
+                            apiBlockState
+                    ));
+                    retainReplacementAliases(
+                            identity,
+                            replacementAliases,
+                            apiBlockState,
+                            captureTimeNanos,
+                            worldPosition,
+                            logicalWorldPosition,
+                            previousPositionValid ? previousWorldPosition : null
+                    );
                 }
             }
 
@@ -272,7 +291,9 @@ public final class ContraptionLightsSableBridge {
             movementReferencePositions.keySet().retainAll(seenLightIdentities);
             movingLightHoldUntilNanos.keySet().retainAll(seenLightIdentities);
             lastValidLightStates.keySet().retainAll(seenLightIdentities);
-            ExternalLightList.submit(lights, replacedBlockPositions);
+            replacementAliasHistory.keySet().retainAll(seenLightIdentities);
+            ExternalLightList.submit(lights, replacementAliases);
+            logReplacementAliasTrail(lights.size(), replacementAliases.size());
             logCapture(
                     states.size(),
                     sourceLights,
@@ -303,12 +324,62 @@ public final class ContraptionLightsSableBridge {
         }
     }
 
-    private static void addReplacementAlias(Set<Vector3i> replacementAliases, Vector3dc position) {
-        replacementAliases.add(new Vector3i(
+    private static void retainReplacementAliases(
+            SableLightIdentity identity,
+            Set<ExternalLightList.ReplacementAlias> replacementAliases,
+            IBlockState blockState,
+            long captureTimeNanos,
+            Vector3dc... positions
+    ) {
+        var history = replacementAliasHistory.computeIfAbsent(
+                identity,
+                ignored -> new LinkedHashMap<>()
+        );
+        history.entrySet().removeIf(entry -> entry.getValue() <= captureTimeNanos);
+
+        long expiresAt = captureTimeNanos + REPLACEMENT_ALIAS_HOLD_NANOS;
+        for (var position : positions) {
+            if (position == null)
+                continue;
+
+            var alias = replacementAlias(position, blockState);
+            history.remove(alias);
+            history.put(alias, expiresAt);
+        }
+
+        while (history.size() > MAX_REPLACEMENT_ALIASES_PER_LIGHT) {
+            var iterator = history.keySet().iterator();
+            iterator.next();
+            iterator.remove();
+        }
+
+        replacementAliases.addAll(history.keySet());
+    }
+
+    private static ExternalLightList.ReplacementAlias replacementAlias(
+            Vector3dc position,
+            IBlockState blockState
+    ) {
+        return new ExternalLightList.ReplacementAlias(
                 (int) Math.floor(position.x()),
                 (int) Math.floor(position.y()),
-                (int) Math.floor(position.z())
-        ));
+                (int) Math.floor(position.z()),
+                blockState
+        );
+    }
+
+    private static void logReplacementAliasTrail(int lights, int aliases) {
+        if (replacementAliasTrailLogged || lights <= 0)
+            return;
+
+        replacementAliasTrailLogged = true;
+        Photonics.LOGGER.info(
+                "Photonics v61 stale section-light suppression active: lights={}, aliases={}, aliasHoldMs={}, maxAliasesPerLight={}, matching=block-position+state, mergeOwner=render-thread",
+                lights,
+                aliases,
+                REPLACEMENT_ALIAS_HOLD_NANOS / 1_000_000L,
+                MAX_REPLACEMENT_ALIASES_PER_LIGHT
+        );
     }
 
     public static float filterVeilPointLightBrightness(float brightness) {
@@ -339,6 +410,7 @@ public final class ContraptionLightsSableBridge {
         movementReferencePositions.clear();
         movingLightHoldUntilNanos.clear();
         lastValidLightStates.clear();
+        replacementAliasHistory.clear();
         lastSkyLightScales.clear();
         nextMotionToken = 1;
         if (lastUploadedLights > 0)

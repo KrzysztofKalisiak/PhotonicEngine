@@ -62,6 +62,8 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     protected LightList lights;
     protected LightList mostRecentLights;
     private LightList sectionLights;
+    private long sectionLightsRevision;
+    private long combinedSectionLightsRevision = -1L;
     private long externalLightsRevision = -1L;
 
     private int lastDiagnosticEligibleLights = -1;
@@ -305,9 +307,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
         try {
             this.sectionLights = sectionLights;
-            var externalSnapshot = ExternalLightList.snapshot();
-            externalLightsRevision = externalSnapshot.revision();
-            storeLightsLocked(combineLights(sectionLights, externalSnapshot));
+            sectionLightsRevision++;
         } finally {
             lock.unlock();
         }
@@ -315,9 +315,9 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     private LightList combineLights(LightList sectionLights, ExternalLightList.Snapshot externalSnapshot) {
         var externalLights = externalSnapshot.lights();
-        var replacedBlockPositions = externalSnapshot.replacedBlockPositions();
+        var replacementAliases = externalSnapshot.replacementAliases();
 
-        if (externalLights.isEmpty() && replacedBlockPositions.isEmpty())
+        if (externalLights.isEmpty() && replacementAliases.isEmpty())
             return sectionLights == null
                     ? new LightList(new TracedLightPosition[0], WorldOrigin.get())
                     : sectionLights;
@@ -332,7 +332,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
         if (sectionLights != null) {
             for (var light : sectionLights) {
-                if (replacedBlockPositions.contains(light.blockPos())) {
+                if (replacementAliases.contains(ExternalLightList.ReplacementAlias.from(light))) {
                     suppressedSectionLights++;
                     if (firstSuppressedPosition == null)
                         firstSuppressedPosition = light.blockPos();
@@ -346,9 +346,9 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
         if (suppressedSectionLights != lastDiagnosticSuppressedSectionLights) {
             Photonics.LOGGER.info(
-                    "Photonics v60 external-light de-duplication: suppressedSectionLights={}, replacementAliases={}, externalLights={}, firstSuppressed={}",
+                    "Photonics v61 external-light de-duplication: suppressedSectionLights={}, materialMatchedAliases={}, externalLights={}, firstSuppressed={}",
                     suppressedSectionLights,
-                    replacedBlockPositions.size(),
+                    replacementAliases.size(),
                     externalLights.size(),
                     firstSuppressedPosition == null ? "none" : firstSuppressedPosition
             );
@@ -451,7 +451,9 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
         try {
             var externalSnapshot = ExternalLightList.snapshot();
-            if (externalSnapshot.revision() != externalLightsRevision) {
+            if (sectionLightsRevision != combinedSectionLightsRevision
+                    || externalSnapshot.revision() != externalLightsRevision) {
+                combinedSectionLightsRevision = sectionLightsRevision;
                 externalLightsRevision = externalSnapshot.revision();
                 storeLightsLocked(combineLights(sectionLights, externalSnapshot));
             }
