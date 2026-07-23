@@ -58,6 +58,15 @@ void main() {
     int local_visible_light_count = 0;
     if (receiver_token != 0u) {
         vec3 local_direct_lighting = vec3(0.0f);
+        FragMotion receiver_motion;
+        frag_motion_load(receiver_motion, frag_tex_coord);
+        vec3 receiver_grid_pos;
+        bool receiver_grid_pos_valid = ph_sable_recover_current_grid_position(
+            frag_data_sublevel_slot(_frag_data),
+            receiver_token,
+            receiver_motion.previous_player_pos,
+            receiver_grid_pos
+        );
         int priority_count = clamp(
             ph_priority_light_count,
             0,
@@ -72,13 +81,26 @@ void main() {
             local_light_count++;
 
             vec3 local_sample_color;
-            if (direct_sample_get_final_unweighted_color(
+            bool sample_visible;
+            if (receiver_grid_pos_valid) {
+                sample_visible = direct_sample_get_final_unweighted_color_at_sable_grid(
+                    local_sample,
+                    frag_rt_pos,
+                    frag_geo_normal,
+                    frag_is_hand ? frag_geo_normal : frag_tex_normal,
+                    receiver_grid_pos,
+                    local_sample_color
+                );
+            } else {
+                sample_visible = direct_sample_get_final_unweighted_color(
                     local_sample,
                     frag_rt_pos,
                     frag_geo_normal,
                     frag_is_hand ? frag_geo_normal : frag_tex_normal,
                     local_sample_color
-            )) {
+                );
+            }
+            if (sample_visible) {
                 local_direct_lighting += local_sample_color;
                 local_visible_light_count++;
             }

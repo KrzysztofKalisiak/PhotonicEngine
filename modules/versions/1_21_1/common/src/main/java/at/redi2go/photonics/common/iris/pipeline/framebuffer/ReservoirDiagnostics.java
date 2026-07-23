@@ -197,7 +197,7 @@ final class ReservoirDiagnostics implements AutoCloseable {
 
         float minimumSamples = minimumTotalSamples == Float.POSITIVE_INFINITY ? 0.0f : minimumTotalSamples;
         Photonics.LOGGER.info(
-                "Photonics direct reservoir sample v59: samples={}, populated={}, emptyOrBackground={}, visibilityRejected={}, invalid={}, overLegacyCap={}, overTemporalCap={}, totalSamplesRange={}..{}, viewport={}x{}",
+                "Photonics direct reservoir sample v60: samples={}, populated={}, emptyOrBackground={}, visibilityRejected={}, invalid={}, overLegacyCap={}, overTemporalCap={}, totalSamplesRange={}..{}, viewport={}x{}",
                 samples,
                 populated,
                 empty,

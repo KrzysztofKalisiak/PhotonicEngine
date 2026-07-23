@@ -4,6 +4,7 @@
 #define PH_SABLE_MAX_SUBLEVELS 16
 #define PH_SABLE_MAX_EMISSIVE_CELLS 64
 const float PH_SABLE_VISIBILITY_BIAS = 0.001f;
+const float PH_SABLE_VISIBILITY_ENDPOINT_GUARD = 0.002f;
 const float PH_SABLE_RECEIVER_PROBE = 0.35f;
 const float PH_SABLE_RECEIVER_BOUNDS_PAD = 0.4f;
 //ph_required: uniform sampler3D ph_sable_occupancy;
@@ -65,6 +66,25 @@ float ph_sable_receiver_relative_light_step(
         return length(current_player_pos - previous_player_pos);
 
     return length(current_grid_pos - previous_grid_pos);
+}
+
+bool ph_sable_recover_current_grid_position(
+    int receiver_slot,
+    uint receiver_token,
+    vec3 previous_player_pos,
+    out vec3 current_grid_pos
+) {
+    current_grid_pos = vec3(0.0f);
+    if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
+            || receiver_token == 0u
+            || receiver_token != ph_sable_identity_token(receiver_slot))
+        return false;
+
+    current_grid_pos = (
+        ph_sable_previous_player_to_current_grid_matrix(receiver_slot)
+            * vec4(previous_player_pos, 1.0f)
+    ).xyz;
+    return ph_sable_finite_vec3(current_grid_pos);
 }
 
 float ph_sable_cell_flags(ivec3 cell, ivec3 size, int atlas_z) {
@@ -299,6 +319,11 @@ bool ph_sable_grid_segment_visible(
         return true;
 
     vec3 ray = end_grid - start_grid;
+    float ray_extent = max(abs(ray.x), max(abs(ray.y), abs(ray.z)));
+    float endpoint_guard_t = min(
+        0.25f,
+        PH_SABLE_VISIBILITY_ENDPOINT_GUARD / max(ray_extent, 1e-6f)
+    );
     ivec3 step = ivec3(sign(ray));
     vec3 t_delta = vec3(1e30f);
     vec3 t_max = vec3(1e30f);
@@ -321,7 +346,10 @@ bool ph_sable_grid_segment_visible(
 
     for (int iteration = 0; iteration < 288; iteration++) {
         float next_t = min(t_max.x, min(t_max.y, t_max.z));
-        if (next_t > 1.0f)
+        // The endpoint is already biased onto the receiver's exposed side.
+        // Do not let conservative edge/corner coverage reinterpret the final
+        // surface touch as an adjacent receiver block occluding itself.
+        if (next_t >= 1.0f - endpoint_guard_t)
             return true;
 
         bool cross_x = t_max.x <= next_t + 1e-6f;
@@ -392,10 +420,10 @@ bool ph_sable_grid_segment_visible(
     return false;
 }
 
-bool ph_sable_same_sublevel_light_visibility(
+bool ph_sable_same_sublevel_light_visibility_at_grid(
     int receiver_slot,
     uint receiver_token,
-    vec3 receiver_player_pos,
+    vec3 receiver_grid_pos,
     vec3 receiver_world_normal,
     int light_temporal_domain,
     vec3 light_player_pos,
@@ -420,13 +448,10 @@ bool ph_sable_same_sublevel_light_visibility(
     ))
         return false;
 
-    mat4 player_to_grid = ph_sable_player_to_grid_matrix(receiver_slot);
-    vec3 receiver_grid_pos = (
-        player_to_grid * vec4(receiver_player_pos, 1.0f)
-    ).xyz;
     if (!ph_sable_finite_vec3(receiver_grid_pos))
         return false;
 
+    mat4 player_to_grid = ph_sable_player_to_grid_matrix(receiver_slot);
     vec3 receiver_grid_normal = transpose(inverse(mat3(player_to_grid)))
         * receiver_world_normal;
     float receiver_grid_normal_length_sq = dot(receiver_grid_normal, receiver_grid_normal);
@@ -463,27 +488,21 @@ bool ph_sable_same_sublevel_light_visibility(
         axis_mask
     )) < 0.5f;
 
-    vec3 receiver_endpoint;
+    vec3 receiver_endpoint = ph_sable_receiver_surface_endpoint(
+        receiver_grid_pos,
+        face_normal,
+        receiver_cell
+    );
     vec3 source_endpoint;
     if (coplanar_source) {
         // A wall-mounted source must begin on the exposed face. Starting from
         // its center sends tangential rays through neighboring wall cells.
-        receiver_endpoint = ph_sable_receiver_surface_endpoint(
-            receiver_grid_pos,
-            face_normal,
-            receiver_cell
-        );
         source_endpoint = source_center
             + face_normal * (0.5f + PH_SABLE_VISIBILITY_BIAS);
     } else {
-        // Preserve the collinear v28 segment for non-coplanar layouts.
-        if (!ph_sable_exit_receiver_cell(
-                receiver_grid_pos,
-                receiver_to_source,
-                receiver_cell,
-                receiver_endpoint
-        )) return false;
-
+        // Snap to the classified exposed face before constructing the
+        // collinear source endpoint. A ray-direction bias has vanishing
+        // normal clearance at grazing angles and is unstable at block joints.
         vec3 source_to_receiver = receiver_endpoint - source_center;
         float source_ray_scale = max(
             abs(source_to_receiver.x),
@@ -507,6 +526,36 @@ bool ph_sable_same_sublevel_light_visibility(
         receiver_cell
     );
     return true;
+}
+
+bool ph_sable_same_sublevel_light_visibility(
+    int receiver_slot,
+    uint receiver_token,
+    vec3 receiver_player_pos,
+    vec3 receiver_world_normal,
+    int light_temporal_domain,
+    vec3 light_player_pos,
+    out bool visible
+) {
+    visible = true;
+    if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
+            || receiver_token == 0u
+            || receiver_token != ph_sable_identity_token(receiver_slot))
+        return false;
+
+    vec3 receiver_grid_pos = (
+        ph_sable_player_to_grid_matrix(receiver_slot)
+            * vec4(receiver_player_pos, 1.0f)
+    ).xyz;
+    return ph_sable_same_sublevel_light_visibility_at_grid(
+        receiver_slot,
+        receiver_token,
+        receiver_grid_pos,
+        receiver_world_normal,
+        light_temporal_domain,
+        light_player_pos,
+        visible
+    );
 }
 
 bool ph_sable_receiver_motion(

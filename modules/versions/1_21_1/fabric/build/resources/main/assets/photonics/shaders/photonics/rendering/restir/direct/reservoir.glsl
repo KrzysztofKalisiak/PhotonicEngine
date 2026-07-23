@@ -266,11 +266,13 @@ vec3 direct_reservoir_get_unshadowed_color(
     return direct_sample_get_color(reservoir.smple, light, sample_pos, geo_normal, tex_normal) * reservoir.weight;
 }
 
-bool direct_sample_get_final_unweighted_color(
+bool direct_sample_get_final_unweighted_color_impl(
     DirectSample smple,
     vec3 sample_pos,
     vec3 geo_normal,
     vec3 tex_normal,
+    bool receiver_grid_pos_valid,
+    vec3 receiver_grid_pos,
     out vec3 result
 ) {
     result = vec3(0.0f);
@@ -299,15 +301,28 @@ bool direct_sample_get_final_unweighted_color(
 #endif
 
     bool local_visible;
-    bool local_visibility_handled = ph_sable_same_sublevel_light_visibility(
-            frag_data_sublevel_slot(_frag_data),
-            frag_data_sublevel_token(_frag_data),
-            sample_pos - rt_camera_position,
-            geo_normal,
-            direct_sample_get_temporal_domain(smple),
-            light.position - rt_camera_position,
-            local_visible
-    );
+    bool local_visibility_handled;
+    if (receiver_grid_pos_valid) {
+        local_visibility_handled = ph_sable_same_sublevel_light_visibility_at_grid(
+                frag_data_sublevel_slot(_frag_data),
+                frag_data_sublevel_token(_frag_data),
+                receiver_grid_pos,
+                geo_normal,
+                direct_sample_get_temporal_domain(smple),
+                light.position - rt_camera_position,
+                local_visible
+        );
+    } else {
+        local_visibility_handled = ph_sable_same_sublevel_light_visibility(
+                frag_data_sublevel_slot(_frag_data),
+                frag_data_sublevel_token(_frag_data),
+                sample_pos - rt_camera_position,
+                geo_normal,
+                direct_sample_get_temporal_domain(smple),
+                light.position - rt_camera_position,
+                local_visible
+        );
+    }
     bool same_receiver_domain = direct_sample_matches_receiver_domain(
         smple,
         frag_data_sublevel_token(_frag_data)
@@ -342,6 +357,43 @@ bool direct_sample_get_final_unweighted_color(
     }
     return true;
 #endif
+}
+
+bool direct_sample_get_final_unweighted_color(
+    DirectSample smple,
+    vec3 sample_pos,
+    vec3 geo_normal,
+    vec3 tex_normal,
+    out vec3 result
+) {
+    return direct_sample_get_final_unweighted_color_impl(
+        smple,
+        sample_pos,
+        geo_normal,
+        tex_normal,
+        false,
+        vec3(0.0f),
+        result
+    );
+}
+
+bool direct_sample_get_final_unweighted_color_at_sable_grid(
+    DirectSample smple,
+    vec3 sample_pos,
+    vec3 geo_normal,
+    vec3 tex_normal,
+    vec3 receiver_grid_pos,
+    out vec3 result
+) {
+    return direct_sample_get_final_unweighted_color_impl(
+        smple,
+        sample_pos,
+        geo_normal,
+        tex_normal,
+        true,
+        receiver_grid_pos,
+        result
+    );
 }
 
 vec3 direct_reservoir_get_final_color(
