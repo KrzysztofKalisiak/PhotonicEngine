@@ -109,14 +109,42 @@ void main() {
     IndirectReservoir indirect_result = indirect_reservoir_empty();
     IndirectReservoir temp_indirect = indirect_reservoir_empty();
 
-    indirect_reservoir_load(temp_indirect, frag_tex_coord);
-    indirect_reservoir_merge(indirect_result, temp_indirect, 1.0f, indirect_sample_weight);
-
-    // load temporal sampled reservoir
-    if (indirect_reservoir_load_previous(temp_indirect, prev_texel)) {
+    // Indirect samples do not yet encode a Sable hit domain or local-space hit
+    // point. Reuse world history only; moving receivers keep their current
+    // frame proposal until that representation exists.
+    if (sublevel_token == 0u
+            && !frag_is_hand
+            && indirect_reservoir_load_previous(temp_indirect, prev_texel)) {
         temp_indirect.total_samples = min(max_indirect_temporal_samples, temp_indirect.total_samples);
-        indirect_reservoir_merge(indirect_result, temp_indirect, 1.0f, indirect_sample_weight);
+
+        // Previous fragment positions are camera-relative. Convert the source
+        // receiver into the current camera space without changing the local
+        // direct-light reprojection contract.
+        FragData shift_source_frag = prev_frag;
+        shift_source_frag.data0.xyz -= cameraPosition - previousCameraPosition;
+
+        float shift = indirect_sample_compute_shift(
+            temp_indirect.smple,
+            _frag_data,
+            shift_source_frag
+        );
+        if (shift > 0.0f && shift < 1.2f) {
+            indirect_reservoir_merge(
+                indirect_result,
+                temp_indirect,
+                shift,
+                indirect_sample_weight
+            );
+        }
     }
+
+    indirect_reservoir_load(temp_indirect, frag_tex_coord);
+    indirect_reservoir_merge_current_batch(
+        indirect_result,
+        temp_indirect,
+        1.0f,
+        indirect_sample_weight
+    );
 
     // write resulting reservoir
     indirect_reservoir_finalize_weight(indirect_result, indirect_sample_weight);

@@ -14,6 +14,7 @@ void main() {
     if (!frag_is_in_world) discard;
 
     uint initial_rnd_state = frag_rnd_state;
+    uint trace_rnd_state = initial_rnd_state;
 
     vec3 indirect_result = vec3(0.0f);
     vec3 hit_normal;
@@ -23,8 +24,7 @@ void main() {
         indirect_result,
         frag_rt_pos,
         frag_geo_normal,
-        frag_is_hand ? frag_geo_normal : frag_tex_normal,
-        frag_rnd_state,
+        trace_rnd_state,
 
         hit_position,
         hit_normal
@@ -32,7 +32,6 @@ void main() {
 
     IndirectReservoir reservoir = indirect_reservoir_empty();
 
-    indirect_sample_set_color(reservoir.smple, indirect_result);
     indirect_sample_set_rnd_state(reservoir.smple, initial_rnd_state);
 
     indirect_sample_set_visible_normal(reservoir.smple, frag_geo_normal);
@@ -41,7 +40,16 @@ void main() {
     indirect_sample_set_hit_normal(reservoir.smple, hit_normal);
     indirect_sample_set_hit_position(reservoir.smple, hit_position);
 
-    reservoir.weight = ph_luminance(reservoir.smple.color);
+    // Use the serialized finite hit point for both world and sky samples so
+    // normal-map compensation matches the point reused in later frames.
+    vec3 stored_hit_position = indirect_sample_get_hit_point(reservoir.smple);
+    indirect_result *= indirect_normal_factor(
+        _frag_data,
+        stored_hit_position
+    );
+    indirect_sample_set_color(reservoir.smple, indirect_result);
+
+    reservoir.weight = max(ph_luminance(reservoir.smple.color), 0.0f);
     reservoir.total_samples = 1.0f;
 
     indirect_reservoir_finalize_weight(reservoir, reservoir.weight);

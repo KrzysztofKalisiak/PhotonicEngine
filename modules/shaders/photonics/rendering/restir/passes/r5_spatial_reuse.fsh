@@ -226,7 +226,12 @@ void main() {
     IndirectReservoir temp_indirect = indirect_reservoir_empty();
 
     indirect_reservoir_load(temp_indirect, frag_tex_coord);
-    indirect_reservoir_merge(indirect_result, temp_indirect, 1.0f, indirect_sample_weight);
+    indirect_reservoir_merge_current_batch(
+        indirect_result,
+        temp_indirect,
+        1.0f,
+        indirect_sample_weight
+    );
 #endif
 
     const float reuse_radius = PH_RESTIR_SPATIAL_REUSE_RADIUS * PH_RENDER_SCALE;

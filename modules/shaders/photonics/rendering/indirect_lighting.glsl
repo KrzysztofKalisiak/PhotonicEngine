@@ -41,7 +41,7 @@ void prepare_next_gi_ray(
         int bounce_count,
 
         vec3 rt_pos,
-        vec3 geo_normal,
+        vec3 normal,
         inout bool is_tracing_to_sun
 ) {
     ray_iter_set_direction(
@@ -50,24 +50,31 @@ void prepare_next_gi_ray(
                 rnd_state,
                 bounce_count,
                 rt_pos,
-                geo_normal,
+                normal,
                 is_tracing_to_sun
             )
     );
 
-    ray_iter_offset_position(ray, ray.direction * 0.03f);
+    // The primary ray already starts on the visible surface. Offsetting it
+    // changes the serialized ReSTIR hit distance and can skip nearby geometry.
+    if (bounce_count != -1)
+        ray_iter_offset_position(ray, ray.direction * 0.03f);
 }
 
 void sample_indirect(
         inout vec3 indirect_color,
         vec3 sample_rt_pos,
-        vec3 geo_normal,
-        vec3 tex_normal,
+        vec3 normal,
         inout uint rnd_state,
 
         out vec3 first_hit,
         out vec3 first_normal
 ) {
+    const float infinity = intBitsToFloat(0x7f800000);
+
+    first_hit = vec3(infinity);
+    first_normal = normal;
+
     vec4 running_tint_color = vec4(0.0f);
     float running_light_transmittance = 1.0f;
     vec3 running_bounce_color = vec3(1.0f);
@@ -79,20 +86,23 @@ void sample_indirect(
 
     ray.iterations = max_gi_iterations;
     ray_iter_set_position(ray, sample_rt_pos);
-    prepare_next_gi_ray(ray, rnd_state, bounce_count, sample_rt_pos, geo_normal, is_tracing_to_sun);
+    prepare_next_gi_ray(ray, rnd_state, bounce_count, sample_rt_pos, normal, is_tracing_to_sun);
 
     while (bounce_count < PH_MAX_GI_BOUNCES) {
         RayResult hit = ray_iter_next(ray);
+        if (ray.iterations <= 0) {
+            indirect_color = vec3(0.0f);
+            return;
+        }
+
         vec3 hit_position = ray_result_position(hit);
         vec3 hit_normal = ray_result_normal(hit);
 
-        if (bounce_count == -1) {
-            first_hit = ray_result_is_hit(hit) ? hit_position : vec3(-1.0f);
-            first_normal = hit_normal;
-        }
-
         // No hit & not out of bounds means we likely out of iterations
-        if (!ray_result_is_hit(hit) && ray_iter_is_in_bounds(ray)) break;
+        if (!ray_result_is_hit(hit) && ray_iter_is_in_bounds(ray)) {
+            indirect_color = vec3(0.0f);
+            return;
+        }
 
         vec4 albedo = vec4(1.0f);
         vec3 radiance_color = vec3(0.0f);
@@ -115,6 +125,11 @@ void sample_indirect(
                 ray_iter_skip_block(ray);
 
                 continue;
+            }
+
+            if (bounce_count == -1) {
+                first_hit = hit_position;
+                first_normal = hit_normal;
             }
 
             is_tracing_to_sun = false;
@@ -144,15 +159,15 @@ void sample_indirect(
                     hit_light,
                     sample_rt_pos,
                     floor(ray_result_position(hit)) + 0.5f,
-                    geo_normal,
-                    geo_normal
+                    normal,
+                    normal
                 ) * gi_light_multiplier;
             }
 #else
             modify_indirect_surface_sample(
                 hit,
                 sample_rt_pos,
-                geo_normal,
+                normal,
                 bounce_count,
                 rnd_state,
 
@@ -160,10 +175,11 @@ void sample_indirect(
             );
 #endif
         } else {
-            ray.iterations = 0;
             vec3 player_pos = hit_position - rt_camera_position;
 
             radiance_color = is_tracing_to_sun ? get_sun_color(player_pos, ray.direction) : get_sky_color(player_pos, ray.direction);
+            if (bounce_count == -1)
+                first_normal = -ray.direction;
         }
 
         #define gi_tint_color (running_tint_color != vec4(0.0) ? running_tint_color.rgb : vec3(1.0f))
@@ -172,12 +188,14 @@ void sample_indirect(
 
         indirect_color += radiance_color * gi_tint_color * gi_bounce_color * gi_intensity;
 
+        if (!ray_result_is_hit(hit)) return;
+
         bounce_count += 1;
         running_bounce_color *= albedo.rgb;
 
         sample_rt_pos = hit_position;
-        geo_normal = hit_normal;
+        normal = hit_normal;
 
-        prepare_next_gi_ray(ray, rnd_state, bounce_count, sample_rt_pos, geo_normal, is_tracing_to_sun);
+        prepare_next_gi_ray(ray, rnd_state, bounce_count, sample_rt_pos, normal, is_tracing_to_sun);
     }
 }

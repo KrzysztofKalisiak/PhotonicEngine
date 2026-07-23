@@ -35,6 +35,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         Photonics.LOGGER.info(
                 "Photonics feature increment: v65 upstream traversal guard, hand texture-normal evaluation, immature-history edge variance, and variance-guided full SVGF passes; direct-light-v64 proxy ownership retained"
         );
+        Photonics.LOGGER.info(
+                "Photonics GI foundation v66: finite full-position indirect reservoirs, corrected primary-ray origin/origin rebasing/explicit sky hits, normal/Jacobian-weighted world temporal reuse, hand/Sable temporal isolation, and selected-reservoir visibility validation; combined GI remains gated"
+        );
         Photonics.LOGGER.info("Photonics feature set: direct-light-v64 expiring Contraption Lights proxy ownership with a conservative nearby unmatched-proxy quarantine, position-matched Sable light alias trail with registry/profile diagnostics and render-thread-owned external merge, full-precision motion-grid Sable receiver visibility and endpoint-safe conservative traversal, dual-space Sable light de-duplication, production composite restored after v57 reservoir diagnostics, corrected indirect hit-normal decoding, full temporal reservoir retention for Sable external lighting, randomized systematic world-light proposals, Sable skylight-transition diagnostics with opt-in getter freeze, post-denoise exact Sable-local direct stream and fail-closed same-domain visibility, camera-relative double-composed Sable reprojection, normal-guided receiver classification, tri-state same-sublevel visibility and conservative supercover voxel traversal, sampling-time receiver-domain partition with exact same-sublevel direct lighting, external-only Sable reservoirs and soft-shadow local-visibility-signature-guided Sable SVGF support, preserved all-zero current proposal batches, elapsed-time moving-light hysteresis and unsnapped render-pose positions, rejected spatial-batch accounting, receiver-domain-complete stable/external history partition and rigid-motion Sable spatial reuse, bounded visibility-rejected reservoirs and representative-scoped external reactivity, split stable/external accumulation histories and stale Sable material recovery, explicit emitter motion-domain identity, motion-domain-stable receiver-relative light-history limits, previous-light position metadata, rotation-correct cross-sublevel motion, guarded ordinary-world all-light and external-only Sable single-neighbor spatial reuse, immutable spatial input, current-receiver visibility validation, bounded spatial history, independent spatial random stream, bounded reservoirs, zero-contribution batch accounting, actual-motion reactive lights, stable-anchor Sable reprojection, surface-plane SVGF, visibility-transition provenance, stable Sable identity, current-visible temporal reuse, Sable plot-section isolation, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, duplicate Veil point-light suppression, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; Sable-receiver world/cross-sublevel spatial reuse and combined GI compatibility gates active");
 
         // The hand needs at least seven denoiser passes to avoid residual noise.
@@ -58,7 +61,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_lighting_variance", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirEnabled)
                 .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
                 .addAttachment("restir_direct_state", ITextureFormat.rg32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
-                .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
+                .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs2", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
@@ -127,6 +130,8 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 // The spatial pass also caps temporal reservoirs, so it must run
                 // when the configured spatial candidate count is zero.
                 .deferredPass("spatial reuse/clamp", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isRestirEnabled)
+                .withFramebuffer(indirectReservoirFramebuffer)
+                .deferredPass("validate indirect", "/photonics/rendering/restir/passes/r6_validate_indirect.fsh", null, this::isRestirGiEnabled)
                 .withFramebuffer(diffuseFramebuffer)
                 .deferredPass("diffuse", "/photonics/rendering/restir/passes/r6_diffuse.fsh", null, this::isRestirEnabled)
                 .withFramebuffer(accumulationFramebuffer)
