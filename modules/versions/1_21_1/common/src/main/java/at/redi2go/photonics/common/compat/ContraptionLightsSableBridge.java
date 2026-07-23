@@ -4,6 +4,7 @@ import at.redi2go.photonics.api.gpu.systems.IRenderSystem;
 import at.redi2go.photonics.api.gpu.textures.IGpuTexture3D;
 import at.redi2go.photonics.api.gpu.textures.ITextureFormat;
 import at.redi2go.photonics.api.gpu.textures.TextureUsage;
+import at.redi2go.photonics.api.mc.world.level.IBlock;
 import at.redi2go.photonics.api.mc.world.level.IBlockState;
 import at.redi2go.photonics.api.shaders.IShaderPack;
 import at.redi2go.photonics.common.iris.IrisUtil;
@@ -273,12 +274,12 @@ public final class ContraptionLightsSableBridge {
                             lightX[i],
                             lightY[i],
                             lightZ[i],
-                            apiBlockState
+                            apiBlockState.ph$block()
                     ));
                     retainReplacementAliases(
                             identity,
                             replacementAliases,
-                            apiBlockState,
+                            apiBlockState.ph$block(),
                             captureTimeNanos,
                             worldPosition,
                             logicalWorldPosition,
@@ -327,7 +328,7 @@ public final class ContraptionLightsSableBridge {
     private static void retainReplacementAliases(
             SableLightIdentity identity,
             Set<ExternalLightList.ReplacementAlias> replacementAliases,
-            IBlockState blockState,
+            IBlock block,
             long captureTimeNanos,
             Vector3dc... positions
     ) {
@@ -342,7 +343,7 @@ public final class ContraptionLightsSableBridge {
             if (position == null)
                 continue;
 
-            var alias = replacementAlias(position, blockState);
+            var alias = replacementAlias(position, block);
             history.remove(alias);
             history.put(alias, expiresAt);
         }
@@ -358,13 +359,13 @@ public final class ContraptionLightsSableBridge {
 
     private static ExternalLightList.ReplacementAlias replacementAlias(
             Vector3dc position,
-            IBlockState blockState
+            IBlock block
     ) {
         return new ExternalLightList.ReplacementAlias(
                 (int) Math.floor(position.x()),
                 (int) Math.floor(position.y()),
                 (int) Math.floor(position.z()),
-                blockState
+                block
         );
     }
 
@@ -374,7 +375,7 @@ public final class ContraptionLightsSableBridge {
 
         replacementAliasTrailLogged = true;
         Photonics.LOGGER.info(
-                "Photonics v61 stale section-light suppression active: lights={}, aliases={}, aliasHoldMs={}, maxAliasesPerLight={}, matching=block-position+state, mergeOwner=render-thread",
+                "Photonics v62 stale section-light suppression active: lights={}, aliases={}, aliasHoldMs={}, maxAliasesPerLight={}, matching=block-position+block-identity, mergeOwner=render-thread",
                 lights,
                 aliases,
                 REPLACEMENT_ALIAS_HOLD_NANOS / 1_000_000L,

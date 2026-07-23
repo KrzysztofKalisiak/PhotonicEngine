@@ -1,6 +1,6 @@
 package at.redi2go.photonics.core.rendering.lights;
 
-import at.redi2go.photonics.api.mc.world.level.IBlockState;
+import at.redi2go.photonics.api.mc.world.level.IBlock;
 
 import java.util.List;
 import java.util.Set;
@@ -42,14 +42,14 @@ public final class ExternalLightList {
     ) {
     }
 
-    public record ReplacementAlias(int x, int y, int z, IBlockState blockState) {
+    public record ReplacementAlias(int x, int y, int z, IBlock block) {
         public static ReplacementAlias from(TracedLightPosition light) {
             var blockPos = light.blockPos();
             return new ReplacementAlias(
                     blockPos.x,
                     blockPos.y,
                     blockPos.z,
-                    light.blockState()
+                    light.blockState().ph$block()
             );
         }
     }

@@ -346,7 +346,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
         if (suppressedSectionLights != lastDiagnosticSuppressedSectionLights) {
             Photonics.LOGGER.info(
-                    "Photonics v61 external-light de-duplication: suppressedSectionLights={}, materialMatchedAliases={}, externalLights={}, firstSuppressed={}",
+                    "Photonics v62 external-light de-duplication: suppressedSectionLights={}, blockMatchedAliases={}, externalLights={}, firstSuppressed={}",
                     suppressedSectionLights,
                     replacementAliases.size(),
                     externalLights.size(),
