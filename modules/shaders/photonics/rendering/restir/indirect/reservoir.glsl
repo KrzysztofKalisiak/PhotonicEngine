@@ -138,7 +138,7 @@ void indirect_reservoir_decode(
     reservoir.total_samples = data1.a;
 
     reservoir.smple.packed_visible_normal = floatBitsToUint(data2.x);
-    reservoir.smple.packed_hit_normal = floatBitsToUint(data2.x);
+    reservoir.smple.packed_hit_normal = floatBitsToUint(data2.y);
 
     reservoir.smple.trace_distance = data2.z;
     reservoir.smple.rnd_state = floatBitsToUint(data2.w);
