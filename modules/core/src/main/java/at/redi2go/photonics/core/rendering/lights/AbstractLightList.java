@@ -72,6 +72,9 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     private int lastDiagnosticPriorityLights = -1;
     private int lastDiagnosticMovingLights = -1;
     private int lastDiagnosticSuppressedSectionLights = -1;
+    private int lastDiagnosticBlockIdMatches = -1;
+    private int lastDiagnosticLightProfileMatches = -1;
+    private int lastDiagnosticPositionFallbacks = -1;
 
     @SuppressWarnings("UnstableApiUsage")
     public AbstractLightList(
@@ -327,13 +330,41 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
         ];
         int size = 0;
         int suppressedSectionLights = 0;
+        int blockIdMatches = 0;
+        int lightProfileMatches = 0;
+        int positionFallbacks = 0;
         Vector3i firstSuppressedPosition = null;
         Set<TracedLightPosition> knownLights = new HashSet<>();
 
         if (sectionLights != null) {
             for (var light : sectionLights) {
-                if (replacementAliases.contains(ExternalLightList.ReplacementAlias.from(light))) {
+                var sectionAlias = ExternalLightList.ReplacementAlias.from(light);
+                boolean positionMatched = false;
+                boolean blockIdMatched = false;
+                boolean lightProfileMatched = false;
+                for (var alias : replacementAliases) {
+                    if (!alias.matchesPosition(sectionAlias))
+                        continue;
+
+                    positionMatched = true;
+                    if (alias.matchesBlockId(sectionAlias)) {
+                        blockIdMatched = true;
+                        break;
+                    }
+                    if (alias.matchesLightProfile(sectionAlias))
+                        lightProfileMatched = true;
+                }
+
+                // Sable's mirrored section may expose a different state wrapper.
+                // An exact cell match still denotes the same block emitter.
+                if (positionMatched) {
                     suppressedSectionLights++;
+                    if (blockIdMatched)
+                        blockIdMatches++;
+                    else if (lightProfileMatched)
+                        lightProfileMatches++;
+                    else
+                        positionFallbacks++;
                     if (firstSuppressedPosition == null)
                         firstSuppressedPosition = light.blockPos();
                     continue;
@@ -344,15 +375,24 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
             }
         }
 
-        if (suppressedSectionLights != lastDiagnosticSuppressedSectionLights) {
+        if (suppressedSectionLights != lastDiagnosticSuppressedSectionLights
+                || blockIdMatches != lastDiagnosticBlockIdMatches
+                || lightProfileMatches != lastDiagnosticLightProfileMatches
+                || positionFallbacks != lastDiagnosticPositionFallbacks) {
             Photonics.LOGGER.info(
-                    "Photonics v62 external-light de-duplication: suppressedSectionLights={}, blockMatchedAliases={}, externalLights={}, firstSuppressed={}",
+                    "Photonics v63 external-light de-duplication: suppressedSectionLights={}, blockIdMatches={}, lightProfileMatches={}, positionFallbacks={}, replacementAliases={}, externalLights={}, firstSuppressed={}",
                     suppressedSectionLights,
+                    blockIdMatches,
+                    lightProfileMatches,
+                    positionFallbacks,
                     replacementAliases.size(),
                     externalLights.size(),
                     firstSuppressedPosition == null ? "none" : firstSuppressedPosition
             );
             lastDiagnosticSuppressedSectionLights = suppressedSectionLights;
+            lastDiagnosticBlockIdMatches = blockIdMatches;
+            lastDiagnosticLightProfileMatches = lightProfileMatches;
+            lastDiagnosticPositionFallbacks = positionFallbacks;
         }
 
         for (var light : externalLights) {
