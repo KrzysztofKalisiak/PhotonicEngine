@@ -1,6 +1,7 @@
 package at.redi2go.photonics.core.rendering.lights;
 
-import at.redi2go.photonics.api.mc.world.level.IBlock;
+import at.redi2go.photonics.api.mc.world.level.IBlockState;
+import at.redi2go.photonics.core.config.lights.BlockLightInfo;
 
 import java.util.List;
 import java.util.Set;
@@ -42,15 +43,58 @@ public final class ExternalLightList {
     ) {
     }
 
-    public record ReplacementAlias(int x, int y, int z, IBlock block) {
+    public record ReplacementAlias(
+            int x,
+            int y,
+            int z,
+            String blockId,
+            BlockLightInfo lightInfo
+    ) {
         public static ReplacementAlias from(TracedLightPosition light) {
             var blockPos = light.blockPos();
-            return new ReplacementAlias(
+            return at(
                     blockPos.x,
                     blockPos.y,
                     blockPos.z,
-                    light.blockState().ph$block()
+                    light.blockState(),
+                    light.lightInfo()
             );
+        }
+
+        public static ReplacementAlias at(
+                int x,
+                int y,
+                int z,
+                IBlockState blockState,
+                BlockLightInfo lightInfo
+        ) {
+            return new ReplacementAlias(
+                    x,
+                    y,
+                    z,
+                    blockId(blockState),
+                    lightInfo
+            );
+        }
+
+        public boolean matchesPosition(ReplacementAlias other) {
+            return x == other.x && y == other.y && z == other.z;
+        }
+
+        public boolean matchesBlockId(ReplacementAlias other) {
+            return blockId.equals(other.blockId);
+        }
+
+        public boolean matchesLightProfile(ReplacementAlias other) {
+            return lightInfo.equals(other.lightInfo);
+        }
+
+        private static String blockId(IBlockState blockState) {
+            var id = blockState.ph$block().ph$id();
+            if (id == null)
+                return "<unregistered>";
+
+            return id.ph$namespace() + ":" + id.ph$path();
         }
     }
 }
