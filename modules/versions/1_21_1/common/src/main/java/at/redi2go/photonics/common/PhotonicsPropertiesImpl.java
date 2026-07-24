@@ -7,8 +7,10 @@ import at.redi2go.photonics.core.Photonics;
 
 public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     public static final String RENDER_SCALE_OVERRIDE_PROPERTY = "photonics.renderScaleOverride";
+    public static final String GI_RENDER_SCALE_OVERRIDE_PROPERTY = "photonics.giRenderScaleOverride";
     public static final String RESTIR_INITIAL_SAMPLES_OVERRIDE_PROPERTY = "photonics.restirInitialSamplesOverride";
     public static final String RESTIR_DENOISER_PASSES_OVERRIDE_PROPERTY = "photonics.restirDenoiserPassesOverride";
+    public static final String RESTIR_GI_DENOISER_PASSES_OVERRIDE_PROPERTY = "photonics.restirGiDenoiserPassesOverride";
 
     private static final boolean DISABLE_ACTIVE_PIPELINE_FOR_DIAGNOSTICS = false;
     private static final float MIN_RENDER_SCALE_OVERRIDE = 0.25f;
@@ -25,6 +27,11 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
             MIN_RENDER_SCALE_OVERRIDE,
             MAX_RENDER_SCALE_OVERRIDE
     );
+    private final Float giRenderScaleOverride = readFloatOverride(
+            GI_RENDER_SCALE_OVERRIDE_PROPERTY,
+            MIN_RENDER_SCALE_OVERRIDE,
+            MAX_RENDER_SCALE_OVERRIDE
+    );
     private final Integer restirInitialSamplesOverride = readIntOverride(
             RESTIR_INITIAL_SAMPLES_OVERRIDE_PROPERTY,
             MIN_RESTIR_INITIAL_SAMPLES,
@@ -35,9 +42,15 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
             0,
             MAX_RESTIR_DENOISER_PASSES_OVERRIDE
     );
+    private final Integer restirGiDenoiserPassesOverride = readIntOverride(
+            RESTIR_GI_DENOISER_PASSES_OVERRIDE_PROPERTY,
+            0,
+            MAX_RESTIR_DENOISER_PASSES_OVERRIDE
+    );
 
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
     public float renderScale = PhotonicsProperties.DEFAULT_RENDER_SCALE;
+    public float giRenderScale = PhotonicsProperties.DEFAULT_GI_RENDER_SCALE;
     public int maxLights = PhotonicsProperties.DEFAULT_MAX_LIGHTS;
     public int maxGiBounces = PhotonicsProperties.DEFAULT_MAX_GI_BOUNCES;
     public AlphaMode alphaMode = PhotonicsProperties.DEFAULT_ALPHA_MODE;
@@ -56,14 +69,17 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     public boolean restirSoftShadows = PhotonicsProperties.DEFAULT_USE_RESTIR_SOFT_SHADOWS;
     public boolean restirCombinedGi = PhotonicsProperties.DEFAULT_USE_RESTIR_COMBINED_GI;
     public int restirDenoiserPasses = PhotonicsProperties.DEFAULT_RESTIR_DENOISER_PASSES;
+    public int restirGiDenoiserPasses = PhotonicsProperties.DEFAULT_RESTIR_GI_DENOISER_PASSES;
     public int maxSamples = PhotonicsProperties.DEFAULT_MAX_SAMPLES;
 
     public PhotonicsPropertiesImpl() {
         Photonics.LOGGER.info(
-                "Photonics performance overrides v78: renderScale={}, restirInitialSamples={}, restirDenoiserPasses={} (shader-pack means no JVM override)",
+                "Photonics performance overrides v79: renderScale={}, giRenderScale={}, restirInitialSamples={}, restirDenoiserPasses={}, restirGiDenoiserPasses={} (shader-pack means no JVM override)",
                 overrideLabel(renderScaleOverride),
+                overrideLabel(giRenderScaleOverride),
                 overrideLabel(restirInitialSamplesOverride),
-                overrideLabel(restirDenoiserPassesOverride)
+                overrideLabel(restirDenoiserPassesOverride),
+                overrideLabel(restirGiDenoiserPassesOverride)
         );
     }
 
@@ -75,6 +91,17 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     @Override
     public float getRenderScale() {
         return renderScaleOverride != null ? renderScaleOverride : renderScale;
+    }
+
+    @Override
+    public float getGiRenderScale() {
+        float effectiveScale = giRenderScaleOverride != null
+                ? giRenderScaleOverride
+                : giRenderScale;
+        return Math.min(
+                getRenderScale(),
+                Math.max(MIN_RENDER_SCALE_OVERRIDE, effectiveScale)
+        );
     }
 
     @Override
@@ -194,6 +221,17 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
         if (restirDenoiserPassesOverride != null)
             return restirDenoiserPassesOverride;
         return Math.max(restirDenoiserPasses, MIN_RESTIR_DENOISER_PASSES);
+    }
+
+    @Override
+    public int getRestirGiDenoiserPasses() {
+        int effectivePasses = restirGiDenoiserPassesOverride != null
+                ? restirGiDenoiserPassesOverride
+                : restirGiDenoiserPasses;
+        return Math.max(
+                0,
+                Math.min(effectivePasses, getRestirDenoiserPasses())
+        );
     }
 
     private static Float readFloatOverride(String key, float minimum, float maximum) {

@@ -111,6 +111,8 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
                 float invalidComponent = name.equals("restir_lighting")
                         || name.equals("restir_lighting_variance")
                         || name.equals("restir_external_lighting")
+                        || name.equals("restir_gi_lighting")
+                        || name.equals("restir_gi_lighting_variance")
                         ? -999.0f
                         : 0.0f;
                 float directLightIndex = name.equals("restir_direct_reservoirs0") ? -1.0f : invalidComponent;

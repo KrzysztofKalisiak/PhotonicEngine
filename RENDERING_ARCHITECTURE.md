@@ -396,8 +396,9 @@ The 1.21.1 mixin hooks `beginTranslucents` immediately before Iris invokes its
 deferred `CompositeRenderer`. `PhotonicsExtension.onRender()` executes the
 registered Photonics pipelines in order.
 
-First, the fragment-data pipeline flips its current/previous textures and runs
-`f0_load_frag.fsh`.
+First, the direct fragment-data pipeline flips its current/previous textures
+and runs `f0_load_frag.fsh`. When split GI is active, a second fragment-data
+pipeline runs `f0_load_frag_gi.fsh` on the lower-resolution GI grid.
 
 Then [`RestirPipeline.java`](modules/core/src/main/java/at/redi2go/photonics/core/iris/extensions/RestirPipeline.java)
 runs:
@@ -460,6 +461,32 @@ accumulation, and denoising remain at the smaller effective resolution.
 Framebuffer textures clamp at their edges so filtering the reduced result
 cannot wrap lighting from the opposite side of the screen.
 
+V79 can split direct lighting and GI onto independent grids. The split is
+enabled when combined ReSTIR GI is active and `giRenderScale` is lower than
+`renderScale`. Direct reservoirs, direct history, direct accumulation, and
+direct SVGF remain at `renderScale`; GI gets independent fragment data,
+indirect reservoirs, temporal/spatial reuse, accumulation, and SVGF at
+`giRenderScale`.
+
+This is a real reduction in shader invocations. It does not skip branches
+inside a full-size pass, and it does not upscale a low-resolution reservoir
+into a different receiver. Each GI reservoir belongs to one low-resolution
+receiver throughout its lifetime. Only the finished GI radiance is composed
+onto the direct grid, using position, normal, hand state, and Sable identity to
+avoid interpolation across unrelated surfaces.
+
+The additional v79 launch-time overrides are:
+
+```text
+-Dphotonics.giRenderScaleOverride=0.50
+-Dphotonics.restirGiDenoiserPassesOverride=3
+```
+
+The GI scale accepts `0.25..1.0` and is capped at the effective direct render
+scale. GI denoiser passes accept `0..12` and are capped at the effective direct
+denoiser count. Their shader-property equivalents are
+`photonics.giRenderScale` and `photonics.restirGiDenoiserPasses`.
+
 ### 8.4 The shader pack composes the result
 
 Photonics exposes functions such as `sample_photonics_direct(tex_coord)` and
@@ -485,6 +512,7 @@ The most useful textures and buffers are:
 | `ph_frag_data0` | fragment-data pass | visible player-relative position plus RT-position correction data |
 | `ph_frag_data1` | fragment-data pass | packed RT direction, geometric normal, texture normal, world/hand flags, Sable slot/token |
 | `ph_frag_motion` | fragment-data pass | previous player-relative position and normal for a classified Sable receiver |
+| `ph_gi_frag_data0..1`, `ph_gi_frag_motion` | split-GI fragment-data pass | the same receiver contract sampled on the independent GI grid |
 | `ph_world_voxel_buffer` | world compiler | sparse tree nodes, leaves, block metadata, and embedded static-light records |
 | `ph_palette_texture` | palette compiler | per-face voxel material records |
 | `ph_light_list` | light compiler | current/previous emitter state, material ID, and temporal domain |
@@ -497,6 +525,9 @@ The most useful textures and buffers are:
 | `restir_external_lighting` | diffuse then accumulation | lighting whose emitter motion differs from the receiver domain |
 | `restir_lighting_variance` | accumulation | temporal moments and variance for denoising |
 | `denoise_result` | SVGF passes | final filtered stochastic lighting |
+| `restir_gi_lighting`, `restir_gi_lighting_variance` | split-GI diffuse/accumulation | independent low-resolution GI radiance history and moments |
+| `restir_gi_indirect_reservoirs0..1` | split-GI ReSTIR passes | indirect reservoirs owned by GI-grid receivers |
+| `restir_gi_denoise_result` | split-GI SVGF passes | filtered GI radiance sampled during final composition |
 | `restir_local_lighting` | exact local pass | same-sublevel Sable hard-shadow lighting |
 | `other_handheld` | handheld pass | handheld-light contribution |
 
@@ -811,12 +842,12 @@ Typical failure modes:
 - unstable surface identity: the whole receiver pulses despite a static local
   lighting configuration.
 
-## 15. Current v57 diagnostic output
+## 15. Historical v57 diagnostic output
 
-**Current-fork detail.** The active
+**Historical fork detail.** The v57 diagnostic version of
 [`rendering/restir/samplers.glsl`](modules/shaders/photonics/rendering/restir/samplers.glsl)
-defines `PH_RESTIR_STREAM_SPLIT_DIAGNOSTIC`. It intentionally returns different
-data in four vertical screen quarters:
+defined `PH_RESTIR_STREAM_SPLIT_DIAGNOSTIC` and intentionally returned
+different data in four vertical screen quarters:
 
 | Horizontal range | Returned direct-light value |
 |---|---|
@@ -825,9 +856,10 @@ data in four vertical screen quarters:
 | 50% to 75% | accumulated stable plus external estimate before SVGF output selection |
 | 75% to 100% | current exact same-sublevel Sable-local lighting attachment (active in hard-shadow mode) |
 
-The quarters are diagnostics, not the intended final composition. In this mode
-`sample_photonics_direct` does not return the normal sum of denoised, external,
-and local direct lighting across the whole screen. Visual comparisons must take
+Those quarters were diagnostics, not the intended final composition. That mode
+is no longer active; current `sample_photonics_direct` composes the direct,
+external, exact-local, and optional split-GI results normally. Historical
+visual comparisons must take
 the current quarter into account.
 
 ## 16. A Python-like model of one pixel

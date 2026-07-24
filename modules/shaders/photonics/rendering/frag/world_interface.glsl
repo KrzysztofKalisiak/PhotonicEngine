@@ -16,7 +16,7 @@ vec2 ph_scaled_view_size(float scale) {
 
 vec2 ph_shaderpack_to_render_scale() {
     return ph_scaled_view_size(PH_SHADERPACK_RENDER_SCALE)
-        / ph_scaled_view_size(PH_RENDER_SCALE);
+        / ph_scaled_view_size(PH_ACTIVE_RENDER_SCALE);
 }
 
 vec4 ph_shaderpack_frag_coord() {

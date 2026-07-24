@@ -13,17 +13,56 @@ public class Pipelines {
     }
 
     public static void fragData(AbstractPhotonicsExtension ext, IrisFactory irisFactory, float renderScale) {
+        fragData(
+                ext,
+                irisFactory,
+                renderScale,
+                "frag data",
+                "ph_frag_data0",
+                "ph_frag_data1",
+                "ph_frag_motion",
+                "/photonics/rendering/frag/f0_load_frag.fsh"
+        );
+    }
+
+    public static void giFragData(AbstractPhotonicsExtension ext, IrisFactory irisFactory, float renderScale) {
+        fragData(
+                ext,
+                irisFactory,
+                renderScale,
+                "frag data gi",
+                "ph_gi_frag_data0",
+                "ph_gi_frag_data1",
+                "ph_gi_frag_motion",
+                "/photonics/rendering/frag/f0_load_frag_gi.fsh"
+        );
+    }
+
+    private static void fragData(
+            AbstractPhotonicsExtension ext,
+            IrisFactory irisFactory,
+            float renderScale,
+            String debugGroup,
+            String data0Name,
+            String data1Name,
+            String motionName,
+            String fragmentShader
+    ) {
         var framebuffer = irisFactory.newFramebuffer(renderScale)
-                .addAttachment("ph_frag_data0", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
-                .addAttachment("ph_frag_data1", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
-                .addAttachment("ph_frag_motion", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER)
+                .addAttachment(data0Name, ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
+                .addAttachment(data1Name, ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
+                .addAttachment(motionName, ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER)
                 .build(ext::registerComponent);
 
         irisFactory.newPipeline()
-                .debugGroup("frag data")
+                .debugGroup(debugGroup)
                 .withFramebuffer(framebuffer)
                 .thenFlip(framebuffer)
-                .deferredPass("frag data", "/photonics/rendering/frag/f0_load_frag.fsh", null)
+                .deferredPass(
+                        debugGroup,
+                        fragmentShader,
+                        null
+                )
                 .build(ext::registerRenderer);
     }
 }

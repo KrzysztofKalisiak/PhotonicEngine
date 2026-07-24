@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.ALPHA_MODE_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.ENABLED_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.ENCHANTMENT_GLINT_STRENGTH_KEY;
+import static at.redi2go.photonics.api.shaders.PhotonicsProperties.GI_RENDER_SCALE_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.IS_BLOCK_LIGHT_ENABLED_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.IS_BLOCK_LIGHT_GI_ENABLED_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.IS_GI_ENABLED_KEY;
@@ -37,6 +38,7 @@ import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RENDER_SCALE_
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_ACCUMULATION_FRAMES_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_COMBINED_GI_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_DENOISER_PASSES_KEY;
+import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_GI_DENOISER_PASSES_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_INITIAL_SAMPLES_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_SOFT_SHADOWS_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_SPATIAL_REUSE_RADIUS_KEY;
@@ -82,6 +84,7 @@ public abstract class ShaderPropertiesMixin {
 
         handleBooleanDirective(key, value, ENABLED_KEY, e -> phProperties.enabled = e);
         handleFloatDirective(key, value, RENDER_SCALE_KEY, e -> phProperties.renderScale = e);
+        handleFloatDirective(key, value, GI_RENDER_SCALE_KEY, e -> phProperties.giRenderScale = e);
 
         handleNonZeroDirective(key, value, MAX_LIGHTS_KEY, e -> phProperties.maxLights = e);
         handleNonZeroDirective(key, value, MAX_GI_BOUNCES_KEY, e -> phProperties.maxGiBounces = e);
@@ -104,6 +107,7 @@ public abstract class ShaderPropertiesMixin {
         handleFloatDirective(key, value, RESTIR_SPATIAL_REUSE_RADIUS_KEY, e -> phProperties.restirRestirSpatialReuseRadius = e);
         handleNonZeroDirective(key, value, RESTIR_ACCUMULATION_FRAMES_KEY, e -> phProperties.restirAccumulationFrames = e);
         handleUnsignedIntDirective(key, value, RESTIR_DENOISER_PASSES_KEY, e -> phProperties.restirDenoiserPasses = e);
+        handleUnsignedIntDirective(key, value, RESTIR_GI_DENOISER_PASSES_KEY, e -> phProperties.restirGiDenoiserPasses = e);
         handleBooleanDirective(key, value, RESTIR_SOFT_SHADOWS_KEY, e -> phProperties.restirSoftShadows = e);
         handleBooleanDirective(key, value, RESTIR_COMBINED_GI_KEY, e -> phProperties.restirCombinedGi = e);
     }

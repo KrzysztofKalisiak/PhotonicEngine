@@ -9,6 +9,12 @@ public interface PhotonicsProperties {
     float DEFAULT_RENDER_SCALE = 1f;
     String RENDER_SCALE_KEY = "photonics.renderScale";
 
+    default float getGiRenderScale() {
+        return Math.min(getRenderScale(), DEFAULT_GI_RENDER_SCALE);
+    }
+    float DEFAULT_GI_RENDER_SCALE = 0.5f;
+    String GI_RENDER_SCALE_KEY = "photonics.giRenderScale";
+
     default float getShaderPackRenderScale() {
         return getRenderScale();
     }
@@ -89,4 +95,10 @@ public interface PhotonicsProperties {
     int getRestirDenoiserPasses();
     int DEFAULT_RESTIR_DENOISER_PASSES = 5;
     String RESTIR_DENOISER_PASSES_KEY = "photonics.restirDenoiserPasses";
+
+    default int getRestirGiDenoiserPasses() {
+        return Math.min(getRestirDenoiserPasses(), DEFAULT_RESTIR_GI_DENOISER_PASSES);
+    }
+    int DEFAULT_RESTIR_GI_DENOISER_PASSES = 3;
+    String RESTIR_GI_DENOISER_PASSES_KEY = "photonics.restirGiDenoiserPasses";
 }

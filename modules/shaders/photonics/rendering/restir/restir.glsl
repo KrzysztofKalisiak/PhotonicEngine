@@ -575,8 +575,8 @@ float sample_history_min_variance(float samples) {
     if (frag_is_hand) return high_variance;
 
     const float padding = 0.13f;
-    const vec2 minimum = vec2(padding) * PH_RENDER_SCALE;
-    const vec2 maximum = vec2(1.0f - padding) * PH_RENDER_SCALE;
+    const vec2 minimum = vec2(padding) * PH_ACTIVE_RENDER_SCALE;
+    const vec2 maximum = vec2(1.0f - padding) * PH_ACTIVE_RENDER_SCALE;
     vec2 uv = gl_FragCoord.xy / vec2(viewWidth, viewHeight);
 
     return clamp(uv, minimum, maximum) != uv

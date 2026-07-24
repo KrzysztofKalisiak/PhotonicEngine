@@ -13,6 +13,7 @@ public class IrisDefines {
 
     public static void registerDefines(DefineHolder defines, PhotonicsProperties phProperties) {
         defines.floatDefine("PH_RENDER_SCALE", phProperties.getRenderScale());
+        defines.floatDefine("PH_GI_RENDER_SCALE", phProperties.getGiRenderScale());
         defines.floatDefine("PH_SHADERPACK_RENDER_SCALE", phProperties.getShaderPackRenderScale());
         defines.intDefine("PH_MAX_LIGHTS", phProperties.getMaxLights());
         defines.intDefine("PH_MAX_GI_BOUNCES", phProperties.getMaxGiBounces());
@@ -50,12 +51,18 @@ public class IrisDefines {
         defines.floatDefine("PH_RESTIR_SPATIAL_REUSE_RADIUS", phProperties.getRestirSpatialReuseRadius());
         defines.intDefine("PH_RESTIR_ACCUMULATION_FRAMES", phProperties.getRestirAccumulationFrames());
         defines.intDefine("PH_RESTIR_DENOISER_PASSES", phProperties.getRestirDenoiserPasses());
+        defines.intDefine("PH_RESTIR_GI_DENOISER_PASSES", phProperties.getRestirGiDenoiserPasses());
 
         if (phProperties.useRestirSoftShadows())
             defines.stringDefine("PH_RESTIR_SOFT_SHADOWS", "");
 
         if (phProperties.getLightingMode() == LightingMode.RESTIR && phProperties.useRestirCombinedGi())
             defines.stringDefine("PH_RESTIR_COMBINED_GI", "");
+
+        if (phProperties.getLightingMode() == LightingMode.RESTIR
+                && phProperties.useRestirCombinedGi()
+                && phProperties.getGiRenderScale() < phProperties.getRenderScale() - 0.0001f)
+            defines.stringDefine("PH_RESTIR_SPLIT_GI", "");
 
         defines.intDefine("PH_MAX_SAMPLES",  phProperties.getMaxSamples());
     }
