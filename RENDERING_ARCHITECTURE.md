@@ -406,7 +406,7 @@ runs:
 |---:|---|---|---|
 | 0 | Flip history | current/previous attachments swap roles | Preserve last frame without copying it |
 | 1 | `r1_initial_direct` | direct reservoir | Propose direct-light candidates, retain one weighted representative, and validate its visibility |
-| 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace an initial GI path when combined ReSTIR GI is enabled |
+| 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace an initial GI path; stable world history permits alternating-pixel tracing |
 | 3 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject and merge compatible previous-frame reservoirs |
 | 4 | `r5_copy_spatial_input` | immutable reservoir copies | Prevent reads from observing writes from the same spatial pass |
 | 5 | `r5_spatial_reuse` | direct and indirect reservoirs | Merge compatible current-frame neighbors, clamp history, and validate the final indirect representative |
@@ -427,6 +427,13 @@ final indirect visibility from `r5_spatial_reuse`. The standalone
 `r2_validate_initial_direct` and `r6_validate_indirect` shader sources remain
 for upstream comparison, but are not scheduled. This removes two full-screen
 reservoir read/write cycles without removing either visibility ray.
+
+Starting with v75, `r3_initial_indirect` omits the expensive new GI trace on
+alternating pixels only when a finite previous indirect reservoir reprojects to
+the same ordinary-world surface. The temporal pass supplies that pixel's
+proposal. Disocclusions, missing history, hand geometry, and Sable receivers
+remain full rate so the optimization does not create uncovered pixels or rely
+on unsupported moving-hit history.
 
 ### 8.4 The shader pack composes the result
 
@@ -460,7 +467,7 @@ The most useful textures and buffers are:
 | `ph_sable_occupancy` | Sable bridge | block-resolution local receiver/occluder flags |
 | `restir_direct_reservoirs0` | ReSTIR passes | chosen light index, normalized reservoir weight, effective sample count |
 | `restir_direct_state` | diffuse pass | final visibility/confidence or local-history signature |
-| `restir_indirect_reservoirs0..2` | GI passes | path color, random state, visible point/normal, first-hit point/normal, weight/count |
+| `restir_indirect_reservoirs0..1` | GI passes | path color, first-hit point/normal, weight/count |
 | `restir_lighting` | diffuse then accumulation | stable direct/GI lighting history |
 | `restir_external_lighting` | diffuse then accumulation | lighting whose emitter motion differs from the receiver domain |
 | `restir_lighting_variance` | accumulation | temporal moments and variance for denoising |
