@@ -406,7 +406,7 @@ runs:
 |---:|---|---|---|
 | 0 | Flip history | current/previous attachments swap roles | Preserve last frame without copying it |
 | 1 | `r1_initial_direct` | direct reservoir | Propose direct-light candidates, retain one weighted representative, and validate its visibility |
-| 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace an initial GI path; stable world history permits alternating-tile tracing |
+| 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace one full-rate initial GI path |
 | 3 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject and merge compatible previous-frame reservoirs |
 | 4 | `r5_copy_spatial_input` | immutable reservoir copies | Prevent reads from observing writes from the same spatial pass |
 | 5 | `r5_spatial_reuse` | direct and indirect reservoirs | Merge compatible current-frame neighbors, clamp history, and validate the final indirect representative |
@@ -428,14 +428,27 @@ final indirect visibility from `r5_spatial_reuse`. The standalone
 for upstream comparison, but are not scheduled. This removes two full-screen
 reservoir read/write cycles without removing either visibility ray.
 
-Starting with v76, `r3_initial_indirect` omits the expensive new GI trace in
-alternating 16 x 16 screen tiles only when a finite previous indirect reservoir
-reprojects to the same ordinary-world surface. The temporal pass supplies that
-pixel's proposal. Coherent tiles let neighboring GPU lanes avoid the ray
-together; the v75 one-pixel checkerboard diverged inside every GPU wave and
-saved effectively no trace time. Disocclusions, missing history, hand geometry,
-and Sable receivers remain full rate so the optimization does not create
-uncovered pixels or rely on unsupported moving-hit history.
+V77 restores full-rate initial GI. The v75 one-pixel and v76 tiled history
+interleaves produced no measurable stage-time reduction on the tested GPU, so
+keeping their extra history fetches would only complicate the baseline. V77
+instead exposes JVM overrides for render scale, initial direct candidates, and
+denoiser iterations. Lower render scale physically reduces framebuffer size and
+shader invocations, making it a valid performance experiment rather than a
+divergent fragment-shader early return.
+
+The v77 launch-time overrides are:
+
+```text
+-Dphotonics.renderScaleOverride=0.75
+-Dphotonics.restirInitialSamplesOverride=16
+-Dphotonics.restirDenoiserPassesOverride=5
+```
+
+Each property is independent and omitted properties continue to use the shader
+pack setting. Valid ranges are `0.25..1.0`, `8..32`, and `0..12`,
+respectively. Pipeline creation logs the effective values, and
+`Photonics frame throughput v77` reports exact rendered frames and FPS for each
+approximately five-second window.
 
 ### 8.4 The shader pack composes the result
 

@@ -171,7 +171,8 @@ public class PhotonicsRenderer extends CompositeRenderer {
 
     private void logTimingsIfReady() {
         long now = System.nanoTime();
-        if (cpuFrames < MIN_TIMING_FRAMES || now - timingWindowStart < TIMING_LOG_INTERVAL_NANOS) return;
+        long timingWindowNanos = now - timingWindowStart;
+        if (cpuFrames < MIN_TIMING_FRAMES || timingWindowNanos < TIMING_LOG_INTERVAL_NANOS) return;
 
         double averageCpuMillis = cpuNanos / (double) cpuFrames / 1_000_000.0;
         double maximumCpuMillis = maximumCpuNanos / 1_000_000.0;
@@ -198,6 +199,20 @@ public class PhotonicsRenderer extends CompositeRenderer {
                 formatMillis(maximumGpuMillis),
                 formatMillis(averageGpuMillisPerMegapixel)
         );
+
+        if ("frag data".equals(name)) {
+            double windowSeconds = timingWindowNanos / 1_000_000_000.0;
+            double framesPerSecond = cpuFrames / windowSeconds;
+            Photonics.LOGGER.info(
+                    "Photonics frame throughput v77: viewport={}x{}, windowSeconds={}, renderedFrames={}, fps={}, frameAvgMs={}",
+                    viewport.width(),
+                    viewport.height(),
+                    formatMillis(windowSeconds),
+                    cpuFrames,
+                    formatMillis(framesPerSecond),
+                    formatMillis(1_000.0 / framesPerSecond)
+            );
+        }
 
         timingWindowStart = now;
         cpuNanos = 0L;

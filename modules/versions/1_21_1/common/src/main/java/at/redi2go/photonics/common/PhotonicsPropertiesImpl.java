@@ -3,14 +3,38 @@ package at.redi2go.photonics.common;
 import at.redi2go.photonics.api.shaders.AlphaMode;
 import at.redi2go.photonics.api.shaders.LightingMode;
 import at.redi2go.photonics.api.shaders.PhotonicsProperties;
+import at.redi2go.photonics.core.Photonics;
 
 public class PhotonicsPropertiesImpl implements PhotonicsProperties {
+    public static final String RENDER_SCALE_OVERRIDE_PROPERTY = "photonics.renderScaleOverride";
+    public static final String RESTIR_INITIAL_SAMPLES_OVERRIDE_PROPERTY = "photonics.restirInitialSamplesOverride";
+    public static final String RESTIR_DENOISER_PASSES_OVERRIDE_PROPERTY = "photonics.restirDenoiserPassesOverride";
+
     private static final boolean DISABLE_ACTIVE_PIPELINE_FOR_DIAGNOSTICS = false;
+    private static final float MIN_RENDER_SCALE_OVERRIDE = 0.25f;
+    private static final float MAX_RENDER_SCALE_OVERRIDE = 1.0f;
     private static final int MIN_RESTIR_INITIAL_SAMPLES = 8;
     private static final int MAX_RESTIR_INITIAL_SAMPLES = 32;
     private static final int MAX_RESTIR_SPATIAL_REUSE_SAMPLES = 1;
     private static final float MAX_RESTIR_SPATIAL_REUSE_RADIUS = 5.0f;
     private static final int MIN_RESTIR_DENOISER_PASSES = 5;
+    private static final int MAX_RESTIR_DENOISER_PASSES_OVERRIDE = 12;
+
+    private final Float renderScaleOverride = readFloatOverride(
+            RENDER_SCALE_OVERRIDE_PROPERTY,
+            MIN_RENDER_SCALE_OVERRIDE,
+            MAX_RENDER_SCALE_OVERRIDE
+    );
+    private final Integer restirInitialSamplesOverride = readIntOverride(
+            RESTIR_INITIAL_SAMPLES_OVERRIDE_PROPERTY,
+            MIN_RESTIR_INITIAL_SAMPLES,
+            MAX_RESTIR_INITIAL_SAMPLES
+    );
+    private final Integer restirDenoiserPassesOverride = readIntOverride(
+            RESTIR_DENOISER_PASSES_OVERRIDE_PROPERTY,
+            0,
+            MAX_RESTIR_DENOISER_PASSES_OVERRIDE
+    );
 
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
     public float renderScale = PhotonicsProperties.DEFAULT_RENDER_SCALE;
@@ -34,6 +58,15 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     public int restirDenoiserPasses = PhotonicsProperties.DEFAULT_RESTIR_DENOISER_PASSES;
     public int maxSamples = PhotonicsProperties.DEFAULT_MAX_SAMPLES;
 
+    public PhotonicsPropertiesImpl() {
+        Photonics.LOGGER.info(
+                "Photonics performance overrides v77: renderScale={}, restirInitialSamples={}, restirDenoiserPasses={} (shader-pack means no JVM override)",
+                overrideLabel(renderScaleOverride),
+                overrideLabel(restirInitialSamplesOverride),
+                overrideLabel(restirDenoiserPassesOverride)
+        );
+    }
+
     @Override
     public boolean isPhotonicsEnabled() {
         return enabled;
@@ -41,7 +74,7 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public float getRenderScale() {
-        return renderScale;
+        return renderScaleOverride != null ? renderScaleOverride : renderScale;
     }
 
     @Override
@@ -111,9 +144,12 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public int getRestirInitialSamples() {
+        int effectiveSamples = restirInitialSamplesOverride != null
+                ? restirInitialSamplesOverride
+                : restirInitialSamples;
         return Math.max(
                 MIN_RESTIR_INITIAL_SAMPLES,
-                Math.min(restirInitialSamples, MAX_RESTIR_INITIAL_SAMPLES)
+                Math.min(effectiveSamples, MAX_RESTIR_INITIAL_SAMPLES)
         );
     }
 
@@ -150,6 +186,56 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public int getRestirDenoiserPasses() {
+        if (restirDenoiserPassesOverride != null)
+            return restirDenoiserPassesOverride;
         return Math.max(restirDenoiserPasses, MIN_RESTIR_DENOISER_PASSES);
+    }
+
+    private static Float readFloatOverride(String key, float minimum, float maximum) {
+        String rawValue = System.getProperty(key);
+        if (rawValue == null || rawValue.isBlank())
+            return null;
+
+        try {
+            float value = Float.parseFloat(rawValue);
+            if (Float.isFinite(value) && value >= minimum && value <= maximum)
+                return value;
+        } catch (NumberFormatException ignored) {
+        }
+
+        Photonics.LOGGER.warn(
+                "Ignoring invalid JVM property {}={}; expected a finite value in [{}, {}]",
+                key,
+                rawValue,
+                minimum,
+                maximum
+        );
+        return null;
+    }
+
+    private static Integer readIntOverride(String key, int minimum, int maximum) {
+        String rawValue = System.getProperty(key);
+        if (rawValue == null || rawValue.isBlank())
+            return null;
+
+        try {
+            int value = Integer.parseInt(rawValue);
+            if (value >= minimum && value <= maximum)
+                return value;
+        } catch (NumberFormatException ignored) {
+        }
+
+        Photonics.LOGGER.warn(
+                "Ignoring invalid JVM property {}={}; expected an integer in [{}, {}]",
+                key,
+                rawValue,
+                minimum,
+                maximum
+        );
+        return null;
+    }
+
+    private static String overrideLabel(Number value) {
+        return value == null ? "shader-pack" : value.toString();
     }
 }
