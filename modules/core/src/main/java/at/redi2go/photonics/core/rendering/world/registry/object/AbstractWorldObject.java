@@ -1,6 +1,7 @@
 package at.redi2go.photonics.core.rendering.world.registry.object;
 
 import at.redi2go.photonics.api.Disposable;
+import at.redi2go.photonics.core.rendering.world.IgnoredInterruptedException;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.Nullable;
 
@@ -9,15 +10,19 @@ import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.concurrent.locks.LockSupport;
 
 public abstract class AbstractWorldObject<M extends Disposable> implements WorldObject {
-    private static final int CLOSED = -3;
+    private static final int CLOSED = -4;
+    private static final int FAILED = -3;
     private static final int UNALLOCATED = -2;
     private static final int ALLOCATING = -1;
 
     private final ObjectRegistry<WorldObject> registry;
     private volatile int referenceCount = UNALLOCATED;
+    private volatile Throwable allocationFailure = null;
 
     private M memory = null;
 
@@ -33,13 +38,20 @@ public abstract class AbstractWorldObject<M extends Disposable> implements World
 
     public void awaitAllocated() {
         int count = referenceCount;
-        checkNotClosed(count);
+        int spins = 0;
+        checkAvailable(count);
 
         while (count < 0) {
-            Thread.onSpinWait();
+            if (Thread.currentThread().isInterrupted())
+                throw new IgnoredInterruptedException();
+
+            if (spins++ < 64)
+                Thread.onSpinWait();
+            else
+                LockSupport.parkNanos(50_000L);
 
             count = referenceCount;
-            checkNotClosed(count);
+            checkAvailable(count);
         }
     }
 
@@ -48,7 +60,7 @@ public abstract class AbstractWorldObject<M extends Disposable> implements World
 
         while (true) {
             int count = referenceCount;
-            checkNotClosed(count);
+            checkAvailable(count);
 
             if (VAR_HANDLE.compareAndSet(this, count, count + 1))
                 return;
@@ -60,7 +72,8 @@ public abstract class AbstractWorldObject<M extends Disposable> implements World
 
         while (true) {
             int count = referenceCount;
-            if (count == CLOSED) return false;
+            if (count == CLOSED || count == FAILED) return false;
+            checkCanReference(count);
 
             if (VAR_HANDLE.compareAndSet(this, count, count + 1))
                 return true;
@@ -76,28 +89,70 @@ public abstract class AbstractWorldObject<M extends Disposable> implements World
     }
 
     protected M setMemory(Supplier<M> memorySupplier) {
+        return setMemory(memorySupplier, ignored -> {
+        });
+    }
+
+    protected M setMemory(Supplier<M> memorySupplier, Consumer<M> initializer) {
         while (true) {
             int count = this.referenceCount;
             checkCanAllocate(count);
 
             if (!VAR_HANDLE.compareAndSet(this, count, ALLOCATING)) continue;
 
-            var memory = memorySupplier.get();
-            this.memory = memory;
+            M allocatedMemory = null;
+            List<WorldObject> acquiredDependants = new ArrayList<>();
+            try {
+                allocatedMemory = Objects.requireNonNull(memorySupplier.get(), "memorySupplier returned null");
 
-            List<WorldObject> dependants = new ArrayList<>();
-            loadDependants(dependants);
+                List<WorldObject> dependants = new ArrayList<>();
+                loadDependants(dependants);
 
-            for (var dependant : dependants) {
-                dependant.acquireReference();
-                dependant.awaitAllocated();
+                for (var dependant : dependants) {
+                    dependant.acquireReference();
+                    acquiredDependants.add(dependant);
+                }
+
+                initializer.accept(allocatedMemory);
+                this.memory = allocatedMemory;
+
+                if (!VAR_HANDLE.compareAndSet(this, ALLOCATING, 0))
+                    throw new IllegalStateException("Count was changed during allocation");
+
+                registry.enqueueObject(new HandleImpl());
+                return allocatedMemory;
+            } catch (RuntimeException | Error failure) {
+                rollbackAllocation(allocatedMemory, acquiredDependants, failure);
+                throw failure;
             }
-
-            if (!VAR_HANDLE.compareAndSet(this, ALLOCATING, 0))
-                throw new IllegalStateException("Count was changed during allocation");
-
-            return memory;
         }
+    }
+
+    private void rollbackAllocation(
+            @Nullable M allocatedMemory,
+            List<WorldObject> acquiredDependants,
+            Throwable failure
+    ) {
+        for (int i = acquiredDependants.size() - 1; i >= 0; i--) {
+            try {
+                acquiredDependants.get(i).close();
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+        }
+
+        if (allocatedMemory != null) {
+            try {
+                allocatedMemory.close();
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+        }
+
+        memory = null;
+        allocationFailure = failure;
+        if (!VAR_HANDLE.compareAndSet(this, ALLOCATING, FAILED))
+            failure.addSuppressed(new IllegalStateException("Count was changed during allocation rollback"));
     }
 
     protected @Nullable M memoryOrNull() {
@@ -114,6 +169,7 @@ public abstract class AbstractWorldObject<M extends Disposable> implements World
 
         return switch (count) {
             case CLOSED -> throw new IllegalStateException("closed");
+            case FAILED -> throw new IllegalStateException("allocation failed", allocationFailure);
             case UNALLOCATED -> throw new IllegalStateException("not allocated");
             case ALLOCATING -> throw new IllegalStateException("allocating");
 
@@ -140,7 +196,8 @@ public abstract class AbstractWorldObject<M extends Disposable> implements World
     public final void close() {
         while (true) {
             int count = referenceCount;
-            checkNotClosed(count);
+            checkAvailable(count);
+            checkCanReference(count);
 
             if (count == 0)
                 throw new IllegalStateException("count was 0");
@@ -154,14 +211,25 @@ public abstract class AbstractWorldObject<M extends Disposable> implements World
         }
     }
 
-    private void checkNotClosed(int count) {
+    private void checkAvailable(int count) {
         if (count == CLOSED)
             throw new IllegalStateException("closed");
+        if (count == FAILED)
+            throw new IllegalStateException("allocation failed", allocationFailure);
+    }
+
+    private void checkCanReference(int count) {
+        if (count == UNALLOCATED)
+            throw new IllegalStateException("not allocated");
+        if (count == ALLOCATING)
+            throw new IllegalStateException("allocating");
     }
 
     private void checkCanAllocate(int count) {
         if (count == CLOSED)
             throw new IllegalStateException("closed");
+        else if (count == FAILED)
+            throw new IllegalStateException("allocation failed", allocationFailure);
         else if (count != UNALLOCATED)
             throw new IllegalStateException("already allocated");
     }

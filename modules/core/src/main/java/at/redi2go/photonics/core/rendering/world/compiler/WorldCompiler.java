@@ -167,7 +167,11 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             if (t instanceof InterruptedException) return;
             if (IgnoredInterruptedException.shouldIgnore(t)) return;
 
-            Photonics.LOGGER.error("An error was thrown during world compilation!", t);
+            Photonics.LOGGER.error(
+                    "An error was thrown during world compilation; memory={}",
+                    registry.memoryDiagnosticSummary(),
+                    t
+            );
         }
     }
 
@@ -218,44 +222,46 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         ILevel level = Minecraft.getLevel();
         if (level == null) return;
 
-        for (var section : sections) {
-            try (section) {
-                blockSorter.reset();
+        try (var registryLock = registry.lightRegistry().acquireLock()) {
+            for (var section : sections) {
+                try (section) {
+                    blockSorter.reset();
 
-                var chunkBlockPos = new Vector3i(section.chunkBlockPos())
-                        .sub(iorigin);
+                    var chunkBlockPos = new Vector3i(section.chunkBlockPos())
+                            .sub(iorigin);
 
-                int region = regionIds.getId(section.chunkPos());
-                section.forEachBlock((blockChunkOffset, blockState, blockModel) -> blockSorter.addBlock(
-                        chunkBlockPos.add(blockChunkOffset, new Vector3i()),
-                        blockState,
-                        blockModel
-                ));
+                    int region = regionIds.getId(section.chunkPos());
+                    section.forEachBlock((blockChunkOffset, blockState, blockModel) -> blockSorter.addBlock(
+                            chunkBlockPos.add(blockChunkOffset, new Vector3i()),
+                            blockState,
+                            blockModel
+                    ));
 
-                blockSorter.forEachBlock((block) -> {
-                    var parts = block.blockModel().parts();
-                    if (parts.isEmpty()) return;
+                    blockSorter.forEachBlock((block) -> {
+                        var parts = block.blockModel().parts();
+                        if (parts.isEmpty()) return;
 
-                    var light = registry.lightRegistry().getWeak(block.blockState());
+                        var light = registry.lightRegistry().getWeak(block.blockState());
 
-                    for (int i = 0; i < parts.size(); i++) {
-                        var part = parts.get(i);
+                        for (int i = 0; i < parts.size(); i++) {
+                            var part = parts.get(i);
 
-                        blockPos.set(block.x(), block.y(), block.z());
-                        blockPos.add(part.offset());
-                        blockPos.add(iorigin);
+                            blockPos.set(block.x(), block.y(), block.z());
+                            blockPos.add(part.offset());
+                            blockPos.add(iorigin);
 
-                        var skylight = SectionCopy.compileSkylight(level, IBlockPos.of(blockPos));
-                        var entry = part.createEntry(region, skylight, light);
+                            var skylight = SectionCopy.compileSkylight(level, IBlockPos.of(blockPos));
+                            var entry = part.createEntry(region, skylight, light);
 
-                        blockPos.sub(iorigin);
+                            blockPos.sub(iorigin);
 
-                        treeManager.insertBlock(
-                                blockPos,
-                                entry
-                        );
-                    }
-                });
+                            treeManager.insertBlock(
+                                    blockPos,
+                                    entry
+                            );
+                        }
+                    });
+                }
             }
         }
     }
@@ -351,7 +357,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             boolean blockBoundsFallback
     ) {
         Photonics.LOGGER.info(
-                "Photonics world tracing v18: revision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, boundsSource={}, compileMs={}",
+                "Photonics world tracing v71: revision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, boundsSource={}, compileMs={}",
                 mostRecentCompilationRevision,
                 settled,
                 mostRecentCompiledSections,
@@ -370,6 +376,9 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                 blockBoundsFallback ? "tree" : "compiled",
                 String.format(java.util.Locale.ROOT, "%.3f", mostRecentCompilationMillis)
         );
+
+        if (settled)
+            Photonics.LOGGER.info("Photonics memory v71: {}", registry.memoryDiagnosticSummary());
     }
 
     @Override
@@ -431,6 +440,22 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     @Override
     public void close() {
         compilerThread.interrupt();
+        joinCompilerThread();
+    }
+
+    private void joinCompilerThread() {
+        boolean interrupted = false;
+        while (compilerThread.isAlive()) {
+            try {
+                compilerThread.join();
+            } catch (InterruptedException ignored) {
+                interrupted = true;
+                compilerThread.interrupt();
+            }
+        }
+
+        if (interrupted)
+            Thread.currentThread().interrupt();
     }
 
     private static Vector3f toVector3f(Vector3dc vector) {
@@ -456,11 +481,22 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
         @Override
         public void awaitCompletion() throws InterruptedException {
+            boolean interrupted = false;
             try {
-                if (pendingTasks.get() != 0)
-                    get();
+                while (pendingTasks.get() != 0) {
+                    try {
+                        get();
+                    } catch (InterruptedException ignored) {
+                        interrupted = true;
+                    }
+                }
             } catch (ExecutionException e) {
                 throw new RuntimeException(e);
+            }
+
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+                throw new InterruptedException();
             }
         }
     }

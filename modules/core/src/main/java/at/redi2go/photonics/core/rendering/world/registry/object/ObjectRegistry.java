@@ -3,6 +3,8 @@ package at.redi2go.photonics.core.rendering.world.registry.object;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -13,6 +15,9 @@ public class ObjectRegistry<T extends WorldObject> {
 
     private final ConcurrentHashMap<Object, T> cache = new ConcurrentHashMap<>();
     private final Queue<WorldObject.Handle<T>> freeQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger pendingFreeObjects = new AtomicInteger();
+    private final LongAdder allocatedObjects = new LongAdder();
+    private final LongAdder failedAllocations = new LongAdder();
 
     public ObjectRegistry(ReadWriteLock lock) {
         this.lock = lock;
@@ -39,8 +44,15 @@ public class ObjectRegistry<T extends WorldObject> {
         var newValue = supplier.apply(key);
         var result = cache.putIfAbsent(newValue, newValue);
         if (result == null) {
-            allocator.accept(newValue);
-            return newValue;
+            try {
+                allocator.accept(newValue);
+                recordAllocatedObject();
+                return newValue;
+            } catch (RuntimeException | Error failure) {
+                recordFailedAllocation();
+                removeCachedValue(newValue);
+                throw failure;
+            }
         }
 
         return result;
@@ -55,7 +67,13 @@ public class ObjectRegistry<T extends WorldObject> {
     }
 
     protected void removeObject(T value) {
-        cache.remove(value);
+        removeCachedValue(value);
+    }
+
+    private void removeCachedValue(T value) {
+        cache.computeIfPresent(value, (ignored, cachedValue) ->
+                cachedValue == value ? null : cachedValue
+        );
     }
 
     public boolean hasEnqueuedObject() {
@@ -63,6 +81,7 @@ public class ObjectRegistry<T extends WorldObject> {
     }
 
     void enqueueObject(WorldObject.Handle<T> value) {
+        pendingFreeObjects.incrementAndGet();
         freeQueue.add(value);
     }
 
@@ -73,6 +92,7 @@ public class ObjectRegistry<T extends WorldObject> {
             while (!freeQueue.isEmpty()) {
                 var handle = freeQueue.poll();
                 if (handle == null) return;
+                pendingFreeObjects.decrementAndGet();
 
                 var value = handle.free();
                 if (value != null)
@@ -81,6 +101,35 @@ public class ObjectRegistry<T extends WorldObject> {
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    public Stats stats() {
+        return stats(cache.size());
+    }
+
+    protected Stats stats(int cachedObjects) {
+        return new Stats(
+                cachedObjects,
+                pendingFreeObjects.get(),
+                allocatedObjects.sum(),
+                failedAllocations.sum()
+        );
+    }
+
+    protected void recordAllocatedObject() {
+        allocatedObjects.increment();
+    }
+
+    protected void recordFailedAllocation() {
+        failedAllocations.increment();
+    }
+
+    public record Stats(
+            int cachedObjects,
+            int pendingFreeObjects,
+            long allocatedObjects,
+            long failedAllocations
+    ) {
     }
 
     public interface HeldLock extends AutoCloseable {

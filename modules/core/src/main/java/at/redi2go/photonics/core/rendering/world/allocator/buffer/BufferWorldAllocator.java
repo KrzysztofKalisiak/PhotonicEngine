@@ -1,6 +1,7 @@
 package at.redi2go.photonics.core.rendering.world.allocator.buffer;
 
 import at.redi2go.photonics.api.gpu.buffers.heap.IGpuBufferHeap;
+import at.redi2go.photonics.api.gpu.buffers.heap.GpuBufferHeapStats;
 import at.redi2go.photonics.api.gpu.buffers.heap.MemoryView;
 import at.redi2go.photonics.api.gpu.systems.IRenderSystem;
 import at.redi2go.photonics.core.config.lights.BlockLightInfo;
@@ -44,6 +45,11 @@ public class BufferWorldAllocator implements WorldAllocator {
     @Override
     public WorldLightMemory allocateWorldLight() {
         return new WorldLightAllocation(heap.allocateOrThrow(10 << 2));
+    }
+
+    @Override
+    public GpuBufferHeapStats heapStats() {
+        return heap.stats();
     }
 
     @Override
@@ -193,10 +199,13 @@ public class BufferWorldAllocator implements WorldAllocator {
             int newCapacity = capacity(newSize, capacity);
             if (capacity == newCapacity) return;
 
-            if (memory != null) memory.close();
-
-            memory = heap.allocateOrThrow((long) entryByteSize * newCapacity);
+            MemoryView newMemory = heap.allocateOrThrow((long) entryByteSize * newCapacity);
+            MemoryView oldMemory = memory;
+            memory = newMemory;
             capacity = newCapacity;
+
+            if (oldMemory != null)
+                oldMemory.close();
         }
 
         @Override

@@ -41,36 +41,53 @@ public class BlockModelRegistry extends ObjectRegistry<BlockModelImpl> {
 
     @Override
     protected void removeObject(BlockModelImpl value) {
-        modelCache.remove(value.vertexHash());
+        modelCache.computeIfPresent(value.vertexHash(), (ignored, future) ->
+                isCompletedWith(future, value) ? null : future
+        );
 
         var meshes = value.meshes();
         while (!meshes.isEmpty()) {
             var mesh = meshes.remove();
             if (mesh == null) continue;
 
-            blockMeshCache.remove(mesh);
+            blockMeshCache.computeIfPresent(mesh, (ignored, future) ->
+                    isCompletedWith(future, value) ? null : future
+            );
         }
     }
 
-    private CompletionStage<@WeakValue BlockModelImpl> cacheModel(BlockBakery.MeshResult blockMesh) {
-        CompletableFuture<BlockModelImpl> future = new CompletableFuture<>();
-        var resultFuture = modelCache.putIfAbsent(blockMesh.vertexHash(), future);
+    @Override
+    public Stats stats() {
+        return stats(modelCache.size());
+    }
 
-        if (resultFuture != null) return resultFuture;
+    private CompletionStage<@WeakValue BlockModelImpl> cacheModel(BlockBakery.MeshResult blockMesh) {
+        long vertexHash = blockMesh.vertexHash();
+        CompletableFuture<BlockModelImpl> future = new CompletableFuture<>();
+        var resultFuture = modelCache.putIfAbsent(vertexHash, future);
+
+        if (resultFuture != null) {
+            blockMesh.close();
+            return resultFuture;
+        }
 
         try {
             var builder = new BlockModelBuilder();
 
             blockMesh.bake(builder);
-            blockMesh.close();
 
-            var result = builder.build(blockMesh.vertexHash(), blockRegistry, this);
+            var result = builder.build(vertexHash, blockRegistry, this);
+            if (result != null)
+                recordAllocatedObject();
+
             future.complete(result);
         } catch (Throwable t) {
+            recordFailedAllocation();
+            modelCache.remove(vertexHash, future);
             future.completeExceptionally(t);
+        } finally {
+            blockMesh.close();
         }
-
-        blockMesh.close();
 
         return future;
     }
@@ -97,6 +114,11 @@ public class BlockModelRegistry extends ObjectRegistry<BlockModelImpl> {
                 var resultFuture = blockMeshCache.putIfAbsent(meshState, future);
                 if (resultFuture != null)
                     return acquireModelReference(resultFuture);
+
+                future.whenComplete((ignored, failure) -> {
+                    if (failure != null)
+                        blockMeshCache.remove(meshState, future);
+                });
             }
 
             var meshResult = bakery.meshBlock(
@@ -123,7 +145,9 @@ public class BlockModelRegistry extends ObjectRegistry<BlockModelImpl> {
                                     model.meshes().add(meshState);
 
                                 future.complete(model);
-                            } future.completeExceptionally(e);
+                            } else {
+                                future.completeExceptionally(e);
+                            }
                         } catch (Throwable t) {
                             future.completeExceptionally(t);
                         }
@@ -147,5 +171,14 @@ public class BlockModelRegistry extends ObjectRegistry<BlockModelImpl> {
 
             return e;
         });
+    }
+
+    private static boolean isCompletedWith(
+            CompletableFuture<? extends @Nullable BlockModel> future,
+            BlockModelImpl expected
+    ) {
+        return future.isDone()
+                && !future.isCompletedExceptionally()
+                && future.getNow(null) == expected;
     }
 }

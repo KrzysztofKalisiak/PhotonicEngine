@@ -25,10 +25,10 @@ public class WorldLight extends AbstractWorldObject<WorldLightMemory> {
     }
 
     public void allocate(WorldAllocator allocator) {
-        var memory = setMemory(allocator::allocateWorldLight);
-
-        memory.setLight(light, blockId);
-        memory.upload();
+        setMemory(allocator::allocateWorldLight, memory -> {
+            memory.setLight(light, blockId);
+            memory.upload();
+        });
     }
 
     public BlockLightInfo lightInfo() {

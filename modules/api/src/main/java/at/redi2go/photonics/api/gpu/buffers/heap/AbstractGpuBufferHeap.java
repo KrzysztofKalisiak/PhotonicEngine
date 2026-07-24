@@ -10,29 +10,83 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * A basic heap, this does not do defragmentation.
  */
 public abstract class AbstractGpuBufferHeap implements IGpuBufferHeap {
     private long index = 0;
-    private final Map<Long, ConcurrentLinkedQueue<FreeRegion>> freeRegions = new ConcurrentHashMap();
+    private final Map<Long, ConcurrentLinkedQueue<FreeRegion>> freeRegions = new ConcurrentHashMap<>();
+
+    private final AtomicLong liveBytes = new AtomicLong();
+    private final AtomicLong peakLiveBytes = new AtomicLong();
+    private final AtomicLong reusableBytes = new AtomicLong();
+    private final LongAdder allocations = new LongAdder();
+    private final LongAdder reusedAllocations = new LongAdder();
+    private final LongAdder frees = new LongAdder();
+    private final LongAdder failedAllocations = new LongAdder();
 
     protected synchronized long allocatePtr(long byteSize) {
+        if (byteSize <= 0)
+            throw new IllegalArgumentException("byteSize must be positive");
+
         var queue = freeRegions.get(byteSize);
         if (queue != null) {
             final var region = queue.poll();
-            if (region != null)
+            if (region != null) {
+                reusableBytes.addAndGet(-byteSize);
+                recordAllocation(byteSize, true);
                 return region.begin;
+            }
         }
 
         long begin = index;
         long end = index + byteSize;
 
-        if (end > capacity()) return -1;
+        if (end < begin || end > capacity()) {
+            failedAllocations.increment();
+            return -1;
+        }
+
         index = end;
+        recordAllocation(byteSize, false);
 
         return begin;
+    }
+
+    @Override
+    public synchronized GpuBufferHeapStats stats() {
+        return new GpuBufferHeapStats(
+                capacity(),
+                index,
+                liveBytes.get(),
+                peakLiveBytes.get(),
+                reusableBytes.get(),
+                allocations.sum(),
+                reusedAllocations.sum(),
+                frees.sum(),
+                failedAllocations.sum()
+        );
+    }
+
+    private void recordAllocation(long byteSize, boolean reused) {
+        long currentLiveBytes = liveBytes.addAndGet(byteSize);
+        peakLiveBytes.accumulateAndGet(currentLiveBytes, Math::max);
+        allocations.increment();
+
+        if (reused)
+            reusedAllocations.increment();
+    }
+
+    private void freeRegion(long begin, long end) {
+        long byteSize = end - begin;
+        liveBytes.addAndGet(-byteSize);
+        reusableBytes.addAndGet(byteSize);
+        frees.increment();
+        freeRegions.computeIfAbsent(byteSize, ignored -> new ConcurrentLinkedQueue<>())
+                .add(new FreeRegion(begin, end));
     }
 
     private record FreeRegion(long begin, long end) implements MemorySlice {
@@ -60,12 +114,17 @@ public abstract class AbstractGpuBufferHeap implements IGpuBufferHeap {
         @Override
         @SuppressWarnings("resource")
         default void close() {
-            if ((_begin() & SIGN_BIT) != 0) return;
-            _setBegin(_begin() | SIGN_BIT);
+            long begin;
+            long end;
+            synchronized (this) {
+                if ((_begin() & SIGN_BIT) != 0) return;
 
-            long size = end() - begin();
-            owner().freeRegions.computeIfAbsent(size, (ignored) -> new ConcurrentLinkedQueue<>())
-                            .add(new FreeRegion(begin(), end()));
+                begin = begin();
+                end = end();
+                _setBegin(_begin() | SIGN_BIT);
+            }
+
+            owner().freeRegion(begin, end);
         }
 
         static List<? extends MemorySlice> takeFrom(Queue<Region> queue) {

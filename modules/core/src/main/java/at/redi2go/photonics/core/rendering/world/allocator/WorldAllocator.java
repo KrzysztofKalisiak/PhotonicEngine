@@ -1,5 +1,6 @@
 package at.redi2go.photonics.core.rendering.world.allocator;
 
+import at.redi2go.photonics.api.gpu.buffers.heap.GpuBufferHeapStats;
 import at.redi2go.photonics.core.rendering.RenderingComponent;
 
 public interface WorldAllocator extends RenderingComponent {
@@ -8,6 +9,10 @@ public interface WorldAllocator extends RenderingComponent {
     VoxelEntryListMemory allocateEntryList(boolean useChildMask, int extraFields);
 
     WorldLightMemory allocateWorldLight();
+
+    default GpuBufferHeapStats heapStats() {
+        return GpuBufferHeapStats.unavailable(0);
+    }
 
     void upload();
 }

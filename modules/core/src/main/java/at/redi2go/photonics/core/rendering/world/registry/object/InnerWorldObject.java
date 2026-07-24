@@ -3,6 +3,7 @@ package at.redi2go.photonics.core.rendering.world.registry.object;
 import at.redi2go.photonics.api.Disposable;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public abstract class InnerWorldObject<M extends Disposable> extends AbstractWorldObject<M> {
@@ -12,6 +13,10 @@ public abstract class InnerWorldObject<M extends Disposable> extends AbstractWor
 
     public M setMemory(Supplier<M> memorySupplier) {
         return super.setMemory(memorySupplier);
+    }
+
+    public M setMemory(Supplier<M> memorySupplier, Consumer<M> initializer) {
+        return super.setMemory(memorySupplier, initializer);
     }
 
     public @Nullable M memoryOrNull() {

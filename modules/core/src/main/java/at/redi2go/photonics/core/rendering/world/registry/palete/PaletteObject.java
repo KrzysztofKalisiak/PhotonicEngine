@@ -33,28 +33,28 @@ public class PaletteObject extends PaletteEntry implements WorldObject, VoxelTre
     }
 
     public void allocate(PaletteTexture texture) {
-        var memory = ref.setMemory(texture::reserveEntry);
+        ref.setMemory(texture::reserveEntry, memory -> {
+            var faceData = new Vector4i();
 
-        var faceData = new Vector4i();
+            for (int i = 0; i < faces.length; i++) {
+                var face = faces[i];
+                if (face == null) {
+                    faceData.set(0);
+                    memory.writeFace(i, faceData);
 
-        for (int i = 0; i < faces.length; i++) {
-            var face = faces[i];
-            if (face == null) {
-                faceData.set(0);
+                    continue;
+                }
+
+                faceData.x = face.blockId();
+                faceData.y = face.color();
+                faceData.z = face.normal();
+                faceData.w = face.specular();
+
                 memory.writeFace(i, faceData);
-
-                continue;
             }
 
-            faceData.x = face.blockId();
-            faceData.y = face.color();
-            faceData.z = face.normal();
-            faceData.w = face.specular();
-
-            memory.writeFace(i, faceData);
-        }
-
-        memory.upload();
+            memory.upload();
+        });
     }
 
 

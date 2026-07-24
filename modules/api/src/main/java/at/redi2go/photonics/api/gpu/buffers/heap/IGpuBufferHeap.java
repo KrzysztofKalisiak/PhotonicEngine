@@ -10,6 +10,13 @@ public interface IGpuBufferHeap extends Disposable {
     long capacity();
 
     /**
+     * Returns allocator diagnostics for this heap.
+     */
+    default GpuBufferHeapStats stats() {
+        return GpuBufferHeapStats.unavailable(capacity());
+    }
+
+    /**
      * Allocates a chunk of memory of size {@code byteSize}
      *
      * @return The allocated memory view, or null if there was not enough memory to allocate {@code byteSize}
@@ -25,7 +32,7 @@ public interface IGpuBufferHeap extends Disposable {
     default MemoryView allocateOrThrow(long byteSize) {
         var result = allocate(byteSize);
         if (result == null)
-            throw new OutOfMemoryError("Could not allocate " + byteSize + " bytes");
+            throw new GpuBufferHeapOutOfMemoryError(byteSize, stats());
 
         return result;
     }
@@ -46,7 +53,7 @@ public interface IGpuBufferHeap extends Disposable {
     default IGpuBufferHeap allocateHeapOrThrow(long byteSize) {
         var result = allocateHeap(byteSize);
         if (result == null)
-            throw new OutOfMemoryError("Could not allocate " + byteSize + " bytes");
+            throw new GpuBufferHeapOutOfMemoryError(byteSize, stats());
 
         return result;
     }

@@ -1,6 +1,7 @@
 package at.redi2go.photonics.core.rendering.world.allocator.buffer;
 
 import at.redi2go.photonics.api.gpu.buffers.heap.IGpuBufferHeap;
+import at.redi2go.photonics.api.gpu.buffers.heap.GpuBufferHeapStats;
 import at.redi2go.photonics.api.gpu.buffers.heap.MemoryView;
 import at.redi2go.photonics.api.gpu.systems.IRenderSystem;
 import at.redi2go.photonics.core.iris.pipeline.buffer.IBufferHolder;
@@ -35,6 +36,11 @@ public class BufferPaletteTexture implements PaletteTexture {
     @Override
     public PaletteTextureView reserveEntry() {
         return new View(heap.allocateOrThrow(ENTRY_BYTE_SIZE));
+    }
+
+    @Override
+    public GpuBufferHeapStats heapStats() {
+        return heap.stats();
     }
 
     @Override

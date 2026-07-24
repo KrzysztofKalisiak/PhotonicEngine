@@ -18,6 +18,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class WorldRegistry {
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
+    private final WorldAllocator worldAllocator;
+    private final PaletteTexture paletteTexture;
+
     private final WorldLightRegistry lightRegistry;
     private final PaletteRegistry paletteRegistry;
 
@@ -29,6 +32,9 @@ public class WorldRegistry {
             PaletteTexture paletteTexture,
             AtlasDownloader atlasDownloader
     ) {
+        this.worldAllocator = worldAllocator;
+        this.paletteTexture = paletteTexture;
+
         var bakery = BlockBakery.newBakery(atlasDownloader);
 
         this.lightRegistry = new WorldLightRegistry(lock, worldAllocator);
@@ -66,6 +72,19 @@ public class WorldRegistry {
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    public String diagnosticSummary() {
+        return "lights=" + lightRegistry.stats()
+                + ", palettes=" + paletteRegistry.stats()
+                + ", blocks=" + blockRegistry.stats()
+                + ", models=" + blockModelRegistry.stats();
+    }
+
+    public String memoryDiagnosticSummary() {
+        return "worldHeap=" + worldAllocator.heapStats()
+                + ", paletteHeap=" + paletteTexture.heapStats()
+                + ", registries={" + diagnosticSummary() + "}";
     }
 
     private static boolean hasEnqueuedObject(ObjectRegistry<?>[] registries) {
