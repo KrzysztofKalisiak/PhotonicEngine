@@ -56,5 +56,13 @@ void main() {
     }
 
     direct_reservoir_finalize_weight(reservoir, sample_weight);
+    // Validation consumes the reservoir selected by this pass. Keeping it
+    // here avoids a full-screen read/write pass without changing the ray test
+    // or the reservoir seen by temporal reuse.
+    direct_reservoir_validate_visiblity(
+        reservoir,
+        frag_rt_pos,
+        frag_geo_normal
+    );
     direct_reservoir_encode(reservoir, di_reservoir_0);
 }

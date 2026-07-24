@@ -405,24 +405,28 @@ runs:
 | Order | Pass | Main output | Purpose |
 |---:|---|---|---|
 | 0 | Flip history | current/previous attachments swap roles | Preserve last frame without copying it |
-| 1 | `r1_initial_direct` | direct reservoir | Propose direct-light candidates and retain one weighted representative |
-| 2 | `r2_validate_initial_direct` | direct reservoir | Trace visibility for that representative |
-| 3 | `r3_initial_indirect` | three indirect reservoir textures | Trace an initial GI path when combined ReSTIR GI is enabled |
-| 4 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject and merge compatible previous-frame reservoirs |
-| 5 | `r5_copy_spatial_input` | immutable direct-reservoir copy | Prevent reads from observing writes from the same spatial pass |
-| 6 | `r5_spatial_reuse` | direct and indirect reservoirs | Merge compatible current-frame neighboring pixels and clamp history |
-| 7 | `r6_diffuse` | raw lighting, direct state, reservoirs | Evaluate selected direct/GI samples at the current receiver |
-| 8 | `r6_capture_current` | current-lighting diagnostic | Preserve the unaccumulated estimate for current diagnostics |
-| 9 | `r7_accumulation` | lighting, external lighting, variance | Reproject and average radiance history |
-| 10 | `r8_variance_prefilter` | denoise buffer | Estimate/filter variance and prepare SVGF input |
-| 11 | repeated `r9_denoising` | ping-pong denoise buffers | Edge-aware a-trous spatial filtering |
-| 12 | `r10_local_direct` | exact local lighting | Evaluate every same-token Sable light with coarse local DDA when hard shadows are selected |
-| 13 | `r10_handheld` | handheld lighting | Evaluate main/off-hand sources |
+| 1 | `r1_initial_direct` | direct reservoir | Propose direct-light candidates, retain one weighted representative, and validate its visibility |
+| 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace an initial GI path when combined ReSTIR GI is enabled |
+| 3 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject and merge compatible previous-frame reservoirs |
+| 4 | `r5_copy_spatial_input` | immutable reservoir copies | Prevent reads from observing writes from the same spatial pass |
+| 5 | `r5_spatial_reuse` | direct and indirect reservoirs | Merge compatible current-frame neighbors, clamp history, and validate the final indirect representative |
+| 6 | `r6_diffuse` | raw lighting, direct state, reservoirs | Evaluate selected direct/GI samples at the current receiver |
+| 7 | `r7_accumulation` | lighting, external lighting, variance | Reproject and average radiance history |
+| 8 | `r8_variance_prefilter` | denoise buffer | Estimate/filter variance and prepare SVGF input |
+| 9 | repeated `r9_denoising` | ping-pong denoise buffers | Edge-aware a-trous spatial filtering |
+| 10 | `r10_local_direct` | exact local lighting | Evaluate every same-token Sable light with coarse local DDA when hard shadows are selected |
+| 11 | `r10_handheld` | handheld lighting | Evaluate main/off-hand sources |
 
 All of these are screen-space passes. A pass over a 1920 x 1080 target launches
 roughly 2.07 million fragment-shader invocations. Each invocation reads the data
 for one visible pixel and writes one texel to one or more framebuffer
 attachments.
+
+The v73 pipeline invokes initial direct visibility from `r1_initial_direct` and
+final indirect visibility from `r5_spatial_reuse`. The standalone
+`r2_validate_initial_direct` and `r6_validate_indirect` shader sources remain
+for upstream comparison, but are not scheduled. This removes two full-screen
+reservoir read/write cycles without removing either visibility ray.
 
 ### 8.4 The shader pack composes the result
 

@@ -1,6 +1,7 @@
 package at.redi2go.photonics.common.iris.pipeline.renderer;
 
 import at.redi2go.photonics.common.iris.pipeline.CompositeRendererPassExt;
+import at.redi2go.photonics.common.iris.pipeline.framebuffer.InternalIrisFramebuffer;
 import at.redi2go.photonics.common.mixins.iris.pipeline.passes.composite.CompositeRendererAccessor;
 import at.redi2go.photonics.core.Photonics;
 import com.google.common.collect.ImmutableMap;
@@ -176,17 +177,26 @@ public class PhotonicsRenderer extends CompositeRenderer {
         double maximumCpuMillis = maximumCpuNanos / 1_000_000.0;
         double averageGpuMillis = gpuFrames == 0 ? 0.0 : gpuNanos / (double) gpuFrames / 1_000_000.0;
         double maximumGpuMillis = maximumGpuNanos / 1_000_000.0;
+        Viewport viewport = viewport();
+        double megapixels = viewport.pixelCount() / 1_000_000.0;
+        double averageGpuMillisPerMegapixel = megapixels > 0.0
+                ? averageGpuMillis / megapixels
+                : 0.0;
 
         Photonics.LOGGER.info(
-                "Photonics pass timing v18: group={}, passes={}, cpuFrames={}, cpuSubmitAvgMs={}, cpuSubmitMaxMs={}, gpuFrames={}, gpuAvgMs={}, gpuMaxMs={}",
+                "Photonics pass timing v73: group={}, passes={}, viewport={}x{}, megapixels={}, cpuInvocations={}, cpuSubmitAvgMs={}, cpuSubmitMaxMs={}, gpuSamples={}, gpuAvgMs={}, gpuMaxMs={}, gpuAvgMsPerMP={}",
                 name,
                 passNames,
+                viewport.width(),
+                viewport.height(),
+                formatMillis(megapixels),
                 cpuFrames,
                 formatMillis(averageCpuMillis),
                 formatMillis(maximumCpuMillis),
                 gpuFrames,
                 formatMillis(averageGpuMillis),
-                formatMillis(maximumGpuMillis)
+                formatMillis(maximumGpuMillis),
+                formatMillis(averageGpuMillisPerMegapixel)
         );
 
         timingWindowStart = now;
@@ -198,8 +208,27 @@ public class PhotonicsRenderer extends CompositeRenderer {
         gpuFrames = 0;
     }
 
+    private Viewport viewport() {
+        for (CompositeRendererPassExt pass : getPasses()) {
+            var framebuffer = pass.getFramebuffer().orElse(null);
+            if (!(framebuffer instanceof InternalIrisFramebuffer internalFramebuffer))
+                continue;
+
+            var size = internalFramebuffer.viewportSize();
+            return new Viewport(size.x(), size.y());
+        }
+
+        return new Viewport(0, 0);
+    }
+
     private static String formatMillis(double millis) {
         return String.format(Locale.ROOT, "%.3f", millis);
+    }
+
+    private record Viewport(int width, int height) {
+        private long pixelCount() {
+            return (long) width * height;
+        }
     }
 
     @Override

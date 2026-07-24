@@ -445,6 +445,14 @@ void main() {
     indirect_reservoir_clamp_samples(indirect_result);
 
     indirect_reservoir_finalize_weight(indirect_result, indirect_sample_weight);
+    // This is the final selected indirect reservoir. Validate it before the
+    // encode so the standalone validation pass does not have to read and
+    // rewrite both high-precision indirect attachments.
+    indirect_reservoir_validate_visibility(
+        indirect_result,
+        frag_rt_pos
+    );
+    indirect_reservoir_clamp_samples(indirect_result);
     indirect_reservoir_encode(indirect_result, gi_reservoir_0, gi_reservoir_1);
 #endif
 }
