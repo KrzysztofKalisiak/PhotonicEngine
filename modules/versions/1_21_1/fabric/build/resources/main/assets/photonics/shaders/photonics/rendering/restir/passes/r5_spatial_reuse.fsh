@@ -19,9 +19,34 @@ layout(location = INDIRECT_RESERVOIR_1) out uvec3 gi_reservoir_1;
 const float ph_spatial_max_receiver_distance_sq = 0.5625f;
 const float ph_spatial_max_plane_distance = 0.05f;
 const float ph_spatial_min_normal_alignment = 0.99f;
+const int ph_indirect_spatial_candidate_attempts = 8;
 
 bool ph_spatial_is_finite(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
+}
+
+ivec2 ph_spatial_next_sample_texel(
+    inout uint rnd_state,
+    float reuse_radius
+) {
+    float angle = 6.28318530718f * ph_rand_next_float(rnd_state);
+    float sample_radius = max(
+        1.0f,
+        sqrt(ph_rand_next_float(rnd_state)) * reuse_radius
+    );
+    ivec2 sample_offset = ivec2(round(
+        vec2(cos(angle), sin(angle)) * sample_radius
+    ));
+    return frag_tex_coord + sample_offset;
+}
+
+bool ph_spatial_sample_texel_is_valid(
+    ivec2 sample_texel,
+    ivec2 texture_size
+) {
+    return !all(equal(sample_texel, frag_tex_coord))
+        && !any(lessThan(sample_texel, ivec2(0)))
+        && !any(greaterThanEqual(sample_texel, texture_size));
 }
 
 bool ph_spatial_current_receiver_can_reuse() {
@@ -302,28 +327,24 @@ void main() {
         && frag_data_sublevel_token(_frag_data) == 0u;
 #endif
 
+#if defined PH_ENABLE_BLOCKLIGHT
     for (int i = 0; i < reuse_samples; i++) {
         if (!spatial_receiver_can_reuse || reuse_radius <= 0.0f) break;
 
-        float angle = 6.28318530718f * ph_rand_next_float(frag_rnd_state);
-        float sample_radius = max(
-            1.0f,
-            sqrt(ph_rand_next_float(frag_rnd_state)) * reuse_radius
+        ivec2 sample_texel = ph_spatial_next_sample_texel(
+            frag_rnd_state,
+            reuse_radius
         );
-        ivec2 sample_offset = ivec2(round(
-            vec2(cos(angle), sin(angle)) * sample_radius
-        ));
-        ivec2 sample_texel = frag_tex_coord + sample_offset;
-        if (all(equal(sample_texel, frag_tex_coord))
-                || any(lessThan(sample_texel, ivec2(0)))
-                || any(greaterThanEqual(sample_texel, spatial_texture_size)))
+        if (!ph_spatial_sample_texel_is_valid(
+                sample_texel,
+                spatial_texture_size
+        ))
             continue;
 
         FragData sample_frag;
         frag_data_load(sample_frag, sample_texel);
         if (!ph_spatial_receiver_matches(sample_frag)) continue;
 
-#if defined PH_ENABLE_BLOCKLIGHT
 #if PH_RESTIR_SPATIAL_REUSE_SAMPLES > 0
         ph_spatial_direct_reservoir_load(temp_direct, sample_texel);
         if (direct_reservoir_is_reusable(temp_direct)
@@ -335,11 +356,50 @@ void main() {
             );
         }
 #endif
+    }
 #endif
 
 #if defined PH_ENABLE_RESTIR_GI
 #if PH_RESTIR_SPATIAL_REUSE_SAMPLES > 0
-        if (indirect_spatial_receiver_can_reuse) {
+    if (indirect_spatial_receiver_can_reuse && reuse_radius > 0.0f) {
+        uint indirect_spatial_rnd_state = ph_new_rand_state(
+            gl_FragCoord.xy,
+            frameCounter,
+            1171
+        );
+
+        for (int i = 0; i < reuse_samples; i++) {
+            bool candidate_found = false;
+            ivec2 sample_texel = frag_tex_coord;
+            FragData sample_frag;
+
+            // Search only on receiver geometry. Reservoir contents are not
+            // inspected until after selection, so bright samples receive no
+            // extra proposal probability.
+            for (int attempt = 0;
+                    attempt < ph_indirect_spatial_candidate_attempts;
+                    attempt++) {
+                sample_texel = ph_spatial_next_sample_texel(
+                    indirect_spatial_rnd_state,
+                    reuse_radius
+                );
+                if (!ph_spatial_sample_texel_is_valid(
+                        sample_texel,
+                        spatial_texture_size
+                ))
+                    continue;
+
+                frag_data_load(sample_frag, sample_texel);
+                if (!ph_spatial_receiver_matches(sample_frag))
+                    continue;
+
+                candidate_found = true;
+                break;
+            }
+
+            if (!candidate_found)
+                continue;
+
             ph_spatial_indirect_reservoir_load(
                 temp_indirect,
                 sample_texel
@@ -351,9 +411,9 @@ void main() {
                 indirect_sample_weight
             );
         }
-#endif
-#endif
     }
+#endif
+#endif
 
 #if defined PH_ENABLE_BLOCKLIGHT
     if (direct_reservoir_is_reusable(direct_result)) {
