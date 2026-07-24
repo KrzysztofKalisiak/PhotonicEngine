@@ -69,7 +69,7 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
 
         var properties = shaderPack.properties();
         Photonics.LOGGER.info(
-                "Photonics pipeline for '{}': enabled={}, mode={}, blockLight={}, gi={}, blockLightGi={}, handheld={}, renderScale={}, maxLights={}, maxSamples={}, restirInitial={}, restirSpatial={}, restirDenoiser={}, restirSoftShadows={}, restirCombinedGi={}",
+                "Photonics pipeline for '{}': enabled={}, mode={}, blockLight={}, gi={}, blockLightGi={}, handheld={}, shaderPackRenderScale={}, renderScale={}, maxLights={}, maxSamples={}, restirInitial={}, restirSpatial={}, restirDenoiser={}, restirSoftShadows={}, restirCombinedGi={}",
                 shaderPack.name(),
                 properties.isPhotonicsEnabled(),
                 properties.getLightingMode(),
@@ -77,6 +77,7 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
                 properties.isGiEnabled(),
                 properties.isBlockLightGiEnabled(),
                 properties.isHandheldLightEnabled(),
+                properties.getShaderPackRenderScale(),
                 properties.getRenderScale(),
                 properties.getMaxLights(),
                 properties.getMaxSamples(),

@@ -35,7 +35,7 @@ vec3 ph_get_normal_for_denoise(FragData frag, float variance) {
 
 ivec2 ph_get_denoise_depth_texel(ivec2 texel) {
     return clamp(
-        SVGF_DEPTH_MODIFIER(texel),
+        SVGF_DEPTH_MODIFIER(ph_shaderpack_texel(texel)),
         ivec2(0),
         textureSize(depthtex0, 0) - ivec2(1)
     );

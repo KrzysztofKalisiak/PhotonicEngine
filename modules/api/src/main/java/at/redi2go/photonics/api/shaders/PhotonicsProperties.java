@@ -9,6 +9,10 @@ public interface PhotonicsProperties {
     float DEFAULT_RENDER_SCALE = 1f;
     String RENDER_SCALE_KEY = "photonics.renderScale";
 
+    default float getShaderPackRenderScale() {
+        return getRenderScale();
+    }
+
     int getMaxLights();
     int DEFAULT_MAX_LIGHTS = 1000;
     String MAX_LIGHTS_KEY = "photonics.maxLights";

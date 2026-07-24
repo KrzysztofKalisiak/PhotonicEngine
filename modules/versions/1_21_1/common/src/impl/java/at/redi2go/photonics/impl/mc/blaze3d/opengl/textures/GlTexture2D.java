@@ -7,6 +7,7 @@ import at.redi2go.photonics.impl.mc.blaze3d.opengl.GlEnums;
 import org.joml.Vector2i;
 import org.joml.Vector2ic;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 
 public class GlTexture2D extends AbstractGlTexture<Vector2ic> implements IGpuTexture2D {
@@ -32,6 +33,8 @@ public class GlTexture2D extends AbstractGlTexture<Vector2ic> implements IGpuTex
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, handle);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, filter);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, filter);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, glFormat.internalFormat(), size.x(), size.y(), 0, glFormat.format(), glFormat.type(), 0L);
         GL30.glBindTexture(GL11.GL_TEXTURE_2D, 0);
     }

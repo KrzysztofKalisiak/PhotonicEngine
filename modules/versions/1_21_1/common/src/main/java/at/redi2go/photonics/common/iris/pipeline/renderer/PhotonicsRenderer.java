@@ -204,7 +204,7 @@ public class PhotonicsRenderer extends CompositeRenderer {
             double windowSeconds = timingWindowNanos / 1_000_000_000.0;
             double framesPerSecond = cpuFrames / windowSeconds;
             Photonics.LOGGER.info(
-                    "Photonics frame throughput v77: viewport={}x{}, windowSeconds={}, renderedFrames={}, fps={}, frameAvgMs={}",
+                    "Photonics frame throughput v78: viewport={}x{}, windowSeconds={}, renderedFrames={}, fps={}, frameAvgMs={}",
                     viewport.width(),
                     viewport.height(),
                     formatMillis(windowSeconds),

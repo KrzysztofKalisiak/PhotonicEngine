@@ -60,7 +60,7 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     public PhotonicsPropertiesImpl() {
         Photonics.LOGGER.info(
-                "Photonics performance overrides v77: renderScale={}, restirInitialSamples={}, restirDenoiserPasses={} (shader-pack means no JVM override)",
+                "Photonics performance overrides v78: renderScale={}, restirInitialSamples={}, restirDenoiserPasses={} (shader-pack means no JVM override)",
                 overrideLabel(renderScaleOverride),
                 overrideLabel(restirInitialSamplesOverride),
                 overrideLabel(restirDenoiserPassesOverride)
@@ -75,6 +75,11 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     @Override
     public float getRenderScale() {
         return renderScaleOverride != null ? renderScaleOverride : renderScale;
+    }
+
+    @Override
+    public float getShaderPackRenderScale() {
+        return renderScale;
     }
 
     @Override

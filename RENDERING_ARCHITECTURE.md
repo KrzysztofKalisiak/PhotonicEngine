@@ -447,8 +447,18 @@ The v77 launch-time overrides are:
 Each property is independent and omitted properties continue to use the shader
 pack setting. Valid ranges are `0.25..1.0`, `8..32`, and `0..12`,
 respectively. Pipeline creation logs the effective values, and
-`Photonics frame throughput v77` reports exact rendered frames and FPS for each
+`Photonics frame throughput v78` reports exact rendered frames and FPS for each
 approximately five-second window.
+
+V78 separates the shader pack's native render scale from Photonics' effective
+render scale. Shader-pack G-buffer interfaces expect `gl_FragCoord` in their
+native pixel grid, while ReSTIR may now run on a smaller independent grid. The
+fragment-data pass remaps coordinates by the ratio of the exact truncated
+shader-pack and Photonics framebuffer dimensions, and SVGF applies the same
+conversion before reading shader-pack depth. Photonics history, reservoirs,
+accumulation, and denoising remain at the smaller effective resolution.
+Framebuffer textures clamp at their edges so filtering the reduced result
+cannot wrap lighting from the opposite side of the screen.
 
 ### 8.4 The shader pack composes the result
 
