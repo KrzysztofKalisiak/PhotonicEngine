@@ -58,7 +58,13 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics direct startup v84: unbiased candidate-count-stable half-budget camera-contribution stratum with full-list systematic tail coverage"
         );
         Photonics.LOGGER.info(
-                "Photonics ReSTIR GI transport v85: stochastic alpha-coverage traversal, neutral thin-cutout pass-through, tinted glass pass-through, and endpoint-first transparent-hit validation"
+                "Photonics ReSTIR GI transport v85+: stochastic tinted-glass traversal and endpoint-first transparent-hit validation"
+        );
+        Photonics.LOGGER.info(
+                "Photonics stability v86: deterministic thin-cutout GI coverage and bounded palette-heap compiler recovery probes"
+        );
+        Photonics.LOGGER.info(
+                "Photonics ReSTIR GI validation v88: triState=valid/blocked-current-receiver/stale, blockedHistoryM=preserved-once-with-zero-energy, staleHistoryM=excluded, maxTemporalCandidates=1, maxSpatialCandidates=1, maxTraversalSteps=128"
         );
         Photonics.LOGGER.info("Photonics feature set: direct-light-v64 expiring Contraption Lights proxy ownership with a conservative nearby unmatched-proxy quarantine, position-matched Sable light alias trail with registry/profile diagnostics and render-thread-owned external merge, full-precision motion-grid Sable receiver visibility and endpoint-safe conservative traversal, dual-space Sable light de-duplication, production composite restored after v57 reservoir diagnostics, corrected indirect hit-normal decoding, full temporal reservoir retention for Sable external lighting, randomized systematic world-light proposals, Sable skylight-transition diagnostics with opt-in getter freeze, post-denoise exact Sable-local direct stream and fail-closed same-domain visibility, camera-relative double-composed Sable reprojection, normal-guided receiver classification, tri-state same-sublevel visibility and conservative supercover voxel traversal, sampling-time receiver-domain partition with exact same-sublevel direct lighting, external-only Sable reservoirs and soft-shadow local-visibility-signature-guided Sable SVGF support, preserved all-zero current proposal batches, elapsed-time moving-light hysteresis and unsnapped render-pose positions, rejected spatial-batch accounting, receiver-domain-complete stable/external history partition and rigid-motion Sable spatial reuse, bounded visibility-rejected reservoirs and representative-scoped external reactivity, split stable/external accumulation histories and stale Sable material recovery, explicit emitter motion-domain identity, motion-domain-stable receiver-relative light-history limits, previous-light position metadata, rotation-correct cross-sublevel motion, guarded ordinary-world all-light and external-only Sable single-neighbor spatial reuse, immutable spatial input, current-receiver visibility validation, bounded spatial history, independent spatial random stream, bounded reservoirs, zero-contribution batch accounting, actual-motion reactive lights, stable-anchor Sable reprojection, surface-plane SVGF, visibility-transition provenance, stable Sable identity, current-visible temporal reuse, Sable plot-section isolation, deterministic diagonal cutouts, generation-aligned adaptive stratified ReSTIR proposals, exposed-face Sable local visibility, duplicate Veil point-light suppression, moving-light and Iris material bridges; finite-segment OOB visibility and tree-origin tracing, masked passes, texture barriers, accumulation, denoising, handheld; Sable-receiver world/cross-sublevel spatial reuse and combined GI compatibility gates active");
 
@@ -147,7 +153,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
                 .debugGroup("restir temporal")
                 .withFramebuffer(reusedReservoirFramebuffer)
-                .deferredPass("temporal reuse", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isRestirEnabled)
+                .deferredPass("temporal reuse + tri-state GI classification", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isRestirEnabled)
                 .debugGroup("restir spatial copy")
                 .withFramebuffer(spatialInputFramebuffer)
                 .deferredPass("copy spatial input", "/photonics/rendering/restir/passes/r5_copy_spatial_input.fsh", null, this::isSpatialReuseEnabled)
@@ -155,7 +161,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .withFramebuffer(reusedReservoirFramebuffer)
                 // The spatial pass also caps temporal reservoirs, so it must run
                 // when the configured spatial candidate count is zero.
-                .deferredPass("spatial reuse/clamp + indirect visibility", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isRestirEnabled)
+                .deferredPass("spatial reuse/clamp + tri-state GI classification", "/photonics/rendering/restir/passes/r5_spatial_reuse.fsh", null, this::isRestirEnabled)
                 .debugGroup("restir diffuse")
                 .withFramebuffer(diffuseFramebuffer)
                 .deferredPass("diffuse", "/photonics/rendering/restir/passes/r6_diffuse.fsh", null, this::isRestirEnabled)
@@ -321,7 +327,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .debugGroup("restir gi temporal")
                 .withFramebuffer(giReservoirFramebuffer)
                 .deferredPass(
-                        "temporal reuse",
+                        "temporal reuse + tri-state classification",
                         "/photonics/rendering/restir/passes/r4_temporal_reuse_gi.fsh",
                         null
                 )
@@ -336,7 +342,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .debugGroup("restir gi spatial")
                 .withFramebuffer(giReservoirFramebuffer)
                 .deferredPass(
-                        "spatial reuse/clamp + visibility",
+                        "spatial reuse/clamp + tri-state classification",
                         "/photonics/rendering/restir/passes/r5_spatial_reuse_gi.fsh",
                         null
                 )

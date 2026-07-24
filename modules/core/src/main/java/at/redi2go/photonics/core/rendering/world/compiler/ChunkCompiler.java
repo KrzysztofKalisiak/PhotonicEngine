@@ -36,6 +36,8 @@ import java.util.concurrent.locks.LockSupport;
 public class ChunkCompiler implements Runnable, RenderingComponent {
     private static final int THREAD_COUNT = 2;
     private static final long HEAP_RECOVERY_RELEASE_BYTES = 8L * 1024L * 1024L;
+    private static final long MIN_HEAP_RECOVERY_PROBE_NANOS = 2_000_000_000L;
+    private static final long MAX_HEAP_RECOVERY_PROBE_NANOS = 16_000_000_000L;
     private static final long COMPILER_IDLE_POLL_NANOS = 100_000_000L;
     private static final long FAILURE_LOG_INTERVAL_NANOS = 10_000_000_000L;
 
@@ -54,6 +56,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicLong nextHeapFailureLogNanos = new AtomicLong();
     private final AtomicLong nextHeapRecoveryLogNanos = new AtomicLong();
+    private final AtomicLong nextHeapProbeLogNanos = new AtomicLong();
     private final AtomicLong nextCompilerFailureLogNanos = new AtomicLong();
 
     public ChunkCompiler(
@@ -250,11 +253,16 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                 saturatedAdd(attemptHeadroom, heapFailure.requestedBytes(), capacity),
                 saturatedAdd(currentHeadroom, HEAP_RECOVERY_RELEASE_BYTES, capacity)
         );
-        requireHeapHeadroom(heapKind, resumeHeadroom);
+        long probeDelayNanos = heapRecoveryProbeDelayNanos(consecutiveFailures);
+        requireHeapHeadroom(
+                heapKind,
+                resumeHeadroom,
+                System.nanoTime() + probeDelayNanos
+        );
 
         if (shouldLog(nextHeapFailureLogNanos)) {
             Photonics.LOGGER.warn(
-                    "Photonics GPU heap pressure v72: section={}, heap={}, failedBlocks={}, consecutiveFailures={}, attemptHeadroomBytes={}, currentHeadroomBytes={}, resumeHeadroomBytes={}, requestedBytes={}, memory={}",
+                    "Photonics GPU heap pressure v86: section={}, heap={}, failedBlocks={}, consecutiveFailures={}, attemptHeadroomBytes={}, currentHeadroomBytes={}, resumeHeadroomBytes={}, probeDelayMs={}, requestedBytes={}, memory={}",
                     section.pos(),
                     heapKind.logName,
                     failedBlocks,
@@ -262,6 +270,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                     attemptHeadroom,
                     currentHeadroom,
                     resumeHeadroom,
+                    probeDelayNanos / 1_000_000L,
                     heapFailure.requestedBytes(),
                     worldRegistry.memoryDiagnosticSummary()
             );
@@ -306,13 +315,35 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                 continue;
             }
 
+            long now = System.nanoTime();
+            if (pressure.isProbeDue(now)
+                    && heapPressure.compareAndSet(pressure, null)) {
+                if (shouldLog(nextHeapProbeLogNanos)) {
+                    Photonics.LOGGER.info(
+                            "Photonics GPU heap recovery probe v86: requiredWorldHeadroomBytes={}, currentWorldHeadroomBytes={}, requiredPaletteHeadroomBytes={}, currentPaletteHeadroomBytes={}, pendingSections={}",
+                            pressure.worldHeadroomBytes(),
+                            worldHeadroom,
+                            pressure.paletteHeadroomBytes(),
+                            paletteHeadroom,
+                            sectionQueue.pendingCount()
+                    );
+                }
+                continue;
+            }
+
             LockSupport.parkNanos(COMPILER_IDLE_POLL_NANOS);
         }
     }
 
-    private void requireHeapHeadroom(HeapKind kind, long headroomBytes) {
+    private void requireHeapHeadroom(
+            HeapKind kind,
+            long headroomBytes,
+            long probeAtNanos
+    ) {
         heapPressure.updateAndGet(current -> {
-            HeapPressure next = current == null ? HeapPressure.NONE : current;
+            HeapPressure next = current == null
+                    ? new HeapPressure(0, 0, probeAtNanos)
+                    : current.withProbeDeadline(probeAtNanos);
             return next.withRequiredHeadroom(kind, headroomBytes);
         });
     }
@@ -342,6 +373,14 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             return limit;
 
         return value + increment;
+    }
+
+    private static long heapRecoveryProbeDelayNanos(int consecutiveFailures) {
+        int shift = Math.min(3, Math.max(0, consecutiveFailures - 1));
+        return Math.min(
+                MAX_HEAP_RECOVERY_PROBE_NANOS,
+                MIN_HEAP_RECOVERY_PROBE_NANOS << shift
+        );
     }
 
     private static @Nullable GpuBufferHeapOutOfMemoryError findHeapFailure(Throwable failure) {
@@ -437,26 +476,39 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
     private record HeapPressure(
             long worldHeadroomBytes,
-            long paletteHeadroomBytes
+            long paletteHeadroomBytes,
+            long probeAtNanos
     ) {
-        private static final HeapPressure NONE = new HeapPressure(0, 0);
-
         private HeapPressure withRequiredHeadroom(HeapKind kind, long headroomBytes) {
             return switch (kind) {
                 case WORLD -> new HeapPressure(
                         Math.max(worldHeadroomBytes, headroomBytes),
-                        paletteHeadroomBytes
+                        paletteHeadroomBytes,
+                        probeAtNanos
                 );
                 case PALETTE -> new HeapPressure(
                         worldHeadroomBytes,
-                        Math.max(paletteHeadroomBytes, headroomBytes)
+                        Math.max(paletteHeadroomBytes, headroomBytes),
+                        probeAtNanos
                 );
             };
+        }
+
+        private HeapPressure withProbeDeadline(long deadlineNanos) {
+            return new HeapPressure(
+                    worldHeadroomBytes,
+                    paletteHeadroomBytes,
+                    Math.max(probeAtNanos, deadlineNanos)
+            );
         }
 
         private boolean isSatisfied(long worldHeadroom, long paletteHeadroom) {
             return worldHeadroom >= worldHeadroomBytes
                     && paletteHeadroom >= paletteHeadroomBytes;
+        }
+
+        private boolean isProbeDue(long nowNanos) {
+            return nowNanos - probeAtNanos >= 0;
         }
     }
 

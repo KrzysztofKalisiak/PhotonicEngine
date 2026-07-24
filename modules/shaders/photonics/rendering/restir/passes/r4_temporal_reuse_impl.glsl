@@ -105,21 +105,22 @@ void main() {
     float indirect_sample_weight = 0.0f;
     IndirectReservoir indirect_result = indirect_reservoir_empty();
     IndirectReservoir temp_indirect = indirect_reservoir_empty();
+    IndirectReservoir current_indirect = indirect_reservoir_empty();
+    indirect_reservoir_load(current_indirect, frag_tex_coord);
 
     // The GI tracer currently intersects only the world voxel volume, so every
     // finite stored hit is world-space even when its receiver belongs to a
     // Sable sublevel. The receiver reprojection above already supplies that
-    // sublevel's previous rigid pose; reuse its world/sky hit and let the final
-    // visibility validation reject geometry changes. This avoids feeding the
+    // sublevel's previous rigid pose. Revalidate its world/sky hit from this
+    // receiver before it enters the estimator. This avoids feeding the
     // half-rate Sable GI path an unrelated one-sample reservoir every frame.
     //
     // Once GI can hit Sable geometry, the sample must also carry the hit
     // sublevel identity and local-space point before this remains valid.
     if (!frag_is_hand
             && !frag_data_is_hand(prev_frag)
-            && indirect_reservoir_load_previous(temp_indirect, prev_texel)) {
-        temp_indirect.total_samples = min(max_indirect_temporal_samples, temp_indirect.total_samples);
-
+            && indirect_reservoir_load_previous(temp_indirect, prev_texel)
+            && indirect_reservoir_has_sample(temp_indirect)) {
         // Previous fragment positions are camera-relative. Convert the source
         // receiver into the current camera space without changing the local
         // direct-light reprojection contract.
@@ -131,25 +132,48 @@ void main() {
             _frag_data,
             shift_source_frag
         );
-        if (shift > 0.0f && shift < 1.2f) {
-            indirect_reservoir_merge(
-                indirect_result,
-                temp_indirect,
-                shift,
-                indirect_sample_weight
-            );
+        float effective_samples = min(
+            max_indirect_temporal_samples,
+            temp_indirect.total_samples
+        );
+        if (shift > 0.0f
+                && shift < 1.2f
+                && effective_samples > 0.0f
+                && !isnan(effective_samples)
+                && !isinf(effective_samples)) {
+            uint path_validation =
+                indirect_reservoir_classify_reused_path(
+                    temp_indirect,
+                    frag_rt_pos
+                );
+            if (path_validation == indirect_path_validation_valid) {
+                temp_indirect.total_samples = effective_samples;
+                indirect_reservoir_merge(
+                    indirect_result,
+                    temp_indirect,
+                    shift,
+                    indirect_sample_weight
+                );
+            } else if (path_validation
+                    == indirect_path_validation_blocked_current_receiver) {
+                // This is a valid historical proposal with zero target at the
+                // current receiver. Its represented M remains in the
+                // normalization exactly once, without adding energy.
+                indirect_reservoir_add_batch_samples(
+                    indirect_result,
+                    effective_samples
+                );
+            }
         }
     }
 
-    indirect_reservoir_load(temp_indirect, frag_tex_coord);
     indirect_reservoir_merge_current_batch(
         indirect_result,
-        temp_indirect,
+        current_indirect,
         1.0f,
         indirect_sample_weight
     );
 
-    // write resulting reservoir
     indirect_reservoir_finalize_weight(indirect_result, indirect_sample_weight);
     indirect_reservoir_encode(indirect_result, gi_reservoir_0, gi_reservoir_1);
 #endif
