@@ -278,6 +278,10 @@ bool direct_sample_get_final_unweighted_color_impl(
     result = vec3(0.0f);
     if (direct_sample_is_empty(smple))
         return false;
+    if (ph_sable_ambiguous_receiver_rejects_light(
+            frag_data_sublevel_token(_frag_data),
+            direct_sample_get_temporal_domain(smple)
+    )) return false;
 
     Light light = direct_sample_get_light(smple);
     vec3 sampled_color = direct_sample_get_color(

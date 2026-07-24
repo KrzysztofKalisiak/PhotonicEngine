@@ -312,7 +312,7 @@ captures two related datasets.
 
 For each Sable sublevel, the bridge reads Contraption Lights' local emissive
 block coordinates, transforms their centers into current world coordinates,
-retains previous positions, assigns a stable UUID-derived motion token, and
+retains previous positions, assigns a stable UUID-associated motion token, and
 publishes them through
 [`ExternalLightList.java`](modules/core/src/main/java/at/redi2go/photonics/core/rendering/lights/ExternalLightList.java).
 
@@ -351,6 +351,9 @@ Consequences of this bounded local policy:
   full cells;
 - the atlas is capped at 786,432 cells and a 3 MiB `RGBA8` payload, while the
   shape table is capped at 511 rows and 512 texels on either dimension;
+- both textures are additionally bounded by the runtime
+  `GL_MAX_3D_TEXTURE_SIZE`; a missing or insufficient capability uses the
+  atlas-less fail-closed path;
 - sublevel shape payloads are cached by topology generation, so a dirty
   sublevel does not rescan every other sublevel;
 - stable layouts upload only changed 3D slices; additions, removals, resized
@@ -359,6 +362,12 @@ Consequences of this bounded local policy:
 - receiver identity remains available through conservative local-bounds
   classification when a sublevel has no atlas slice, and its matching direct
   visibility fails closed instead of using the static world tree;
+- overlapping atlas-less bounds encode an explicit unknown-Sable token and
+  reject every Sable-domain light, rather than arbitrarily selecting one;
+- local traversal tests the start cell and exempts only the emitter cell,
+  preventing wall-mounted sources from skipping an adjacent occluder;
+- partial traversal permits at most 64 shape-box intersections per ray and
+  fails closed if that budget is exhausted;
 - partial receiver endpoints come from the selected AABB, and only the final
   epsilon endpoint intersection is ignored, so another AABB in the same cell
   can occlude;

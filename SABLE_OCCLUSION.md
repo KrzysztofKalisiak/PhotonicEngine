@@ -20,13 +20,17 @@ conditions hold:
 
 Receiver identity does not depend on atlas allocation. If a sublevel is
 omitted because it is oversized or the aggregate atlas is full, a stricter
-local-bounds classifier still assigns its persistent token. A matching
-same-token light is then handled with `visible = false`; it never silently
-falls through to the static-world visibility tree.
+local-bounds classifier still assigns its persistent token when exactly one
+unavailable bound matches. If multiple unavailable bounds overlap at the
+receiver, token `65535` represents "Sable receiver, exact domain unknown" and
+all Sable-domain lights fail closed. CPU sublevel tokens are therefore limited
+to `1..65534`. These cases never silently fall through to the static-world
+visibility tree for a Sable-domain light.
 
-The v64 motion contract is unchanged. UUID-derived temporal tokens remain
-persistent, GPU slots remain frame-local, and the existing current/previous
-camera-relative transforms continue to drive history reprojection.
+The v64 motion contract is otherwise unchanged. UUID-associated temporal
+tokens remain persistent, GPU slots remain frame-local, and the existing
+current/previous camera-relative transforms continue to drive history
+reprojection.
 
 ## Local Geometry Data
 
@@ -43,20 +47,28 @@ reports a topology revision:
    - Two texels per local AABB: minimum then maximum.
    - At most 8 AABBs per shape.
    - At most 511 persistent shape definitions.
-   - Maximum table dimension 512 texels.
+   - Policy table dimension at most 512 texels.
 
 Full blocks stay on the one-fetch path. Partial blocks use Minecraft's
 `BlockState.getShape(...).toAabbs()` data only after DDA reaches that cell.
-Air, fluid, and emissive cells keep the existing non-occluding behavior.
+Air and fluid cells remain non-occluding. Emissive blocks now upload their
+normal shape; only the currently sampled emitter cell is exempt in the shader,
+so another emissive block can occlude the ray.
 
 Malformed or out-of-cell shapes, shapes with more than 8 boxes, invalid shape
-IDs, a missing shape table, and shape
-table overflow are represented as conservative full cells. Sublevels larger
+IDs, non-positive extents, a missing shape table, and shape-table overflow are
+represented as conservative full cells. Sublevels larger
 than 96 blocks on an axis, 300,000 cells, or the 512-layer aggregate atlas
 limit receive no local atlas offset. The complete atlas is additionally capped
 at 786,432 cells, which is a 3 MiB `RGBA8` payload. Candidates are UUID-sorted
 before planning, and omitted candidates remain in the motion/token snapshot
 with an atlas offset of `-1`.
+
+The render-thread bridge queries `GL_MAX_3D_TEXTURE_SIZE`. Every atlas
+dimension must fit that reported value. The shape-table dimension is
+`min(512, GL_MAX_3D_TEXTURE_SIZE)`, so its effective row limit can be lower
+than 511. If the query fails or the device limit cannot represent a candidate,
+fine geometry is omitted and the atlas-less fail-closed identity path applies.
 
 Contraption Lights allocates a new occupancy array when it rebuilds a
 sublevel. The bridge uses that array identity as the topology generation.
@@ -85,15 +97,24 @@ test:
 1. Transform the CPU-tokened light into the receiver's current local grid.
 2. Derive its source cell directly, without the old global 64-emissive-cell
    visibility lookup.
-3. Resolve the receiver cell and select the nearest normal-facing AABB.
-4. Derive the endpoint from that selected AABB, not the whole block cell.
-5. Run the endpoint-safe conservative supercover DDA, including the receiver
+3. Test the DDA start cell explicitly. Only the CPU-tokened emitter cell is
+   self-exempt, so a wall-mounted source cannot skip an occluder immediately
+   outside its exposed face.
+4. Resolve the receiver cell and select the nearest normal-facing AABB.
+5. Derive the endpoint from that selected AABB, not the whole block cell.
+6. Run the endpoint-safe conservative supercover DDA, including the receiver
    cell.
-6. Treat full/fallback cells as opaque and intersect sparse AABBs for partial
+7. Treat full/fallback cells as opaque and intersect sparse AABBs for partial
    cells.
 
 Only the final epsilon-sized endpoint intersection is ignored. Another AABB in
 the same multipart receiver cell can therefore block the ray.
+
+Each ray may perform at most 64 partial-shape AABB intersection tests. Coarse
+cell rejection runs before consuming this budget, and exact full/fallback
+cells remain on their constant-cost path. If another partial cell would exceed
+the budget, visibility fails closed. The value allows eight maximally complex
+8-box cells while bounding the expensive inner loop.
 
 If a same-token ray cannot be classified or has no uploaded atlas, it fails
 closed. It does not fall back to the static world tree, because Sable plot
@@ -106,6 +127,7 @@ or contradictory answer.
 | --- | --- | --- | --- |
 | World | World | Photonics world tracer | Not applicable |
 | Sable A | Sable A | Sable A local DDA and sparse shapes, or fail closed without its slice | Yes, exact within the uploaded shape model |
+| Unknown overlapping Sable bounds | Any Sable domain | Explicit unknown-domain rejection | Fail closed |
 | Sable A | World | Photonics world tracer | No |
 | World | Sable A | Photonics world tracer | No |
 | Sable A | Sable B | Photonics world tracer | No |
@@ -129,11 +151,26 @@ GPU cost for same-token direct visibility is:
 - the existing bounded supercover DDA;
 - one `RGBA8` fetch per tested cell;
 - a coarse cell AABB rejection before shape-table work; and
-- up to 8 AABB pairs only for a reached partial cell.
+- up to 8 AABB pairs for one reached partial cell and 64 total partial AABB
+  intersection tests per ray.
 
 World and cross-sublevel rays have no additional dynamic-sublevel loop in this
 baseline. The maximum 16 uploaded sublevels and all existing motion/history
 limits remain unchanged.
+
+There is deliberately no deferred per-frame topology queue in this patch.
+Keeping the previous slice after a dirty topology revision could expose stale
+occluders and fail open; dropping/repacking slices across several frames would
+also cause repeated full layout changes. Instead, hard memory/upload sizes are
+bounded and the bridge warns, at powers of two, when a topology update exceeds
+any diagnostic target:
+
+- 4 ms CPU shape scanning;
+- 8 ms total CPU update/command submission; or
+- 1 MiB uploaded in one update.
+
+These are profiling targets, not correctness cutoffs. `updateMs` measures CPU
+work and command submission, not asynchronous GPU completion.
 
 ## Diagnostics
 
@@ -142,6 +179,7 @@ An atlas or slice update logs:
 - accepted and skipped sublevels;
 - receiver, full, exact-shape, fallback, and receiver-only cell counts;
 - distinct shape count and per-shape limit;
+- `GL_MAX_3D_TEXTURE_SIZE` and hardware-limit skips;
 - per-frame and cumulative cache hits, rescans, scanned cells, upload counts,
   bytes, and CPU timing;
 - full versus slice upload mode and atlas dimensions/budgets; and
@@ -177,6 +215,17 @@ Run these cases after a centralized serial 1.21.1 build:
 8. Put two disjoint AABBs in one receiver cell and aim a ray through the first
    toward the second. The earlier AABB must occlude while the selected
    receiver surface must not self-occlude.
+9. Place a wall-mounted Sable light with an occupied cell immediately outside
+   its exposed face. That start cell must block the ray while the emitter's own
+   cell remains exempt. Put a second emissive block on the ray and confirm that
+   it still occludes.
+10. Overlap two atlas-less sublevel bounds. Their overlapping receiver pixels
+    must encode token `65535` and reject lights from either Sable domain.
+11. Trace through more than 64 intersecting partial-shape boxes. The result
+    must fail closed rather than continue unbounded.
+12. Dirty all accepted sublevels in one frame and inspect the scan/update/upload
+    diagnostics. Record frame time and GPU timing externally if a diagnostic
+    target is exceeded.
 
 ## Remaining Risks
 
@@ -187,6 +236,11 @@ Run these cases after a centralized serial 1.21.1 build:
 - Bounds-only classification can classify an ordinary surface inside an
   omitted sublevel's AABB as Sable. That deliberate false positive produces a
   missing light rather than a fail-open leak.
+- Ambiguous atlas-less receivers have no authoritative rigid transform, so
+  their motion output remains in current player space and their Sable direct
+  contribution is suppressed until classification becomes unique.
+- Runtime warnings do not include asynchronous GPU completion time; the
+  validation workload requires an external GPU profiler or frame-time capture.
 - Cross-domain moving occlusion remains unsupported and uses the static world
   result. No Veil shadow result is treated as authoritative Photonics
   visibility.

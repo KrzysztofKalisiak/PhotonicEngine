@@ -4,8 +4,10 @@
 #define PH_SABLE_MAX_SUBLEVELS 16
 #define PH_SABLE_MAX_EMISSIVE_CELLS 64
 #define PH_SABLE_MAX_SHAPE_BOXES 8
+#define PH_SABLE_MAX_SHAPE_BOX_TESTS_PER_RAY 64
 #define PH_SABLE_FULL_CELL_BOX_COUNT 254
 #define PH_SABLE_CONSERVATIVE_CELL_BOX_COUNT 255
+#define PH_SABLE_AMBIGUOUS_RECEIVER_TOKEN 65535u
 const float PH_SABLE_VISIBILITY_BIAS = 0.001f;
 const float PH_SABLE_VISIBILITY_ENDPOINT_GUARD = 0.002f;
 const float PH_SABLE_RECEIVER_PROBE = 0.35f;
@@ -49,6 +51,14 @@ uint ph_sable_identity_token(int slot) {
 
 bool ph_sable_finite_vec3(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
+}
+
+bool ph_sable_ambiguous_receiver_rejects_light(
+    uint receiver_token,
+    int light_temporal_domain
+) {
+    return receiver_token == PH_SABLE_AMBIGUOUS_RECEIVER_TOKEN
+        && light_temporal_domain > 0;
 }
 
 float ph_sable_receiver_relative_light_step(
@@ -272,7 +282,7 @@ bool ph_sable_shape_box(
     ).xyz + vec3(cell);
     return ph_sable_finite_vec3(box_min)
         && ph_sable_finite_vec3(box_max)
-        && all(lessThanEqual(box_min, box_max))
+        && all(greaterThan(box_max - box_min, vec3(0.0f)))
         && all(greaterThanEqual(box_min, vec3(cell) - vec3(1e-5f)))
         && all(lessThanEqual(box_max, vec3(cell) + vec3(1.00001f)));
 }
@@ -423,10 +433,14 @@ bool ph_sable_visibility_cell_occludes(
     int atlas_z,
     vec3 segment_origin,
     vec3 segment_direction,
-    float endpoint_limit
+    float endpoint_limit,
+    ivec3 emitter_cell,
+    inout int remaining_shape_box_tests
 ) {
     if (any(lessThan(cell, ivec3(0)))
             || any(greaterThanEqual(cell, grid_size)))
+        return false;
+    if (all(equal(cell, emitter_cell)))
         return false;
 
     vec4 cell_data = ph_sable_cell_data(cell, grid_size, atlas_z);
@@ -445,6 +459,9 @@ bool ph_sable_visibility_cell_occludes(
         return true;
     if (box_count > PH_SABLE_MAX_SHAPE_BOXES)
         return true;
+    if (box_count > remaining_shape_box_tests)
+        return true;
+    remaining_shape_box_tests -= box_count;
 
     int shape_id = ph_sable_cell_shape_id(cell_data);
     if (!ph_sable_shape_id_valid(shape_id))
@@ -480,7 +497,8 @@ bool ph_sable_grid_segment_visible(
     int slot,
     vec3 start_grid,
     vec3 end_grid,
-    ivec3 receiver_cell
+    ivec3 receiver_cell,
+    ivec3 emitter_cell
 ) {
     ivec3 grid_size = ivec3(ph_sable_grid_info[slot].xyz + 0.5f);
     int atlas_z = int(ph_sable_grid_info[slot].w);
@@ -496,16 +514,22 @@ bool ph_sable_grid_segment_visible(
         PH_SABLE_VISIBILITY_ENDPOINT_GUARD / max(ray_extent, 1e-6f)
     );
     float endpoint_limit = 1.0f - endpoint_guard_t;
-    if (all(equal(cell, target_cell))) {
-        return !ph_sable_visibility_cell_occludes(
+    int remaining_shape_box_tests = PH_SABLE_MAX_SHAPE_BOX_TESTS_PER_RAY;
+    // The endpoint can be pushed into the cell immediately outside a
+    // wall-mounted emitter. Test that start cell explicitly; only the
+    // CPU-tokened emitter cell is exempt from its own source geometry.
+    if (ph_sable_visibility_cell_occludes(
             cell,
             grid_size,
             atlas_z,
             start_grid,
             ray,
-            endpoint_limit
-        );
-    }
+            endpoint_limit,
+            emitter_cell,
+            remaining_shape_box_tests
+    )) return false;
+    if (all(equal(cell, target_cell)))
+        return true;
 
     ivec3 step = ivec3(sign(ray));
     vec3 t_delta = vec3(1e30f);
@@ -549,20 +573,28 @@ bool ph_sable_grid_segment_visible(
         // remain conservatively closed.
         if (cross_x && ph_sable_visibility_cell_occludes(
                 x_cell, grid_size, atlas_z,
-                start_grid, ray, endpoint_limit)) return false;
+                start_grid, ray, endpoint_limit,
+                emitter_cell,
+                remaining_shape_box_tests)) return false;
         if (cross_y && ph_sable_visibility_cell_occludes(
                 y_cell, grid_size, atlas_z,
-                start_grid, ray, endpoint_limit)) return false;
+                start_grid, ray, endpoint_limit,
+                emitter_cell,
+                remaining_shape_box_tests)) return false;
         if (cross_z && ph_sable_visibility_cell_occludes(
                 z_cell, grid_size, atlas_z,
-                start_grid, ray, endpoint_limit)) return false;
+                start_grid, ray, endpoint_limit,
+                emitter_cell,
+                remaining_shape_box_tests)) return false;
         if (cross_x && cross_y && ph_sable_visibility_cell_occludes(
                 x_cell + ivec3(0, step.y, 0),
                 grid_size,
                 atlas_z,
                 start_grid,
                 ray,
-                endpoint_limit
+                endpoint_limit,
+                emitter_cell,
+                remaining_shape_box_tests
         )) return false;
         if (cross_x && cross_z && ph_sable_visibility_cell_occludes(
                 x_cell + ivec3(0, 0, step.z),
@@ -570,7 +602,9 @@ bool ph_sable_grid_segment_visible(
                 atlas_z,
                 start_grid,
                 ray,
-                endpoint_limit
+                endpoint_limit,
+                emitter_cell,
+                remaining_shape_box_tests
         )) return false;
         if (cross_y && cross_z && ph_sable_visibility_cell_occludes(
                 y_cell + ivec3(0, 0, step.z),
@@ -578,7 +612,9 @@ bool ph_sable_grid_segment_visible(
                 atlas_z,
                 start_grid,
                 ray,
-                endpoint_limit
+                endpoint_limit,
+                emitter_cell,
+                remaining_shape_box_tests
         )) return false;
         if (cross_x && cross_y && cross_z
                 && ph_sable_visibility_cell_occludes(
@@ -587,7 +623,9 @@ bool ph_sable_grid_segment_visible(
                     atlas_z,
                     start_grid,
                     ray,
-                    endpoint_limit
+                    endpoint_limit,
+                    emitter_cell,
+                    remaining_shape_box_tests
                 )) return false;
 
         if (cross_x) {
@@ -624,6 +662,15 @@ bool ph_sable_same_sublevel_light_visibility_at_grid(
     out bool visible
 ) {
     visible = true;
+    if (ph_sable_ambiguous_receiver_rejects_light(
+            receiver_token,
+            light_temporal_domain
+    )) {
+        visible = false;
+        return true;
+    }
+    if (receiver_token == PH_SABLE_AMBIGUOUS_RECEIVER_TOKEN)
+        return false;
     if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
             || receiver_token == 0u
             || receiver_token != ph_sable_identity_token(receiver_slot))
@@ -738,7 +785,8 @@ bool ph_sable_same_sublevel_light_visibility_at_grid(
         receiver_slot,
         source_endpoint,
         receiver_endpoint,
-        receiver_cell
+        receiver_cell,
+        ivec3(emissive_cell_min)
     );
     return true;
 }
@@ -753,6 +801,15 @@ bool ph_sable_same_sublevel_light_visibility(
     out bool visible
 ) {
     visible = true;
+    if (ph_sable_ambiguous_receiver_rejects_light(
+            receiver_token,
+            light_temporal_domain
+    )) {
+        visible = false;
+        return true;
+    }
+    if (receiver_token == PH_SABLE_AMBIGUOUS_RECEIVER_TOKEN)
+        return false;
     if (receiver_slot < 0 || receiver_slot >= ph_sable_sublevel_count
             || receiver_token == 0u
             || receiver_token != ph_sable_identity_token(receiver_slot))
@@ -782,6 +839,7 @@ bool ph_sable_receiver_motion(
     out uint sublevel_token
 ) {
     int fallback_slot = -1;
+    int fallback_matches = 0;
     uint fallback_token = 0u;
     vec3 fallback_previous_player_pos = current_player_pos;
     vec3 fallback_previous_world_normal = current_world_normal;
@@ -823,8 +881,8 @@ bool ph_sable_receiver_motion(
 
         if (!ph_sable_slot_has_geometry(slot)) {
             // Fine occupancy can be omitted by the bounded atlas planner.
-            // Keep a deterministic bounds-classified identity so a matching
-            // light remains in the local domain and fails visibility closed.
+            // A unique bounds match keeps its identity. Multiple unavailable
+            // bounds become the explicit unknown-Sable token below.
             if (any(lessThan(
                     grid_pos,
                     vec3(-PH_SABLE_UNAVAILABLE_RECEIVER_BOUNDS_PAD)
@@ -833,7 +891,8 @@ bool ph_sable_receiver_motion(
                     vec3(grid_size)
                         + vec3(PH_SABLE_UNAVAILABLE_RECEIVER_BOUNDS_PAD)
             ))) continue;
-            if (fallback_slot < 0) {
+            fallback_matches++;
+            if (fallback_matches == 1) {
                 fallback_slot = slot;
                 fallback_token = candidate_token;
                 fallback_previous_player_pos = candidate_previous_player_pos;
@@ -862,7 +921,18 @@ bool ph_sable_receiver_motion(
         return true;
     }
 
-    if (fallback_slot >= 0 && fallback_token != 0u) {
+    if (fallback_matches > 1) {
+        // Multiple atlas-less bounds contain this surface and no exact
+        // atlas-backed receiver matched. Preserve "Sable but unknown" as a
+        // first-class domain so every Sable light is rejected fail-closed.
+        previous_player_pos = current_player_pos;
+        previous_world_normal = current_world_normal;
+        sublevel_slot = -1;
+        sublevel_token = PH_SABLE_AMBIGUOUS_RECEIVER_TOKEN;
+        return true;
+    }
+
+    if (fallback_matches == 1 && fallback_slot >= 0 && fallback_token != 0u) {
         previous_player_pos = fallback_previous_player_pos;
         previous_world_normal = fallback_previous_world_normal;
         sublevel_slot = fallback_slot;

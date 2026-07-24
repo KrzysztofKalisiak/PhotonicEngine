@@ -25,6 +25,8 @@ import org.joml.Quaterniondc;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.joml.Vector3i;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -55,9 +57,13 @@ public final class ContraptionLightsSableBridge {
     private static final int MAX_SHAPE_BOXES = 8;
     private static final int MAX_SHAPE_DEFINITIONS = 511;
     private static final int MAX_SHAPE_TEXTURE_DIMENSION = 512;
+    private static final int MAX_MOTION_TOKEN = 0xfffe;
     private static final int FULL_CELL_BOX_COUNT = 254;
     private static final int CONSERVATIVE_CELL_BOX_COUNT = 255;
     private static final double SHAPE_EPSILON = 1.0e-6;
+    private static final long GEOMETRY_SCAN_WARNING_NANOS = 4_000_000L;
+    private static final long GEOMETRY_UPDATE_WARNING_NANOS = 8_000_000L;
+    private static final long GEOMETRY_UPLOAD_WARNING_BYTES = 1_048_576L;
     private static final double STATIC_LIGHT_POSITION_EPSILON_SQUARED = 1.0e-6;
     private static final long MOVING_LIGHT_HOLD_NANOS = 250_000_000L;
     private static final long REPLACEMENT_ALIAS_HOLD_NANOS = 250_000_000L;
@@ -118,7 +124,9 @@ public final class ContraptionLightsSableBridge {
     private static long geometryFullUploads;
     private static long geometrySliceUploads;
     private static long geometryUploadedBytes;
+    private static int geometryRuntimeBudgetWarnings;
     private static AtlasSkipSummary lastAtlasSkipSummary;
+    private static int cachedMaximum3dTextureSize = -1;
     private static long nextGeometryRevision = 1L;
 
     private ContraptionLightsSableBridge() {
@@ -650,6 +658,8 @@ public final class ContraptionLightsSableBridge {
 
     private static GeometryAtlasState updateGeometryAtlas(List<MotionCandidate> candidates) {
         long updateStarted = System.nanoTime();
+        int textureSizeLimit = maximum3dTextureSize();
+        int shapeDefinitionLimit = maximumShapeDefinitions(textureSizeLimit);
         int[] offsets = new int[candidates.size()];
         Arrays.fill(offsets, -1);
         var accepted = new ArrayList<AcceptedGeometry>(candidates.size());
@@ -659,6 +669,7 @@ public final class ContraptionLightsSableBridge {
         int skippedOversized = 0;
         int skippedAtlasDepth = 0;
         int skippedCellBudget = 0;
+        int skippedTextureLimit = 0;
 
         for (int i = 0; i < candidates.size(); i++) {
             MotionCandidate candidate = candidates.get(i);
@@ -670,6 +681,13 @@ public final class ContraptionLightsSableBridge {
                 skippedOversized++;
                 continue;
             }
+            if (textureSizeLimit <= 0
+                    || candidate.sizeX() > textureSizeLimit
+                    || candidate.sizeY() > textureSizeLimit
+                    || candidate.sizeZ() > textureSizeLimit) {
+                skippedTextureLimit++;
+                continue;
+            }
             if (depth + candidate.sizeZ() > MAX_GEOMETRY_ATLAS_DEPTH) {
                 skippedAtlasDepth++;
                 continue;
@@ -678,6 +696,12 @@ public final class ContraptionLightsSableBridge {
             int projectedWidth = alignGeometryWidth(Math.max(unalignedWidth, candidate.sizeX()));
             int projectedHeight = Math.max(height, candidate.sizeY());
             int projectedDepth = depth + candidate.sizeZ();
+            if (projectedWidth > textureSizeLimit
+                    || projectedHeight > textureSizeLimit
+                    || projectedDepth > textureSizeLimit) {
+                skippedTextureLimit++;
+                continue;
+            }
             long projectedCells = (long) projectedWidth * projectedHeight * projectedDepth;
             long projectedBytes = projectedCells * GEOMETRY_CELL_STRIDE;
             if (projectedCells > MAX_GEOMETRY_ATLAS_CELLS
@@ -706,7 +730,9 @@ public final class ContraptionLightsSableBridge {
                     0,
                     skippedOversized,
                     skippedAtlasDepth,
-                    skippedCellBudget
+                    skippedCellBudget,
+                    skippedTextureLimit,
+                    textureSizeLimit
             );
             return new GeometryAtlasState(offsets, 0);
         }
@@ -762,10 +788,14 @@ public final class ContraptionLightsSableBridge {
         }
         geometryCache.keySet().retainAll(acceptedIds);
 
-        int newShapeDefinitions = registerPersistentShapes(prepared);
+        int newShapeDefinitions = registerPersistentShapes(
+                prepared,
+                shapeDefinitionLimit
+        );
         List<ShapeKey> shapeKeys = List.copyOf(geometryShapeIds.keySet());
         boolean shapeUploadRequired = !shapeKeys.isEmpty()
-                && (newShapeDefinitions > 0 || !shapeTextureMatches(shapeKeys.size()));
+                && (newShapeDefinitions > 0
+                || !shapeTextureMatches(shapeKeys.size(), textureSizeLimit));
 
         boolean layoutChanged = geometryTexture == null
                 || geometryTexture.ph$isClosed()
@@ -846,7 +876,10 @@ public final class ContraptionLightsSableBridge {
 
         long frameShapeUploadBytes = 0L;
         if (shapeUploadRequired) {
-            geometryShapeDefinitionCount = uploadShapeTable(shapeKeys);
+            geometryShapeDefinitionCount = uploadShapeTable(
+                    shapeKeys,
+                    textureSizeLimit
+            );
             if (geometryShapeDefinitionCount > 0) {
                 frameShapeUploadBytes = shapeTablePayloadBytes(
                         geometryShapeDefinitionCount
@@ -855,7 +888,7 @@ public final class ContraptionLightsSableBridge {
         } else if (shapeKeys.isEmpty()) {
             closeShapeTexture();
             geometryShapeDefinitionCount = 0;
-        } else if (shapeTextureMatches(shapeKeys.size())) {
+        } else if (shapeTextureMatches(shapeKeys.size(), textureSizeLimit)) {
             geometryShapeDefinitionCount = shapeKeys.size();
         } else {
             geometryShapeDefinitionCount = 0;
@@ -875,17 +908,26 @@ public final class ContraptionLightsSableBridge {
         geometryUploadedBytes += frameUploadedBytes;
 
         GeometryCellStats cellStats = aggregateCellStats(prepared);
+        long frameUpdateNanos = System.nanoTime() - updateStarted;
+        logGeometryRuntimeBudget(
+                frameScanNanos,
+                frameUpdateNanos,
+                frameUploadedBytes,
+                frameRescans,
+                frameScannedCells
+        );
         boolean atlasUploaded = layoutChanged || frameSliceUploads > 0;
         boolean anythingUploaded = atlasUploaded || frameShapeUploadBytes > 0;
         if (anythingUploaded) {
             geometryRebuilds++;
             Photonics.LOGGER.info(
-                    "Photonics Sable local-occlusion atlas update: update={}, subLevels={}, skippedOversized={}, skippedAtlasDepth={}, skippedCellBudget={}, cacheHits={}/{} total, rescans={}/{} total, scannedCells={}/{} total, scanMs={}, updateMs={}, uploadMode={}, fullUploads={} total, sliceUploads={}/{} total, uploadedBytes={}/{} total, uploadMs={}, receiverCells={}, exactFullCells={}, exactShapeCells={}, localConservativeCells={}, frameGlobalShapeFallbackCells={}, receiverOnlyCells={}, shapeDefinitions={}, maxBoxesPerShape={}, size={}x{}x{}, atlasCells={}/{}, payloadBytes={}/{}, authority=same-token-local-only",
+                    "Photonics Sable local-occlusion atlas update: update={}, subLevels={}, skippedOversized={}, skippedAtlasDepth={}, skippedCellBudget={}, skippedTextureLimit={}, cacheHits={}/{} total, rescans={}/{} total, scannedCells={}/{} total, scanMs={}, updateMs={}, uploadMode={}, fullUploads={} total, sliceUploads={}/{} total, uploadedBytes={}/{} total, uploadMs={}, receiverCells={}, exactFullCells={}, exactShapeCells={}, localConservativeCells={}, frameGlobalShapeFallbackCells={}, receiverOnlyCells={}, shapeDefinitions={}/{}, maxBoxesPerShape={}, size={}x{}x{}, glMax3dTextureSize={}, atlasCells={}/{}, payloadBytes={}/{}, authority=same-token-local-only",
                     geometryRebuilds,
                     accepted.size(),
                     skippedOversized,
                     skippedAtlasDepth,
                     skippedCellBudget,
+                    skippedTextureLimit,
                     frameCacheHits,
                     geometryCacheHits,
                     frameRescans,
@@ -893,7 +935,7 @@ public final class ContraptionLightsSableBridge {
                     frameScannedCells,
                     geometryScannedCells,
                     nanosToMilliseconds(frameScanNanos),
-                    nanosToMilliseconds(System.nanoTime() - updateStarted),
+                    nanosToMilliseconds(frameUpdateNanos),
                     layoutChanged ? "full" : "slice",
                     geometryFullUploads,
                     frameSliceUploads,
@@ -908,10 +950,12 @@ public final class ContraptionLightsSableBridge {
                     globalShapeFallbackCells,
                     cellStats.receiverOnlyCells(),
                     geometryShapeDefinitionCount,
+                    shapeDefinitionLimit,
                     MAX_SHAPE_BOXES,
                     width,
                     height,
                     depth,
+                    textureSizeLimit,
                     atlasCells,
                     MAX_GEOMETRY_ATLAS_CELLS,
                     atlasPayloadBytes,
@@ -938,7 +982,9 @@ public final class ContraptionLightsSableBridge {
                 accepted.size(),
                 skippedOversized,
                 skippedAtlasDepth,
-                skippedCellBudget
+                skippedCellBudget,
+                skippedTextureLimit,
+                textureSizeLimit
         );
 
         return new GeometryAtlasState(offsets, geometryShapeDefinitionCount);
@@ -949,9 +995,14 @@ public final class ContraptionLightsSableBridge {
             int acceptedCount,
             int skippedOversized,
             int skippedAtlasDepth,
-            int skippedCellBudget
+            int skippedCellBudget,
+            int skippedTextureLimit,
+            int textureSizeLimit
     ) {
-        if (skippedOversized + skippedAtlasDepth + skippedCellBudget == 0) {
+        if (skippedOversized
+                + skippedAtlasDepth
+                + skippedCellBudget
+                + skippedTextureLimit == 0) {
             lastAtlasSkipSummary = null;
             return;
         }
@@ -961,24 +1012,90 @@ public final class ContraptionLightsSableBridge {
                 acceptedCount,
                 skippedOversized,
                 skippedAtlasDepth,
-                skippedCellBudget
+                skippedCellBudget,
+                skippedTextureLimit,
+                textureSizeLimit
         );
         if (summary.equals(lastAtlasSkipSummary))
             return;
 
         lastAtlasSkipSummary = summary;
         Photonics.LOGGER.warn(
-                "Photonics omitted Sable local geometry under bounded atlas policy: oversized={}, atlasDepth={}, cellBudget={}, uploaded={}, candidates={}, limits=axis:{} volume:{} atlasDepth:{} atlasCells:{} payloadBytes:{}; omitted receivers retain bounds-classified motion identity and matching same-domain direct visibility fails closed",
+                "Photonics omitted Sable local geometry under bounded atlas policy: oversized={}, atlasDepth={}, cellBudget={}, textureLimit={}, uploaded={}, candidates={}, limits=axis:{} volume:{} atlasDepth:{} atlasCells:{} payloadBytes:{} glMax3dTextureSize:{}; omitted receivers retain bounds-classified motion identity and matching same-domain direct visibility fails closed",
                 skippedOversized,
                 skippedAtlasDepth,
                 skippedCellBudget,
+                skippedTextureLimit,
                 acceptedCount,
                 candidateCount,
                 MAX_GEOMETRY_AXIS,
                 MAX_GEOMETRY_VOLUME,
                 MAX_GEOMETRY_ATLAS_DEPTH,
                 MAX_GEOMETRY_ATLAS_CELLS,
-                MAX_GEOMETRY_PAYLOAD_BYTES
+                MAX_GEOMETRY_PAYLOAD_BYTES,
+                textureSizeLimit
+        );
+    }
+
+    private static int maximum3dTextureSize() {
+        if (cachedMaximum3dTextureSize >= 0)
+            return cachedMaximum3dTextureSize;
+
+        cachedMaximum3dTextureSize = Math.max(
+                0,
+                GL11.glGetInteger(GL12.GL_MAX_3D_TEXTURE_SIZE)
+        );
+        if (cachedMaximum3dTextureSize == 0) {
+            Photonics.LOGGER.error(
+                    "Photonics could not query GL_MAX_3D_TEXTURE_SIZE; Sable fine geometry is disabled and matching local visibility will fail closed"
+            );
+        } else {
+            Photonics.LOGGER.info(
+                    "Photonics Sable geometry capability: GL_MAX_3D_TEXTURE_SIZE={}, policyDimensionLimit={}",
+                    cachedMaximum3dTextureSize,
+                    MAX_SHAPE_TEXTURE_DIMENSION
+            );
+        }
+        return cachedMaximum3dTextureSize;
+    }
+
+    private static int maximumShapeDefinitions(int textureSizeLimit) {
+        int dimensionLimit = Math.min(
+                MAX_SHAPE_TEXTURE_DIMENSION,
+                Math.max(0, textureSizeLimit)
+        );
+        if (dimensionLimit < MAX_SHAPE_BOXES * 2)
+            return 0;
+        return Math.min(MAX_SHAPE_DEFINITIONS, dimensionLimit - 1);
+    }
+
+    private static void logGeometryRuntimeBudget(
+            long frameScanNanos,
+            long frameUpdateNanos,
+            long frameUploadedBytes,
+            int frameRescans,
+            long frameScannedCells
+    ) {
+        if (frameScanNanos <= GEOMETRY_SCAN_WARNING_NANOS
+                && frameUpdateNanos <= GEOMETRY_UPDATE_WARNING_NANOS
+                && frameUploadedBytes <= GEOMETRY_UPLOAD_WARNING_BYTES)
+            return;
+
+        geometryRuntimeBudgetWarnings++;
+        if (Integer.bitCount(geometryRuntimeBudgetWarnings) != 1)
+            return;
+
+        Photonics.LOGGER.warn(
+                "Photonics Sable topology update exceeded its runtime diagnostic target: warning={}, rescans={}, scannedCells={}, scanMs={}/{}, updateMs={}/{}, uploadedBytes={}/{}; updates are not deferred because retaining stale occluders could fail open",
+                geometryRuntimeBudgetWarnings,
+                frameRescans,
+                frameScannedCells,
+                nanosToMilliseconds(frameScanNanos),
+                nanosToMilliseconds(GEOMETRY_SCAN_WARNING_NANOS),
+                nanosToMilliseconds(frameUpdateNanos),
+                nanosToMilliseconds(GEOMETRY_UPDATE_WARNING_NANOS),
+                frameUploadedBytes,
+                GEOMETRY_UPLOAD_WARNING_BYTES
         );
     }
 
@@ -1068,13 +1185,16 @@ public final class ContraptionLightsSableBridge {
                 && Arrays.equals(first.localPayload(), second.localPayload());
     }
 
-    private static int registerPersistentShapes(List<PreparedGeometry> prepared) {
+    private static int registerPersistentShapes(
+            List<PreparedGeometry> prepared,
+            int shapeDefinitionLimit
+    ) {
         int added = 0;
         for (PreparedGeometry entry : prepared) {
             for (ShapeKey shape : entry.geometry().shapeKeys()) {
                 if (geometryShapeIds.containsKey(shape))
                     continue;
-                if (geometryShapeIds.size() >= MAX_SHAPE_DEFINITIONS)
+                if (geometryShapeIds.size() >= shapeDefinitionLimit)
                     continue;
 
                 geometryShapeIds.put(shape, geometryShapeIds.size() + 1);
@@ -1239,7 +1359,9 @@ public final class ContraptionLightsSableBridge {
             BlockState state,
             Map<ShapeKey, Integer> shapeIds
     ) {
-        if (state.isAir() || state.getLightEmission() > 0 || !state.getFluidState().isEmpty())
+        // Emissive geometry stays present; the shader exempts only the
+        // currently sampled emitter cell.
+        if (state.isAir() || !state.getFluidState().isEmpty())
             return CellOcclusion.EMPTY;
 
         List<AABB> sourceBoxes = state.getShape(level, pos).toAabbs();
@@ -1320,9 +1442,13 @@ public final class ContraptionLightsSableBridge {
         return Math.max(0.0d, Math.min(1.0d, value));
     }
 
-    private static boolean shapeTextureMatches(int shapeDefinitionCount) {
+    private static boolean shapeTextureMatches(
+            int shapeDefinitionCount,
+            int textureSizeLimit
+    ) {
+        int shapeDefinitionLimit = maximumShapeDefinitions(textureSizeLimit);
         if (shapeDefinitionCount <= 0
-                || shapeDefinitionCount > MAX_SHAPE_DEFINITIONS
+                || shapeDefinitionCount > shapeDefinitionLimit
                 || shapeTexture == null
                 || shapeTexture.ph$isClosed())
             return false;
@@ -1330,7 +1456,9 @@ public final class ContraptionLightsSableBridge {
         int width = MAX_SHAPE_BOXES * 2;
         int height = shapeDefinitionCount + 1;
         if (width > MAX_SHAPE_TEXTURE_DIMENSION
-                || height > MAX_SHAPE_TEXTURE_DIMENSION)
+                || height > MAX_SHAPE_TEXTURE_DIMENSION
+                || width > textureSizeLimit
+                || height > textureSizeLimit)
             return false;
 
         return shapeTexture.ph$size(0).equals(new Vector3i(width, height, 1));
@@ -1344,7 +1472,10 @@ public final class ContraptionLightsSableBridge {
                 * Float.BYTES;
     }
 
-    private static int uploadShapeTable(List<ShapeKey> shapeKeys) {
+    private static int uploadShapeTable(
+            List<ShapeKey> shapeKeys,
+            int textureSizeLimit
+    ) {
         if (shapeKeys.isEmpty()) {
             closeShapeTexture();
             return 0;
@@ -1352,17 +1483,21 @@ public final class ContraptionLightsSableBridge {
 
         int width = MAX_SHAPE_BOXES * 2;
         int height = shapeKeys.size() + 1;
-        if (shapeKeys.size() > MAX_SHAPE_DEFINITIONS
+        int shapeDefinitionLimit = maximumShapeDefinitions(textureSizeLimit);
+        if (shapeKeys.size() > shapeDefinitionLimit
                 || width > MAX_SHAPE_TEXTURE_DIMENSION
-                || height > MAX_SHAPE_TEXTURE_DIMENSION) {
+                || height > MAX_SHAPE_TEXTURE_DIMENSION
+                || width > textureSizeLimit
+                || height > textureSizeLimit) {
             closeShapeTexture();
             Photonics.LOGGER.error(
-                    "Photonics rejected invalid Sable shape-table dimensions: definitions={}, size={}x{}x1, limits=definitions:{} dimension:{}; partial cells will fail closed",
+                    "Photonics rejected invalid Sable shape-table dimensions: definitions={}, size={}x{}x1, limits=definitions:{} policyDimension:{} glMax3dTextureSize:{}; partial cells will fail closed",
                     shapeKeys.size(),
                     width,
                     height,
-                    MAX_SHAPE_DEFINITIONS,
-                    MAX_SHAPE_TEXTURE_DIMENSION
+                    shapeDefinitionLimit,
+                    MAX_SHAPE_TEXTURE_DIMENSION,
+                    textureSizeLimit
             );
             return 0;
         }
@@ -1439,7 +1574,9 @@ public final class ContraptionLightsSableBridge {
         geometryFullUploads = 0L;
         geometrySliceUploads = 0L;
         geometryUploadedBytes = 0L;
+        geometryRuntimeBudgetWarnings = 0;
         lastAtlasSkipSummary = null;
+        cachedMaximum3dTextureSize = -1;
         nextGeometryRevision = 1L;
         closeGeometryTextures();
     }
@@ -1494,9 +1631,9 @@ public final class ContraptionLightsSableBridge {
         if (current != null)
             return current;
 
-        for (int attempt = 0; attempt < 0xffff; attempt++) {
+        for (int attempt = 0; attempt < MAX_MOTION_TOKEN; attempt++) {
             int token = nextMotionToken++;
-            if (nextMotionToken > 0xffff)
+            if (nextMotionToken > MAX_MOTION_TOKEN)
                 nextMotionToken = 1;
             if (motionTokens.containsValue(token))
                 continue;
@@ -1512,7 +1649,7 @@ public final class ContraptionLightsSableBridge {
         if (!motionActiveLogged && subLevels > 0) {
             motionActiveLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics Sable receiver motion active: subLevels={}, classifier=normal-guided-receiver-cell-atlas+emissive-cells+atlasless-bounds-token-fallback, emitterIdentity=explicit-sublevel-token, localVisibility=same-token-rgba-cell-atlas+sparse-shape-aabb+fail-closed-supercover-dda, crossDomainVisibility=static-world-only, temporalTransform=camera-relative-stable-anchor-double-compose",
+                    "Photonics Sable receiver motion active: subLevels={}, classifier=normal-guided-receiver-cell-atlas+emissive-cells+unique-atlasless-bounds-token+ambiguous-unknown-token, emitterIdentity=explicit-sublevel-token, localVisibility=same-token-rgba-cell-atlas+sparse-shape-aabb+64-box-fail-closed-supercover-dda, crossDomainVisibility=static-world-only, temporalTransform=camera-relative-stable-anchor-double-compose",
                     subLevels
             );
         }
@@ -1696,7 +1833,9 @@ public final class ContraptionLightsSableBridge {
             int acceptedCount,
             int skippedOversized,
             int skippedAtlasDepth,
-            int skippedCellBudget
+            int skippedCellBudget,
+            int skippedTextureLimit,
+            int textureSizeLimit
     ) {
     }
 
