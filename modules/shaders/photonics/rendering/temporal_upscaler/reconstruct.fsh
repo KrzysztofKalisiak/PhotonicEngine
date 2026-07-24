@@ -20,13 +20,24 @@ const float PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD = 0.75f;
 const float PH_UPSCALE_HISTORY_NORMAL_THRESHOLD = 0.95f;
 const float PH_UPSCALE_MIN_PLANE_DISTANCE = 1.0f / 64.0f;
 const float PH_UPSCALE_MAX_PLANE_DISTANCE = 1.0f / 32.0f;
+const float PH_UPSCALE_MAX_PRECISION_PLANE_DISTANCE = 1.0f / 4.0f;
 const float PH_UPSCALE_MAX_POSITION_DISTANCE_SQ = 9.0f;
+const float PH_HALF_MIN_NORMAL = 1.0f / 16384.0f;
 
 bool ph_temporal_finite_vec3(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
 }
 
-float ph_temporal_plane_tolerance(
+bool ph_temporal_normalize(inout vec3 value) {
+    float length_sq = dot(value, value);
+    if (!ph_temporal_finite_vec3(value) || length_sq <= 1e-8f)
+        return false;
+
+    value *= inversesqrt(length_sq);
+    return ph_temporal_finite_vec3(value);
+}
+
+float ph_temporal_base_plane_tolerance(
     ivec2 source_size,
     ivec2 output_size
 ) {
@@ -36,6 +47,48 @@ float ph_temporal_plane_tolerance(
         PH_UPSCALE_MIN_PLANE_DISTANCE,
         PH_UPSCALE_MAX_PLANE_DISTANCE,
         1.0f - source_scale
+    );
+}
+
+float ph_half_component_rounding_bound(float stored_component) {
+    float magnitude = max(abs(stored_component), PH_HALF_MIN_NORMAL);
+    uint exponent_bits = (
+        floatBitsToUint(magnitude) >> 23u
+    ) & 0xffu;
+    int exponent = int(exponent_bits) - 127;
+
+    // Binary16 has ten explicit fraction bits. Round-to-nearest error is at
+    // most half an ULP, or 2^(exponent - 11). Clamping the magnitude to the
+    // minimum normal half value gives the subnormal bound 2^-25.
+    return exp2(float(exponent - 11));
+}
+
+vec3 ph_half_position_rounding_bound(vec3 stored_position) {
+    return vec3(
+        ph_half_component_rounding_bound(stored_position.x),
+        ph_half_component_rounding_bound(stored_position.y),
+        ph_half_component_rounding_bound(stored_position.z)
+    );
+}
+
+float ph_temporal_precision_plane_tolerance(
+    float base_tolerance,
+    vec3 stored_source_position,
+    vec3 source_normal,
+    vec3 output_normal
+) {
+    vec3 component_error = ph_half_position_rounding_bound(
+        stored_source_position
+    );
+    float source_normal_error = dot(abs(source_normal), component_error);
+    float output_normal_error = dot(abs(output_normal), component_error);
+    float projected_error = max(
+        source_normal_error,
+        output_normal_error
+    );
+    return min(
+        PH_UPSCALE_MAX_PRECISION_PLANE_DISTANCE,
+        base_tolerance + projected_error
     );
 }
 
@@ -73,7 +126,7 @@ bool ph_source_matches_surface(
     bool hand,
     int receiver_slot,
     uint receiver_token,
-    float plane_tolerance,
+    float base_plane_tolerance,
     out float score
 ) {
     score = -1e30f;
@@ -90,8 +143,8 @@ bool ph_source_matches_surface(
     vec3 source_normal = frag_data_geo_normal(source_frag);
     vec3 source_tex_normal = frag_data_tex_normal(source_frag);
     if (!ph_temporal_finite_vec3(source_pos)
-            || !ph_temporal_finite_vec3(source_normal)
-            || !ph_temporal_finite_vec3(source_tex_normal))
+            || !ph_temporal_normalize(source_normal)
+            || !ph_temporal_normalize(source_tex_normal))
         return false;
 
     float normal_alignment = dot(source_normal, geo_normal);
@@ -102,6 +155,12 @@ bool ph_source_matches_surface(
     if (texture_normal_alignment < PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD)
         return false;
 
+    float plane_tolerance = ph_temporal_precision_plane_tolerance(
+        base_plane_tolerance,
+        source_pos,
+        source_normal,
+        geo_normal
+    );
     vec3 position_delta = source_pos - player_pos;
     float position_distance_sq = dot(position_delta, position_delta);
     if (position_distance_sq > PH_UPSCALE_MAX_POSITION_DISTANCE_SQ)
@@ -136,7 +195,7 @@ bool ph_find_source_receiver(
     bool hand,
     int receiver_slot,
     uint receiver_token,
-    float plane_tolerance,
+    float base_plane_tolerance,
     out ivec2 best_texel
 ) {
     ivec2 base_texel = ivec2(floor(source_position));
@@ -162,7 +221,7 @@ bool ph_find_source_receiver(
                     hand,
                     receiver_slot,
                     receiver_token,
-                    plane_tolerance,
+                    base_plane_tolerance,
                     score
             )) continue;
 
@@ -199,7 +258,7 @@ bool ph_find_source_receiver(
                     hand,
                     receiver_slot,
                     receiver_token,
-                    plane_tolerance,
+                    base_plane_tolerance,
                     score
             )) continue;
 
@@ -225,7 +284,7 @@ bool ph_reconstruct_current(
     bool hand,
     int receiver_slot,
     uint receiver_token,
-    float plane_tolerance,
+    float base_plane_tolerance,
     out vec3 radiance,
     out float variance,
     out vec3 neighborhood_min,
@@ -242,7 +301,7 @@ bool ph_reconstruct_current(
             hand,
             receiver_slot,
             receiver_token,
-            plane_tolerance,
+            base_plane_tolerance,
             best_texel
     )) return false;
 
@@ -273,7 +332,7 @@ bool ph_reconstruct_current(
                     hand,
                     receiver_slot,
                     receiver_token,
-                    plane_tolerance,
+                    base_plane_tolerance,
                     unused_score
             ))
                 continue;
@@ -480,8 +539,8 @@ void main() {
     vec3 tex_normal;
     load_fragment_data(geo_normal, tex_normal);
     if (!ph_temporal_finite_vec3(player_pos)
-            || !ph_temporal_finite_vec3(geo_normal)
-            || !ph_temporal_finite_vec3(tex_normal))
+            || !ph_temporal_normalize(geo_normal)
+            || !ph_temporal_normalize(tex_normal))
         return;
 
     bool hand = is_hand_at();
@@ -513,7 +572,7 @@ void main() {
     ivec2 source_size = textureSize(photonics_temporal_source, 0);
     vec2 tex_coord = gl_FragCoord.xy / vec2(output_size);
     vec2 source_position = tex_coord * vec2(source_size) - 0.5f;
-    float plane_tolerance = ph_temporal_plane_tolerance(
+    float base_plane_tolerance = ph_temporal_base_plane_tolerance(
         source_size,
         output_size
     );
@@ -532,7 +591,7 @@ void main() {
             hand,
             receiver_slot,
             receiver_token,
-            plane_tolerance,
+            base_plane_tolerance,
             current_radiance,
             current_variance,
             neighborhood_min,

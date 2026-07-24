@@ -67,10 +67,52 @@ projected source position. A source texel participates only when:
 - its geometric and texture normals agree with the output surface;
 - its reconstructed position is close to the output surface plane.
 
-The plane tolerance scales from 1/64 block at equal resolution toward, but
-never beyond, 1/32 block as source resolution decreases. This remains below
-half of a 1/16-block layer and prevents the former 0.20-block acceptance radius
-from mixing carpets, trapdoors, and nearby parallel surfaces.
+The geometric base tolerance scales from 1/64 block at equal resolution toward
+1/32 block as source resolution decreases. The fetched candidate position,
+however, came through the RGBA16F `ph_frag_data0` attachment. Its effective
+plane tolerance therefore also includes a component- and normal-aware
+binary16 rounding bound.
+
+For stored half position component `p_i`, the maximum round-to-nearest error is:
+
+```text
+e_i = 2^(floor(log2(max(abs(p_i), 2^-14))) - 11)
+```
+
+The `2^-14` floor gives the half-subnormal error bound `2^-25`. For source and
+output unit normals `n_s` and `n_o`, reconstruction uses:
+
+```text
+E = max(sum_i(abs(n_s_i) * e_i), sum_i(abs(n_o_i) * e_i))
+T = min(1/4, T_base + E)
+```
+
+This is the worst-case projection of independent component rounding errors
+onto either normal used by the plane test. Both normals are normalized first;
+degenerate values are rejected. The shader extracts the exact float32 exponent
+of each fetched half value rather than relying on an approximate logarithm.
+
+Binary16 half-ULP bounds at power-of-two component magnitudes are:
+
+| Component magnitude | Half-ULP bound |
+| ---: | ---: |
+| 32 | 1/64 block |
+| 64 | 1/32 block |
+| 128 | 1/16 block |
+| 256 | 1/8 block |
+
+The 1/4-block cap is sufficient throughout a component-wise +/-256-block cube:
+for a unit normal, `sum(abs(n_i)) <= sqrt(3)`, so the maximum projected
+binary16 error is `sqrt(3) / 8`; adding the maximum 1/32 base margin remains
+below 1/4. Outside that range, the cap intentionally rejects uncertain matches
+instead of allowing tolerance to grow without bound.
+
+Near the camera, `E` is small and the original sub-voxel separation remains
+tight. At greater distances the tolerance necessarily widens, so distinct thin
+layers with identical normals can become indistinguishable. Keeping
+`ph_frag_data0` at RGBA16F avoids doubling position-buffer bandwidth; RGBA32F
+would be required to preserve the same near-field layer discrimination at long
+range.
 
 If none of the four bilinear taps represents the output surface, a bounded
 3-by-3 nearest-compatible search handles thin geometry and silhouettes.
