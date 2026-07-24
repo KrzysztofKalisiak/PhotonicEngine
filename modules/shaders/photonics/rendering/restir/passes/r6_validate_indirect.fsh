@@ -14,14 +14,23 @@ void main() {
 
     IndirectReservoir reservoir = indirect_reservoir_empty();
     indirect_reservoir_load(reservoir, frag_tex_coord);
-    uint path_validation = indirect_reservoir_classify_reused_path(
-        reservoir,
-        frag_rt_pos
-    );
-    if (path_validation
-            == indirect_path_validation_blocked_current_receiver) {
-        indirect_reservoir_reject(reservoir);
-    } else if (path_validation != indirect_path_validation_valid) {
+    if (indirect_reservoir_has_sample(reservoir)) {
+        uint path_validation = indirect_reservoir_classify_reused_path(
+            reservoir,
+            frag_rt_pos
+        );
+        if (path_validation
+                == indirect_path_validation_blocked_current_receiver) {
+            indirect_reservoir_reject(reservoir);
+        } else if (path_validation != indirect_path_validation_valid) {
+            reservoir = indirect_reservoir_empty();
+        }
+    } else if (indirect_reservoir_has_batch(reservoir)) {
+        // Keep a finite zero-radiance batch's represented M while removing
+        // unusable representative state.
+        reservoir.smple = indirect_sample_empty();
+        reservoir.weight = 0.0f;
+    } else {
         reservoir = indirect_reservoir_empty();
     }
     indirect_reservoir_clamp_samples(reservoir);
