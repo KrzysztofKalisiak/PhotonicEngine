@@ -27,6 +27,21 @@
 
 #include "/photonics/utility/normal_encoding.glsl"
 
+float ph_unpack_snorm_16(uint packed_component) {
+    int signed_component = int(packed_component & 0xffffu);
+    if (signed_component >= 32768)
+        signed_component -= 65536;
+
+    return clamp(float(signed_component) / 32767.0f, -1.0f, 1.0f);
+}
+
+vec2 ph_unpack_snorm_2x16(uint packed_value) {
+    return vec2(
+        ph_unpack_snorm_16(packed_value),
+        ph_unpack_snorm_16(packed_value >> 16u)
+    );
+}
+
 bool ph_gi_upsample_matches(
     vec4 center_data0,
     uvec4 center_data1,
@@ -46,8 +61,12 @@ bool ph_gi_upsample_matches(
                 != (sample_data1.w & receiver_identity_mask))
         return false;
 
-    vec3 center_normal = ph_decode_normal(unpackSnorm2x16(center_data1.y));
-    vec3 sample_normal = ph_decode_normal(unpackSnorm2x16(sample_data1.y));
+    vec3 center_normal = ph_decode_normal(
+        ph_unpack_snorm_2x16(center_data1.y)
+    );
+    vec3 sample_normal = ph_decode_normal(
+        ph_unpack_snorm_2x16(sample_data1.y)
+    );
     if (dot(center_normal, sample_normal) < 0.9f)
         return false;
 
