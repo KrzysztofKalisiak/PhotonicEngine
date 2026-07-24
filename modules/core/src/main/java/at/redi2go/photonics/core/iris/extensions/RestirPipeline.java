@@ -401,9 +401,10 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         if (!properties.isTemporalUpscalerActive()) {
             if (properties.useTemporalUpscaler()) {
                 Photonics.LOGGER.info(
-                        "Photonics temporal upscaler bypassed: mode={}, reconstructableRestirLighting={}, sourceScale={}, outputScale={}",
+                        "Photonics temporal upscaler bypassed: mode={}, reconstructableRestirLighting={}, configuredSourceScale={}, effectiveSourceScale={}, outputScale={}",
                         properties.getLightingMode(),
                         isRestirEnabled(),
+                        properties.getTemporalUpscalerSourceScale(),
                         properties.getRenderScale(),
                         properties.getShaderPackRenderScale()
                 );
@@ -432,7 +433,8 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .build(this::registerComponent);
 
         Photonics.LOGGER.info(
-                "Photonics temporal upscaler: enabled=true, sourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, composition=private-lighting-texture",
+                "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, composition=private-lighting-texture",
+                properties.getTemporalUpscalerSourceScale(),
                 properties.getRenderScale(),
                 properties.getGiRenderScale(),
                 properties.getShaderPackRenderScale(),

@@ -16,40 +16,93 @@ layout(location = 0) out vec4 temporal_lighting_out;
 layout(location = 1) out vec4 temporal_surface_out;
 
 const float PH_UPSCALE_NORMAL_THRESHOLD = 0.85f;
+const float PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD = 0.75f;
 const float PH_UPSCALE_HISTORY_NORMAL_THRESHOLD = 0.95f;
-const float PH_UPSCALE_PLANE_DISTANCE = 0.20f;
+const float PH_UPSCALE_MIN_PLANE_DISTANCE = 1.0f / 64.0f;
+const float PH_UPSCALE_MAX_PLANE_DISTANCE = 1.0f / 32.0f;
 const float PH_UPSCALE_MAX_POSITION_DISTANCE_SQ = 9.0f;
 
 bool ph_temporal_finite_vec3(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
 }
 
-float ph_temporal_identity(uint token, bool hand) {
-    uint value = token ^ (hand ? 0x9e3779b9u : 0x85ebca6bu);
+float ph_temporal_plane_tolerance(
+    ivec2 source_size,
+    ivec2 output_size
+) {
+    vec2 scale = vec2(source_size) / max(vec2(output_size), vec2(1.0f));
+    float source_scale = clamp(min(scale.x, scale.y), 0.0f, 1.0f);
+    return mix(
+        PH_UPSCALE_MIN_PLANE_DISTANCE,
+        PH_UPSCALE_MAX_PLANE_DISTANCE,
+        1.0f - source_scale
+    );
+}
+
+float ph_temporal_identity(int slot, uint token, bool hand) {
+    uint slot_value = uint(slot + 1);
+    uint value = token ^ (slot_value * 0x9e3779b9u)
+        ^ (hand ? 0x85ebca6bu : 0xc2b2ae35u);
     value ^= value >> 16u;
     value *= 0x7feb352du;
     value ^= value >> 15u;
-    return float((value & 1023u) + 1u);
+    return float((value & 2047u) + 1u);
+}
+
+bool ph_source_matches_receiver_domain(
+    FragData source_frag,
+    int receiver_slot,
+    uint receiver_token
+) {
+    uint source_token = frag_data_sublevel_token(source_frag);
+    int source_slot = frag_data_sublevel_slot(source_frag);
+    if (source_token != receiver_token)
+        return false;
+
+    if (receiver_token == 0u)
+        return receiver_slot < 0 && source_slot < 0;
+
+    return receiver_slot >= 0 && source_slot == receiver_slot;
 }
 
 bool ph_source_matches_surface(
     FragData source_frag,
     vec3 player_pos,
     vec3 geo_normal,
+    vec3 tex_normal,
     bool hand,
+    int receiver_slot,
+    uint receiver_token,
+    float plane_tolerance,
     out float score
 ) {
     score = -1e30f;
     if (!frag_data_is_in_world(source_frag)
-            || frag_data_is_hand(source_frag) != hand)
+            || frag_data_is_hand(source_frag) != hand
+            || !ph_source_matches_receiver_domain(
+                source_frag,
+                receiver_slot,
+                receiver_token
+            ))
         return false;
 
+    vec3 source_pos = frag_data_player_pos(source_frag);
     vec3 source_normal = frag_data_geo_normal(source_frag);
+    vec3 source_tex_normal = frag_data_tex_normal(source_frag);
+    if (!ph_temporal_finite_vec3(source_pos)
+            || !ph_temporal_finite_vec3(source_normal)
+            || !ph_temporal_finite_vec3(source_tex_normal))
+        return false;
+
     float normal_alignment = dot(source_normal, geo_normal);
     if (normal_alignment < PH_UPSCALE_NORMAL_THRESHOLD)
         return false;
 
-    vec3 position_delta = frag_data_player_pos(source_frag) - player_pos;
+    float texture_normal_alignment = dot(source_tex_normal, tex_normal);
+    if (texture_normal_alignment < PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD)
+        return false;
+
+    vec3 position_delta = source_pos - player_pos;
     float position_distance_sq = dot(position_delta, position_delta);
     if (position_distance_sq > PH_UPSCALE_MAX_POSITION_DISTANCE_SQ)
         return false;
@@ -58,10 +111,11 @@ bool ph_source_matches_surface(
         abs(dot(position_delta, source_normal)),
         abs(dot(position_delta, geo_normal))
     );
-    if (plane_distance > PH_UPSCALE_PLANE_DISTANCE)
+    if (plane_distance > plane_tolerance)
         return false;
 
     score = normal_alignment * 8.0f
+        + texture_normal_alignment * 2.0f
         - plane_distance * 16.0f
         - position_distance_sq * 0.05f;
     return true;
@@ -78,8 +132,11 @@ bool ph_find_source_receiver(
     ivec2 source_size,
     vec3 player_pos,
     vec3 geo_normal,
+    vec3 tex_normal,
     bool hand,
-    out FragData best_frag,
+    int receiver_slot,
+    uint receiver_token,
+    float plane_tolerance,
     out ivec2 best_texel
 ) {
     ivec2 base_texel = ivec2(floor(source_position));
@@ -101,7 +158,11 @@ bool ph_find_source_receiver(
                     candidate,
                     player_pos,
                     geo_normal,
+                    tex_normal,
                     hand,
+                    receiver_slot,
+                    receiver_token,
+                    plane_tolerance,
                     score
             )) continue;
 
@@ -110,7 +171,6 @@ bool ph_find_source_receiver(
             if (!found || score > best_score) {
                 found = true;
                 best_score = score;
-                best_frag = candidate;
                 best_texel = texel;
             }
         }
@@ -135,7 +195,11 @@ bool ph_find_source_receiver(
                     candidate,
                     player_pos,
                     geo_normal,
+                    tex_normal,
                     hand,
+                    receiver_slot,
+                    receiver_token,
+                    plane_tolerance,
                     score
             )) continue;
 
@@ -144,7 +208,6 @@ bool ph_find_source_receiver(
             if (!found || score > best_score) {
                 found = true;
                 best_score = score;
-                best_frag = candidate;
                 best_texel = texel;
             }
         }
@@ -158,13 +221,16 @@ bool ph_reconstruct_current(
     ivec2 source_size,
     vec3 player_pos,
     vec3 geo_normal,
+    vec3 tex_normal,
     bool hand,
+    int receiver_slot,
+    uint receiver_token,
+    float plane_tolerance,
     out vec3 radiance,
     out float variance,
     out vec3 neighborhood_min,
     out vec3 neighborhood_max,
-    out float support,
-    out FragData receiver_frag
+    out float support
 ) {
     ivec2 best_texel;
     if (!ph_find_source_receiver(
@@ -172,12 +238,14 @@ bool ph_reconstruct_current(
             source_size,
             player_pos,
             geo_normal,
+            tex_normal,
             hand,
-            receiver_frag,
+            receiver_slot,
+            receiver_token,
+            plane_tolerance,
             best_texel
     )) return false;
 
-    uint receiver_token = frag_data_sublevel_token(receiver_frag);
     ivec2 base_texel = ivec2(floor(source_position));
     radiance = vec3(0.0f);
     variance = 0.0f;
@@ -197,14 +265,17 @@ bool ph_reconstruct_current(
             frag_data_load(candidate, texel);
 
             float unused_score;
-            if (frag_data_sublevel_token(candidate) != receiver_token
-                    || !ph_source_matches_surface(
-                        candidate,
-                        player_pos,
-                        geo_normal,
-                        hand,
-                        unused_score
-                    ))
+            if (!ph_source_matches_surface(
+                    candidate,
+                    player_pos,
+                    geo_normal,
+                    tex_normal,
+                    hand,
+                    receiver_slot,
+                    receiver_token,
+                    plane_tolerance,
+                    unused_score
+            ))
                 continue;
 
             float weight = ph_bilinear_weight(source_position, texel);
@@ -245,39 +316,42 @@ bool ph_reconstruct_current(
 }
 
 bool ph_reproject_receiver(
-    FragData receiver_frag,
     vec3 current_player_pos,
     vec3 current_geo_normal,
     bool hand,
+    int receiver_slot,
+    uint receiver_token,
+    vec3 classified_previous_player_pos,
+    vec3 classified_previous_geo_normal,
     out vec2 previous_uv,
     out vec3 previous_player_pos,
     out vec3 previous_geo_normal,
     out float expected_identity
 ) {
-    uint token = frag_data_sublevel_token(receiver_frag);
-    expected_identity = ph_temporal_identity(token, hand);
+    expected_identity = ph_temporal_identity(
+        receiver_slot,
+        receiver_token,
+        hand
+    );
     if (hand)
         return false;
 
-    if (token != 0u) {
-        int slot = frag_data_sublevel_slot(receiver_frag);
-        if (slot < 0 || slot >= ph_sable_sublevel_count
-                || token != ph_sable_identity_token(slot))
+    if (receiver_token != 0u) {
+        if (receiver_slot < 0
+                || receiver_slot >= ph_sable_sublevel_count
+                || receiver_token != ph_sable_identity_token(receiver_slot))
             return false;
 
-        previous_player_pos = (
-            ph_sable_player_to_previous_player_matrix(slot)
-                * vec4(current_player_pos, 1.0f)
-        ).xyz;
-        previous_geo_normal = normalize(
-            ph_sable_normal_to_previous_normal_matrix(slot)
-                * current_geo_normal
-        );
+        previous_player_pos = classified_previous_player_pos;
+        previous_geo_normal = classified_previous_geo_normal;
         previous_uv = ph_project_previous_player_pos(
             previous_player_pos,
             get_taa_jitter()
         ).xy;
     } else {
+        if (receiver_slot >= 0)
+            return false;
+
         previous_uv = ph_reproject_player_pos(
             current_player_pos,
             false,
@@ -406,10 +480,32 @@ void main() {
     vec3 tex_normal;
     load_fragment_data(geo_normal, tex_normal);
     if (!ph_temporal_finite_vec3(player_pos)
-            || !ph_temporal_finite_vec3(geo_normal))
+            || !ph_temporal_finite_vec3(geo_normal)
+            || !ph_temporal_finite_vec3(tex_normal))
         return;
 
     bool hand = is_hand_at();
+    vec3 classified_previous_player_pos = player_pos;
+    vec3 classified_previous_geo_normal = geo_normal;
+    int receiver_slot = -1;
+    uint receiver_token = 0u;
+    if (!hand) {
+        bool classified_sable = ph_sable_receiver_motion(
+            player_pos,
+            geo_normal,
+            classified_previous_player_pos,
+            classified_previous_geo_normal,
+            receiver_slot,
+            receiver_token
+        );
+        if (!classified_sable) {
+            classified_previous_player_pos = player_pos;
+            classified_previous_geo_normal = geo_normal;
+            receiver_slot = -1;
+            receiver_token = 0u;
+        }
+    }
+
     ivec2 output_size = textureSize(
         prev_photonics_temporal_lighting,
         0
@@ -417,29 +513,38 @@ void main() {
     ivec2 source_size = textureSize(photonics_temporal_source, 0);
     vec2 tex_coord = gl_FragCoord.xy / vec2(output_size);
     vec2 source_position = tex_coord * vec2(source_size) - 0.5f;
+    float plane_tolerance = ph_temporal_plane_tolerance(
+        source_size,
+        output_size
+    );
 
     vec3 current_radiance;
     float current_variance;
     vec3 neighborhood_min;
     vec3 neighborhood_max;
     float source_support;
-    FragData receiver_frag;
     if (!ph_reconstruct_current(
             source_position,
             source_size,
             player_pos,
             geo_normal,
+            tex_normal,
             hand,
+            receiver_slot,
+            receiver_token,
+            plane_tolerance,
             current_radiance,
             current_variance,
             neighborhood_min,
             neighborhood_max,
-            source_support,
-            receiver_frag
+            source_support
     )) return;
 
-    uint receiver_token = frag_data_sublevel_token(receiver_frag);
-    float identity = ph_temporal_identity(receiver_token, hand);
+    float identity = ph_temporal_identity(
+        receiver_slot,
+        receiver_token,
+        hand
+    );
     temporal_surface_out = vec4(
         ph_encode_normal(geo_normal),
         length(player_pos),
@@ -451,10 +556,13 @@ void main() {
     vec3 previous_geo_normal;
     float expected_identity;
     bool can_reproject = ph_reproject_receiver(
-        receiver_frag,
         player_pos,
         geo_normal,
         hand,
+        receiver_slot,
+        receiver_token,
+        classified_previous_player_pos,
+        classified_previous_geo_normal,
         previous_uv,
         previous_player_pos,
         previous_geo_normal,

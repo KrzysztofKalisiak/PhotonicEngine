@@ -26,6 +26,13 @@ public interface PhotonicsProperties {
         return DEFAULT_USE_TEMPORAL_UPSCALER;
     }
 
+    float DEFAULT_TEMPORAL_UPSCALER_SOURCE_SCALE = 0.67f;
+    String TEMPORAL_UPSCALER_SOURCE_SCALE_KEY = "photonics.temporalUpscalerSourceScale";
+
+    default float getTemporalUpscalerSourceScale() {
+        return DEFAULT_TEMPORAL_UPSCALER_SOURCE_SCALE;
+    }
+
     default boolean isTemporalUpscalerActive() {
         return useTemporalUpscaler()
                 && getLightingMode() == LightingMode.RESTIR

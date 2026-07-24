@@ -6,10 +6,10 @@ This branch adds an optional temporal reconstruction path for Photonics
 lighting. It is not an FSR implementation and does not upscale the shaderpack's
 primary color pipeline.
 
-The expensive Photonics direct-light and GI passes continue to render at
-`photonics.renderScale` and `photonics.giRenderScale`. The new path reconstructs
-their final lighting contribution at the shaderpack render scale immediately
-before the shaderpack samples that contribution.
+The expensive Photonics direct-light and GI passes render at the effective
+temporal source scale and `photonics.giRenderScale`. The new path reconstructs
+their final lighting contribution at the shaderpack's `photonics.renderScale`
+immediately before the shaderpack samples that contribution.
 
 The feature is disabled by default.
 
@@ -29,7 +29,7 @@ The upscaler adds two passes:
 
    This pass combines the final denoised direct radiance, split or combined GI,
    external Sable lighting, and exact Sable-local lighting into
-   `photonics_temporal_source`. It runs at `photonics.renderScale`.
+   `photonics_temporal_source`. It runs at the effective temporal source scale.
 
 2. **Full-resolution temporal reconstruction**
 
@@ -51,16 +51,26 @@ world lighting.
 
 ## Reconstruction
 
-For each output pixel, the reconstruction pass reads native shaderpack depth
-and normals through the existing Photonics world interface.
+For each output pixel, the reconstruction pass reads native shaderpack depth,
+geometric normal, and texture normal through the existing Photonics world
+interface. It independently calls `ph_sable_receiver_motion()` at full
+resolution. That classifier probes the current Sable local occupancy/emissive
+atlas and returns the authoritative receiver slot, generation token, and
+previous rigid transform.
 
 The current-frame estimate uses the four low-resolution texels around the
 projected source position. A source texel participates only when:
 
 - it represents the same hand/world class;
-- its geometric normal agrees with the output surface;
-- its reconstructed position is close to the output surface plane;
-- it belongs to the selected world or Sable receiver domain.
+- its slot and generation token exactly equal the full-resolution receiver;
+- world token zero is unencoded on both the output and source texel;
+- its geometric and texture normals agree with the output surface;
+- its reconstructed position is close to the output surface plane.
+
+The plane tolerance scales from 1/64 block at equal resolution toward, but
+never beyond, 1/32 block as source resolution decreases. This remains below
+half of a 1/16-block layer and prevents the former 0.20-block acceptance radius
+from mixing carpets, trapdoors, and nearby parallel surfaces.
 
 If none of the four bilinear taps represents the output surface, a bounded
 3-by-3 nearest-compatible search handles thin geometry and silhouettes.
@@ -68,10 +78,9 @@ If none of the four bilinear taps represents the output surface, a bounded
 ## Temporal Reprojection
 
 Ordinary world receivers use the existing previous camera matrices and camera
-offset. Sable receivers use the slot and generation token selected from the
-low-resolution fragment data, then apply the existing rigid
-current-player-to-previous-player transform. This avoids a full Sable occupancy
-search for every full-resolution pixel.
+offset. Sable receivers use the previous position and normal returned by the
+independent full-resolution Sable classifier. Low-resolution source samples
+never determine the output pixel's motion domain.
 
 Four bilinear history taps are considered. Each tap must pass:
 
@@ -91,6 +100,12 @@ A reactive weight increases current-frame influence for:
 
 Stable pixels converge to the configured history length. Reactive pixels return
 toward one-frame history instead of carrying stale lighting.
+
+Texture normals validate current reconstruction but are not stored in the
+compact history attachment. History remains validated by geometric normal,
+radial depth, and receiver identity. A texture-normal-only change can therefore
+retain history briefly until luminance change and neighborhood clamping make
+the pixel reactive.
 
 ## History Reset
 
@@ -115,6 +130,7 @@ Shaderpack properties:
 
 ```properties
 photonics.temporalUpscaler = true
+photonics.temporalUpscalerSourceScale = 0.67
 photonics.temporalUpscalerHistoryFrames = 8
 ```
 
@@ -122,13 +138,34 @@ Equivalent test overrides:
 
 ```text
 -Dphotonics.temporalUpscalerOverride=true
+-Dphotonics.temporalUpscalerSourceScaleOverride=0.67
 -Dphotonics.temporalUpscalerHistoryFramesOverride=8
 ```
 
 The upscaler activates only for RESTIR with block lighting or combined RESTIR
-GI, and only when `photonics.renderScale` is lower than the shaderpack render
-scale. At equal scales it is bypassed, even when requested, because it would add
-a full-resolution pass without reducing ray work.
+GI, and only when the effective source scale is lower than the shaderpack's
+`photonics.renderScale`. At equal scales it is bypassed, even when requested,
+because it would add a full-resolution pass without reducing ray work.
+
+Source-scale precedence is:
+
+1. `-Dphotonics.renderScaleOverride` is the existing generic override and has
+   highest priority. The feature does not clamp it to output scale; a value that
+   is not below output scale simply causes temporal reconstruction to bypass.
+2. Without that generic override, an eligible enabled temporal upscaler uses
+   `photonics.temporalUpscalerSourceScaleOverride` when present, otherwise the
+   shaderpack's `photonics.temporalUpscalerSourceScale`.
+3. The temporal source scale is clamped to 0.25 through 1.0 and cannot exceed
+   the shaderpack output scale.
+4. While the upscaler is disabled or ineligible for the selected lighting
+   configuration, temporal source-scale settings have no effect. Effective
+   render scale remains exactly the generic override, when present, or the
+   shaderpack's `photonics.renderScale`.
+
+The temporal source-scale default is 0.67. It is inert while the feature is
+disabled, so a shaderpack-only configuration needs only to enable the feature
+when the default is acceptable. The output scale always remains the
+shaderpack's `photonics.renderScale`.
 
 `photonics.temporalUpscalerHistoryFrames` accepts 2 through 32 frames. Eight is
 the default and the recommended starting point. A longer history is steadier
@@ -137,9 +174,9 @@ but reacts more slowly to lighting changes.
 Example JVM configuration for a 1440p performance test:
 
 ```text
--Dphotonics.renderScaleOverride=0.67
 -Dphotonics.giRenderScaleOverride=0.5
 -Dphotonics.temporalUpscalerOverride=true
+-Dphotonics.temporalUpscalerSourceScaleOverride=0.67
 -Dphotonics.temporalUpscalerHistoryFramesOverride=8
 ```
 
@@ -148,7 +185,7 @@ Example JVM configuration for a 1440p performance test:
 Pipeline creation logs:
 
 - requested and active state;
-- source, GI, and output scales;
+- configured/effective source, GI, and output scales;
 - history-frame limit;
 - current and history tap counts;
 - history memory cost per output pixel.
@@ -166,8 +203,8 @@ The feature pays for:
 - two double-buffered RGBA16F history attachments, or 32 bytes per output pixel
   including both framebuffer sides.
 
-It saves work only through a lower `photonics.renderScale`. Relative direct-pass
-pixel counts are approximately:
+It saves work only through a lower effective temporal source scale. Relative
+direct-pass pixel counts are approximately:
 
 | Render scale | Direct-pass pixels |
 | --- | ---: |
@@ -189,9 +226,15 @@ below 0.5 are unlikely to scale linearly and will lose thin lighting detail.
 - Non-Sable moving entities have no dedicated object motion vectors. Their
   history is normally rejected by depth or reactive tests, but fast motion can
   still reveal short-lived ghosting.
-- Receiver identity uses a compact ten-bit validation signature in addition to
+- Full-resolution Sable domain classification probes the local atlas for every
+  reconstructed world pixel while Sable sublevels are active. This is required
+  for domain correctness but adds work to the reconstruction pass.
+- Receiver identity uses a compact eleven-bit validation signature in addition to
   depth and normal tests. A hash collision is possible, although all validation
   conditions must collide at the same reprojected pixel for history to pass.
+- Exact coplanar surfaces with identical geometric and texture normals have no
+  material identifier in the compact fragment data. They remain
+  indistinguishable if they occupy the same plane and receiver domain.
 - The pass uses temporal reconstruction rather than proprietary FSR features
   such as optical flow, exposure control, frame generation, or vendor-specific
   sharpening.

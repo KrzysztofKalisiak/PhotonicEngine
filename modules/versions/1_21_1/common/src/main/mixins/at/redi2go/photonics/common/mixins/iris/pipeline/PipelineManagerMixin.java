@@ -69,7 +69,7 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
 
         var properties = shaderPack.properties();
         Photonics.LOGGER.info(
-                "Photonics pipeline for '{}': enabled={}, mode={}, blockLight={}, gi={}, blockLightGi={}, handheld={}, shaderPackRenderScale={}, renderScale={}, giRenderScale={}, temporalUpscalerRequested={}, temporalUpscalerActive={}, temporalUpscalerHistoryFrames={}, maxLights={}, maxSamples={}, restirInitial={}, restirSpatial={}, restirDenoiser={}, restirGiDenoiser={}, restirSoftShadows={}, restirCombinedGi={}",
+                "Photonics pipeline for '{}': enabled={}, mode={}, blockLight={}, gi={}, blockLightGi={}, handheld={}, shaderPackRenderScale={}, renderScale={}, giRenderScale={}, temporalUpscalerRequested={}, temporalUpscalerSourceScale={}, temporalUpscalerActive={}, temporalUpscalerHistoryFrames={}, maxLights={}, maxSamples={}, restirInitial={}, restirSpatial={}, restirDenoiser={}, restirGiDenoiser={}, restirSoftShadows={}, restirCombinedGi={}",
                 shaderPack.name(),
                 properties.isPhotonicsEnabled(),
                 properties.getLightingMode(),
@@ -81,6 +81,7 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
                 properties.getRenderScale(),
                 properties.getGiRenderScale(),
                 properties.useTemporalUpscaler(),
+                properties.getTemporalUpscalerSourceScale(),
                 properties.isTemporalUpscalerActive(),
                 properties.getTemporalUpscalerHistoryFrames(),
                 properties.getMaxLights(),
