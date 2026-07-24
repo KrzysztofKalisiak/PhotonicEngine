@@ -408,9 +408,9 @@ runs:
 | 0 | Flip history | current/previous attachments swap roles | Preserve last frame without copying it |
 | 1 | `r1_initial_direct` | direct reservoir | Propose direct-light candidates, retain one weighted representative, and validate its visibility |
 | 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace one full-rate initial GI path |
-| 3 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject and merge compatible previous-frame reservoirs |
+| 3 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject and merge compatible previous-frame reservoirs; validate a reused GI path only when temporal history wins |
 | 4 | `r5_copy_spatial_input` | immutable reservoir copies | Prevent reads from observing writes from the same spatial pass |
-| 5 | `r5_spatial_reuse` | direct and indirect reservoirs | Merge compatible current-frame neighbors, clamp history, and validate the final indirect representative |
+| 5 | `r5_spatial_reuse` | direct and indirect reservoirs | Merge compatible current-frame neighbors, clamp history, and validate GI only when a shifted neighbor wins |
 | 6 | `r6_diffuse` | raw lighting, direct state, reservoirs | Evaluate selected direct/GI samples at the current receiver |
 | 7 | `r7_accumulation` | lighting, external lighting, variance | Reproject and average radiance history |
 | 8 | `r8_variance_prefilter` | denoise buffer | Estimate/filter variance and prepare SVGF input |
@@ -423,11 +423,14 @@ roughly 2.07 million fragment-shader invocations. Each invocation reads the data
 for one visible pixel and writes one texel to one or more framebuffer
 attachments.
 
-The v73 pipeline invokes initial direct visibility from `r1_initial_direct` and
-final indirect visibility from `r5_spatial_reuse`. The standalone
-`r2_validate_initial_direct` and `r6_validate_indirect` shader sources remain
-for upstream comparison, but are not scheduled. This removes two full-screen
-reservoir read/write cycles without removing either visibility ray.
+The pipeline invokes initial direct visibility from `r1_initial_direct`.
+Indirect visibility is winner-scoped: `r4_temporal_reuse` validates selected
+temporal history, and `r5_spatial_reuse` validates a selected shifted neighbor.
+Both retain the already-valid current-receiver reservoir as a fallback. The
+standalone `r2_validate_initial_direct` and `r6_validate_indirect` shader
+sources remain for upstream comparison, but are not scheduled. This avoids
+full-screen validation copies and avoids turning a rejected reused path into a
+one-frame energy hole.
 
 V77 restores full-rate initial GI. The v75 one-pixel and v76 tiled history
 interleaves produced no measurable stage-time reduction on the tested GPU, so
@@ -520,7 +523,7 @@ The most useful textures and buffers are:
 | `ph_sable_occupancy` | Sable bridge | block-resolution local receiver/occluder flags |
 | `restir_direct_reservoirs0` | ReSTIR passes | chosen light index, normalized reservoir weight, effective sample count |
 | `restir_direct_state` | diffuse pass | final visibility/confidence or local-history signature |
-| `restir_indirect_reservoirs0..1` | GI passes | path color, first-hit point/normal, weight/count |
+| `restir_indirect_reservoirs0..1` | GI passes | path color, first-hit point/normal or finite-path surface signature, sky identity, weight/count |
 | `restir_lighting` | diffuse then accumulation | stable direct/GI lighting history |
 | `restir_external_lighting` | diffuse then accumulation | lighting whose emitter motion differs from the receiver domain |
 | `restir_lighting_variance` | accumulation | temporal moments and variance for denoising |
@@ -688,6 +691,12 @@ The previous and fresh reservoirs are then merged using their effective sample
 counts and current target values. This improves candidate selection before any
 radiance averaging happens.
 
+For GI, a temporal winner is traced again from the current receiver. Finite
+paths also compare a compact signature of every transparent pass-through and
+the first-hit voxel face/material. If geometry, material, transparency, or
+skylight metadata changed, the reused winner is rejected and the fresh
+one-path reservoir is retained.
+
 ### 11.2 Spatial reservoir reuse
 
 [`r5_spatial_reuse.fsh`](modules/shaders/photonics/rendering/restir/passes/r5_spatial_reuse.fsh)
@@ -700,10 +709,13 @@ to describe the same kind of surface:
 - small distance from the same surface plane;
 - not hand or unstable grazing-angle data.
 
-The neighbor's selected light is re-evaluated for the current receiver before
-merging. Spatial reuse is valuable because nearby pixels often found different
-good lights. It can also create flicker or leaks if receiver matching is too
-permissive. The immutable copy pass prevents pass-order-dependent feedback.
+For direct light, the neighbor's selected light is re-evaluated for the current
+receiver before merging. For GI, the shifted path is visibility- and
+surface-signature-validated only if that neighbor actually wins the reservoir;
+an invalid winner falls back to the validated local reservoir. Spatial reuse is
+valuable because nearby pixels often found different good samples. It can also
+create flicker or leaks if receiver matching is too permissive. The immutable
+copy pass prevents pass-order-dependent feedback.
 
 ### 11.3 Radiance accumulation
 
@@ -795,9 +807,19 @@ neutral because their alpha represents unresolved plant geometry rather than a
 colored transmissive medium.
 
 The indirect reservoir stores more state than the direct one because it must be
-able to shift and validate a path: first hit point/normal, sky-hit identity, RGB
-result, weight, and sample count. The receiver position and normals come from
-the matching fragment-data texture; RNG state is not persisted.
+able to shift and validate a path: first hit point, sky-hit identity, RGB
+result, weight, and sample count. Sky samples use the metadata field for a full
+transparent-path signature; their direction is recovered from the stored
+finite sky endpoint and source receiver. Finite samples use that field for a
+voxel-face normal and a compact hash of transparent pass-through surfaces plus
+first-hit material, transparency, and skylight data. The receiver position and
+normals come from the matching fragment-data texture; RNG state is not
+persisted.
+
+The signature protects the receiver-to-first-hit segment. Later bounce
+segments and time-varying sky/light radiance are not serialized, so reused
+multi-bounce samples remain an approximation rather than a fully reconnected
+path.
 
 The rendering equation behind this is conceptually:
 

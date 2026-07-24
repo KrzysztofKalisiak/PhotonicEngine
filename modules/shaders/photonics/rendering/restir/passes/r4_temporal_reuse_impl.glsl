@@ -105,6 +105,10 @@ void main() {
     float indirect_sample_weight = 0.0f;
     IndirectReservoir indirect_result = indirect_reservoir_empty();
     IndirectReservoir temp_indirect = indirect_reservoir_empty();
+    IndirectReservoir current_indirect = indirect_reservoir_empty();
+    indirect_reservoir_load(current_indirect, frag_tex_coord);
+    IndirectReservoir indirect_fallback = current_indirect;
+    bool selected_temporal_history = false;
 
     // The GI tracer currently intersects only the world voxel volume, so every
     // finite stored hit is world-space even when its receiver belongs to a
@@ -132,7 +136,7 @@ void main() {
             shift_source_frag
         );
         if (shift > 0.0f && shift < 1.2f) {
-            indirect_reservoir_merge(
+            selected_temporal_history = indirect_reservoir_merge(
                 indirect_result,
                 temp_indirect,
                 shift,
@@ -141,16 +145,25 @@ void main() {
         }
     }
 
-    indirect_reservoir_load(temp_indirect, frag_tex_coord);
-    indirect_reservoir_merge_current_batch(
+    if (indirect_reservoir_merge_current_batch(
         indirect_result,
-        temp_indirect,
+        current_indirect,
         1.0f,
         indirect_sample_weight
-    );
+    )) selected_temporal_history = false;
 
-    // write resulting reservoir
     indirect_reservoir_finalize_weight(indirect_result, indirect_sample_weight);
+    if (selected_temporal_history
+            && !indirect_reservoir_validate_visibility(
+                indirect_result,
+                frag_rt_pos
+            )) {
+        // The current one-path proposal was generated against this frame's
+        // scene. Keep it when a stale temporal representative no longer
+        // reaches the same first-hit surface.
+        indirect_result = indirect_fallback;
+    }
+
     indirect_reservoir_encode(indirect_result, gi_reservoir_0, gi_reservoir_1);
 #endif
 }

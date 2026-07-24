@@ -156,15 +156,15 @@ void indirect_reservoir_reject(inout IndirectReservoir reservoir) {
     reservoir.smple.color = vec3(0.0f);
 }
 
-void indirect_reservoir_validate_visibility(
+bool indirect_reservoir_validate_visibility(
     inout IndirectReservoir reservoir,
     vec3 rt_pos
 ) {
     if (!indirect_reservoir_has_sample(reservoir))
-        return;
+        return false;
     if (ph_world_ready == 0) {
         indirect_reservoir_reject(reservoir);
-        return;
+        return false;
     }
 
     vec3 hit_point = indirect_sample_get_hit_point(reservoir.smple);
@@ -174,44 +174,59 @@ void indirect_reservoir_validate_visibility(
             || any(isnan(hit_point))
             || any(isinf(hit_point))) {
         indirect_reservoir_reject(reservoir);
-        return;
+        return false;
     }
 
     RayIterator ray;
     ray_iter_begin(ray, rt_pos, to_hit * inversesqrt(hit_distance_sq));
-    ray.iterations = 100;
+    ray.iterations = 128;
+    uint path_hash = indirect_path_hash_seed;
 
     while (ray.iterations > 0) {
         RayResult result = ray_iter_next(ray);
         if (ray.iterations <= 0) {
             indirect_reservoir_reject(reservoir);
-            return;
+            return false;
         }
 
         if (!ray_result_is_hit(result)) {
-            if (!indirect_sample_hits_sky(reservoir.smple))
+            bool valid_sky_path = indirect_sample_hits_sky(reservoir.smple)
+                && !ray_iter_is_in_bounds(ray)
+                && indirect_sample_matches_sky_path(
+                    reservoir.smple,
+                    path_hash
+                );
+            if (!valid_sky_path)
                 indirect_reservoir_reject(reservoir);
-            return;
+            return valid_sky_path;
         }
 
-        // A transparent surface may be the stochastic alpha-coverage hit that
-        // produced this sample. Accept its stored endpoint before treating
-        // other transparent surfaces as pass-through blockers.
         vec3 position_delta = ray_result_position(result) - hit_point;
-        if (dot(position_delta, position_delta) < 0.05f)
-            return;
+        if (dot(position_delta, position_delta) < 0.05f) {
+            path_hash = indirect_path_hash_surface(path_hash, result);
+            bool path_matches = indirect_sample_matches_finite_path(
+                reservoir.smple,
+                ray_result_normal(result),
+                path_hash
+            );
+            if (!path_matches)
+                indirect_reservoir_reject(reservoir);
+            return path_matches;
+        }
 
         if (ray_result_is_transparent(result)) {
+            path_hash = indirect_path_hash_surface(path_hash, result);
             ray_iter_skip_block(ray);
             ray_iter_offset_position(ray, ray.direction * 0.03f);
             continue;
         }
 
         indirect_reservoir_reject(reservoir);
-        return;
+        return false;
     }
 
     indirect_reservoir_reject(reservoir);
+    return false;
 }
 
 void indirect_reservoir_finalize_weight(

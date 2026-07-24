@@ -305,8 +305,12 @@ void main() {
     float indirect_sample_weight = 0.0f;
     IndirectReservoir indirect_result = indirect_reservoir_empty();
     IndirectReservoir temp_indirect = indirect_reservoir_empty();
+    IndirectReservoir indirect_fallback = indirect_reservoir_empty();
+    bool selected_spatial_history = false;
 
     indirect_reservoir_load(temp_indirect, frag_tex_coord);
+    indirect_fallback = temp_indirect;
+    indirect_reservoir_clamp_samples(indirect_fallback);
     indirect_reservoir_merge_current_batch(
         indirect_result,
         temp_indirect,
@@ -402,12 +406,12 @@ void main() {
                 temp_indirect,
                 sample_texel
             );
-            ph_spatial_indirect_reservoir_merge(
+            if (ph_spatial_indirect_reservoir_merge(
                 indirect_result,
                 temp_indirect,
                 sample_frag,
                 indirect_sample_weight
-            );
+            )) selected_spatial_history = true;
         }
     }
 #endif
@@ -443,13 +447,17 @@ void main() {
     indirect_reservoir_clamp_samples(indirect_result);
 
     indirect_reservoir_finalize_weight(indirect_result, indirect_sample_weight);
-    // This is the final selected indirect reservoir. Validate it before the
-    // encode so the standalone validation pass does not have to read and
-    // rewrite both high-precision indirect attachments.
-    indirect_reservoir_validate_visibility(
-        indirect_result,
-        frag_rt_pos
-    );
+    if (selected_spatial_history
+            && !indirect_reservoir_validate_visibility(
+                indirect_result,
+                frag_rt_pos
+            )) {
+        // Temporal reuse already validated its selected history. If a shifted
+        // neighbor path is blocked or its first-hit material changed, retain
+        // that local reservoir instead of producing a one-frame energy hole.
+        indirect_result = indirect_fallback;
+    }
+
     indirect_reservoir_clamp_samples(indirect_result);
     indirect_reservoir_encode(indirect_result, gi_reservoir_0, gi_reservoir_1);
 #endif

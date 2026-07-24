@@ -81,12 +81,14 @@ void sample_indirect(
         inout uint rnd_state,
 
         out vec3 first_hit,
-        out vec3 first_normal
+        out vec3 first_normal,
+        out uint first_path_hash
 ) {
     const float infinity = intBitsToFloat(0x7f800000);
 
     first_hit = vec3(infinity);
     first_normal = normal;
+    first_path_hash = indirect_path_hash_seed;
 
     vec4 running_tint_color = vec4(0.0f);
     vec3 running_bounce_color = vec3(1.0f);
@@ -129,6 +131,12 @@ void sample_indirect(
                     albedo,
                     rnd_state
             )) {
+                if (bounce_count == -1)
+                    first_path_hash = indirect_path_hash_surface(
+                        first_path_hash,
+                        hit
+                    );
+
                 // Thin cutouts model unresolved coverage, not colored glass.
                 // Preserve the existing neutral flower/plant pass-through.
                 if (!voxel_data_is_thin_cutout(voxel_data))
@@ -141,6 +149,10 @@ void sample_indirect(
             if (bounce_count == -1) {
                 first_hit = hit_position;
                 first_normal = hit_normal;
+                first_path_hash = indirect_path_hash_surface(
+                    first_path_hash,
+                    hit
+                );
             }
 
             is_tracing_to_sun = false;
