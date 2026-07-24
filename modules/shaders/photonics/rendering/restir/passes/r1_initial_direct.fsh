@@ -27,14 +27,20 @@ void main() {
             ? ph_rand_next_int(frag_rnd_state, 0, priority_count)
             : 0;
         int suffix_count = light_list_size - priority_count;
-        float suffix_phase = suffix_count > 0
+        int camera_count = direct_camera_prefix_count();
+        float camera_phase = camera_count > 0
+            ? ph_rand_next_float(frag_rnd_state)
+            : 0.0f;
+        int tail_count = suffix_count - camera_count;
+        float tail_phase = tail_count > 0
             ? ph_rand_next_float(frag_rnd_state)
             : 0.0f;
         for (int i = 0; i < PH_RESTIR_INITIAL_SAMPLES; i++) {
             DirectSample smple = direct_sample_stratified(
                 i,
                 priority_offset,
-                suffix_phase
+                camera_phase,
+                tail_phase
             );
             // A Sable receiver evaluates lights from its own rigid motion
             // domain directly in r6. Keeping them out of this reservoir makes

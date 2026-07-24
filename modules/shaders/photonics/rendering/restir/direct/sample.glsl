@@ -28,10 +28,54 @@ int direct_priority_sample_count() {
     );
 }
 
+const int ph_direct_camera_prefix_max = 8;
+
+int direct_camera_prefix_count() {
+    int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
+    int suffix_count = light_list_size - priority_count;
+    if (suffix_count <= 0)
+        return 0;
+
+    int remaining_samples = PH_RESTIR_INITIAL_SAMPLES
+        - direct_priority_sample_count();
+    if (remaining_samples <= 0)
+        return 0;
+
+    int prefix_count = min(ph_direct_camera_prefix_max, suffix_count);
+
+    // With only one remaining proposal, retain the original full-suffix
+    // distribution. Otherwise one proposal is always left for the tail.
+    if (suffix_count > prefix_count && remaining_samples <= 1)
+        return 0;
+
+    return prefix_count;
+}
+
+int direct_camera_sample_count() {
+    int prefix_count = direct_camera_prefix_count();
+    if (prefix_count <= 0)
+        return 0;
+
+    int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
+    int suffix_count = light_list_size - priority_count;
+    int remaining_samples = PH_RESTIR_INITIAL_SAMPLES
+        - direct_priority_sample_count();
+    int tail_count = suffix_count - prefix_count;
+
+    // If the prefix is the entire suffix, keep every remaining proposal in
+    // that stratum. Systematic sampling may revisit a light, but its proposal
+    // probability remains exact and no candidate slot is wasted.
+    if (tail_count <= 0)
+        return remaining_samples;
+
+    return min(prefix_count, max(remaining_samples - 1, 0));
+}
+
 DirectSample direct_sample_stratified(
     int candidate_index,
     int priority_offset,
-    float suffix_phase
+    float camera_phase,
+    float tail_phase
 ) {
     int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
     int priority_samples = direct_priority_sample_count();
@@ -39,24 +83,36 @@ DirectSample direct_sample_stratified(
         return DirectSample((priority_offset + candidate_index) % priority_count);
 
     int suffix_count = light_list_size - priority_count;
-    int suffix_samples = PH_RESTIR_INITIAL_SAMPLES - priority_samples;
-    if (suffix_count <= 0 || suffix_samples <= 0)
+    int camera_count = direct_camera_prefix_count();
+    int camera_samples = direct_camera_sample_count();
+    int suffix_candidate = candidate_index - priority_samples;
+    if (suffix_candidate < camera_samples) {
+        float systematic_position = (
+            float(suffix_candidate)
+                + clamp(camera_phase, 0.0f, 0.99999994f)
+        ) * float(camera_count) / float(camera_samples);
+        int camera_index = min(int(systematic_position), camera_count - 1);
+        return DirectSample(priority_count + camera_index);
+    }
+
+    int tail_count = suffix_count - camera_count;
+    int tail_samples = PH_RESTIR_INITIAL_SAMPLES
+        - priority_samples
+        - camera_samples;
+    if (tail_count <= 0 || tail_samples <= 0)
         return direct_sample_empty();
 
-    // The suffix is sorted by approximate camera contribution. A randomized
-    // systematic sweep covers that full ordering without replacement when
-    // there are at least as many lights as candidates. Independent draws
-    // frequently duplicated lights and left whole luminance ranges unseen,
-    // producing a coherent pulse whenever moving receivers lost short-term
-    // history. Every suffix light still has aggregate inclusion probability
-    // suffix_samples / suffix_count, as used by direct_sample_probability().
-    int suffix_candidate = candidate_index - priority_samples;
+    // The ordinary-light suffix is sorted by approximate camera contribution.
+    // Its strongest prefix is sampled separately above so newly exposed
+    // receivers immediately see nearby lights. The remaining proposals still
+    // sweep the full tail, preserving nonzero probability for every light.
+    int tail_candidate = suffix_candidate - camera_samples;
     float systematic_position = (
-        float(suffix_candidate) + clamp(suffix_phase, 0.0f, 0.99999994f)
-    ) * float(suffix_count) / float(suffix_samples);
-    int suffix_index = min(int(systematic_position), suffix_count - 1);
+        float(tail_candidate) + clamp(tail_phase, 0.0f, 0.99999994f)
+    ) * float(tail_count) / float(tail_samples);
+    int tail_index = min(int(systematic_position), tail_count - 1);
 
-    return DirectSample(priority_count + suffix_index);
+    return DirectSample(priority_count + camera_count + tail_index);
 }
 
 float direct_sample_probability(DirectSample smple) {
@@ -77,11 +133,23 @@ float direct_sample_probability(DirectSample smple) {
     }
 
     int suffix_count = light_list_size - priority_count;
-    int suffix_samples = PH_RESTIR_INITIAL_SAMPLES - priority_samples;
-    if (suffix_count <= 0 || suffix_samples <= 0)
+    int camera_count = direct_camera_prefix_count();
+    int camera_samples = direct_camera_sample_count();
+    if (smple.light_index < priority_count + camera_count) {
+        if (camera_samples <= 0)
+            return 0.0f;
+
+        return float(camera_samples) / (total_samples * float(camera_count));
+    }
+
+    int tail_count = suffix_count - camera_count;
+    int tail_samples = PH_RESTIR_INITIAL_SAMPLES
+        - priority_samples
+        - camera_samples;
+    if (tail_count <= 0 || tail_samples <= 0)
         return 0.0f;
 
-    return float(suffix_samples) / (total_samples * float(suffix_count));
+    return float(tail_samples) / (total_samples * float(tail_count));
 }
 
 bool direct_sample_is_empty(DirectSample smple) {
