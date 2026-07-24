@@ -67,7 +67,7 @@ representations coexist.
 |---|---|---|---|---|
 | Iris G-buffer | Minecraft, Sodium, Iris, shader pack | Rendered triangles and textures | Find the surface visible at each screen pixel | It only describes what the camera sees, not arbitrary off-screen ray paths |
 | Photonics static voxel tree | `SectionManager`, `ChunkCompiler`, `WorldCompiler` | Loaded Minecraft chunk block states and baked block-model quads | Shadow and GI ray queries through the ordinary world | It is an approximation; dynamic entities and moving Sable geometry are not part of this tree |
-| Sable motion/occupancy sidecar | `ContraptionLightsSableBridge` | Contraption Lights and Sable state | Classify moving receivers, reproject them, and test coarse same-sublevel visibility | One occupancy cell is one block; it has no full material/albedo model |
+| Sable motion/occlusion sidecar | `ContraptionLightsSableBridge` | Contraption Lights, Sable state, and Minecraft voxel shapes | Classify moving receivers, reproject them, and test same-sublevel direct visibility | It has sparse local AABBs but no full material/albedo model or cross-domain traversal |
 
 ### 2.1 Primary visibility comes from Iris
 
@@ -328,25 +328,32 @@ The bridge also publishes, for at most 16 sublevels:
 - current player-space to previous player-space transform;
 - previous player-space to current local-grid transform;
 - stable identity token;
-- grid dimensions and occupancy-atlas offset;
+- grid dimensions and local-cell-atlas offset;
 - up to 64 emissive local cells.
 
 These are registered by
 [`ExternalSubLevelMotion.java`](modules/core/src/main/java/at/redi2go/photonics/core/rendering/sublevel/ExternalSubLevelMotion.java).
 
-The occupancy atlas is an `R8` 3D texture with one texel per Sable block cell.
-It distinguishes:
+The local-cell atlas is an `RGBA8` 3D texture with one texel per Sable block
+cell. It stores:
 
-- receiver cells: any non-air block or fluid;
-- occluder cells: non-emissive, solid, full-collision blocks only.
+- a receiver flag for any non-air block or fluid;
+- an exact-full or conservative-fallback marker; or
+- a box count and 16-bit row into a sparse `RGBA32F` AABB table.
 
-Consequences of that deliberately coarse policy:
+Consequences of this bounded local policy:
 
 - a full block can occlude same-sublevel direct light;
-- a fence, panel, trapdoor, or other non-full block normally does not;
+- fences, panes, trapdoors, flowers, and other partial shapes use up to 16
+  Minecraft shape AABBs per definition;
+- malformed, out-of-cell, over-complex, or table-overflow shapes fail closed as
+  full cells;
 - the atlas cannot supply albedo, normals, or specular material for bounced GI;
-- it is useful for motion identity and cheap local visibility, but it is not a
-  replacement for the static 1/16-block Photonics voxel tree.
+- only matching receiver/emitter Sable tokens use this local visibility;
+- world-to-Sable, Sable-to-world, and cross-sublevel rays still have no moving
+  Sable occluder data; and
+- the sidecar is not a replacement for the static 1/16-block Photonics voxel
+  tree.
 
 ### 7.3 Veil's role
 
@@ -360,7 +367,7 @@ for these bridged lights is suppressed by
 to avoid adding the same light energy twice. The block's emissive appearance and
 bloom remain shader-pack/Veil concerns.
 
-For the intended future cross-domain occlusion model, see
+For the implemented support matrix and future cross-domain model, see
 [`SABLE_OCCLUSION.md`](SABLE_OCCLUSION.md).
 
 ## 8. Exact frame timeline

@@ -3,11 +3,17 @@
 
 #define PH_SABLE_MAX_SUBLEVELS 16
 #define PH_SABLE_MAX_EMISSIVE_CELLS 64
+#define PH_SABLE_MAX_SHAPE_BOXES 16
+#define PH_SABLE_FULL_CELL_BOX_COUNT 254
+#define PH_SABLE_CONSERVATIVE_CELL_BOX_COUNT 255
 const float PH_SABLE_VISIBILITY_BIAS = 0.001f;
 const float PH_SABLE_VISIBILITY_ENDPOINT_GUARD = 0.002f;
 const float PH_SABLE_RECEIVER_PROBE = 0.35f;
 const float PH_SABLE_RECEIVER_BOUNDS_PAD = 0.4f;
+// RGBA8 cell layout: receiver flag, box count, shape-id low, shape-id high.
 //ph_required: uniform sampler3D ph_sable_occupancy;
+// Sparse shape rows contain min/max AABB pairs as RGBA32F texels.
+//ph_required: uniform sampler3D ph_sable_shape_table;
 //ph_required: uniform int ph_sable_sublevel_count;
 //ph_required: uniform int ph_sable_emissive_cell_count;
 //ph_required: uniform mat4 ph_sable_current_player_to_grid[16];
@@ -87,19 +93,29 @@ bool ph_sable_recover_current_grid_position(
     return ph_sable_finite_vec3(current_grid_pos);
 }
 
-float ph_sable_cell_flags(ivec3 cell, ivec3 size, int atlas_z) {
+vec4 ph_sable_cell_data(ivec3 cell, ivec3 size, int atlas_z) {
     if (atlas_z < 0 || any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size)))
-        return 0.0f;
+        return vec4(0.0f);
 
-    return texelFetch(ph_sable_occupancy, ivec3(cell.xy, cell.z + atlas_z), 0).r;
+    return texelFetch(
+        ph_sable_occupancy,
+        ivec3(cell.xy, cell.z + atlas_z),
+        0
+    );
 }
 
 bool ph_sable_cell_receiver(ivec3 cell, ivec3 size, int atlas_z) {
-    return ph_sable_cell_flags(cell, size, atlas_z) > 0.1f;
+    return ph_sable_cell_data(cell, size, atlas_z).r > 0.5f;
 }
 
-bool ph_sable_cell_occluder(ivec3 cell, ivec3 size, int atlas_z) {
-    return ph_sable_cell_flags(cell, size, atlas_z) > 0.5f;
+int ph_sable_cell_box_count(vec4 cell_data) {
+    return int(cell_data.g * 255.0f + 0.5f);
+}
+
+int ph_sable_cell_shape_id(vec4 cell_data) {
+    int low = int(cell_data.b * 255.0f + 0.5f);
+    int high = int(cell_data.a * 255.0f + 0.5f);
+    return low | (high << 8);
 }
 
 bool ph_sable_matches_emissive_cell(int slot, vec3 grid_pos) {
@@ -137,22 +153,15 @@ bool ph_sable_light_grid_position(
             || any(greaterThan(light_grid_pos, vec3(grid_size) + 0.2f)))
         return false;
 
-    for (int i = 0; i < PH_SABLE_MAX_EMISSIVE_CELLS; i++) {
-        if (i >= ph_sable_emissive_cell_count)
-            break;
-
-        vec4 encoded = ph_sable_emissive_cells[i];
-        if (int(encoded.w + 0.5f) != slot + 1)
-            continue;
-
-        vec3 to_center = light_grid_pos - (encoded.xyz + vec3(0.5f));
-        if (dot(to_center, to_center) <= 0.0625f) {
-            emissive_cell_min = encoded.xyz;
-            return true;
-        }
-    }
-
-    return false;
+    // The temporal-domain token was assigned from this sublevel's CPU light
+    // record. Recovering the source cell directly avoids the old global
+    // 64-emitter lookup limit while retaining bounds validation.
+    emissive_cell_min = vec3(clamp(
+        ivec3(floor(light_grid_pos)),
+        ivec3(0),
+        max(grid_size - ivec3(1), ivec3(0))
+    ));
+    return true;
 }
 
 bool ph_sable_light_belongs_to_sublevel(
@@ -175,39 +184,38 @@ bool ph_sable_light_belongs_to_sublevel(
     );
 }
 
-bool ph_sable_cell_line_interval(
+bool ph_sable_aabb_line_interval(
     vec3 origin,
     vec3 direction,
-    ivec3 cell,
+    vec3 box_min,
+    vec3 box_max,
     out float enter_t,
     out float exit_t
 ) {
-    vec3 cell_min = vec3(cell);
-    vec3 cell_max = cell_min + vec3(1.0f);
     enter_t = -1e30f;
     exit_t = 1e30f;
 
     if (abs(direction.x) <= 1e-6f) {
-        if (origin.x < cell_min.x || origin.x > cell_max.x) return false;
+        if (origin.x < box_min.x || origin.x > box_max.x) return false;
     } else {
-        float first_t = (cell_min.x - origin.x) / direction.x;
-        float second_t = (cell_max.x - origin.x) / direction.x;
+        float first_t = (box_min.x - origin.x) / direction.x;
+        float second_t = (box_max.x - origin.x) / direction.x;
         enter_t = max(enter_t, min(first_t, second_t));
         exit_t = min(exit_t, max(first_t, second_t));
     }
     if (abs(direction.y) <= 1e-6f) {
-        if (origin.y < cell_min.y || origin.y > cell_max.y) return false;
+        if (origin.y < box_min.y || origin.y > box_max.y) return false;
     } else {
-        float first_t = (cell_min.y - origin.y) / direction.y;
-        float second_t = (cell_max.y - origin.y) / direction.y;
+        float first_t = (box_min.y - origin.y) / direction.y;
+        float second_t = (box_max.y - origin.y) / direction.y;
         enter_t = max(enter_t, min(first_t, second_t));
         exit_t = min(exit_t, max(first_t, second_t));
     }
     if (abs(direction.z) <= 1e-6f) {
-        if (origin.z < cell_min.z || origin.z > cell_max.z) return false;
+        if (origin.z < box_min.z || origin.z > box_max.z) return false;
     } else {
-        float first_t = (cell_min.z - origin.z) / direction.z;
-        float second_t = (cell_max.z - origin.z) / direction.z;
+        float first_t = (box_min.z - origin.z) / direction.z;
+        float second_t = (box_max.z - origin.z) / direction.z;
         enter_t = max(enter_t, min(first_t, second_t));
         exit_t = min(exit_t, max(first_t, second_t));
     }
@@ -276,10 +284,11 @@ bool ph_sable_exit_receiver_cell(
 ) {
     float enter_t;
     float exit_t;
-    if (!ph_sable_cell_line_interval(
+    if (!ph_sable_aabb_line_interval(
             grid_pos,
             direction,
-            receiver_cell,
+            vec3(receiver_cell),
+            vec3(receiver_cell) + vec3(1.0f),
             enter_t,
             exit_t
     )) return false;
@@ -292,14 +301,60 @@ bool ph_sable_visibility_cell_occludes(
     ivec3 cell,
     ivec3 grid_size,
     int atlas_z,
-    ivec3 receiver_cell
+    ivec3 receiver_cell,
+    vec3 segment_origin,
+    vec3 segment_direction,
+    float endpoint_limit
 ) {
     if (all(equal(cell, receiver_cell)))
         return false;
     if (any(lessThan(cell, ivec3(0)))
             || any(greaterThanEqual(cell, grid_size)))
         return false;
-    return ph_sable_cell_occluder(cell, grid_size, atlas_z);
+
+    vec4 cell_data = ph_sable_cell_data(cell, grid_size, atlas_z);
+    int box_count = ph_sable_cell_box_count(cell_data);
+    if (box_count <= 0)
+        return false;
+    if (box_count == PH_SABLE_FULL_CELL_BOX_COUNT
+            || box_count == PH_SABLE_CONSERVATIVE_CELL_BOX_COUNT)
+        return true;
+    if (box_count > PH_SABLE_MAX_SHAPE_BOXES)
+        return true;
+
+    int shape_id = ph_sable_cell_shape_id(cell_data);
+    if (shape_id <= 0)
+        return true;
+
+    for (int box_index = 0; box_index < PH_SABLE_MAX_SHAPE_BOXES; box_index++) {
+        if (box_index >= box_count)
+            break;
+
+        vec3 box_min = texelFetch(
+            ph_sable_shape_table,
+            ivec3(box_index * 2, shape_id, 0),
+            0
+        ).xyz + vec3(cell);
+        vec3 box_max = texelFetch(
+            ph_sable_shape_table,
+            ivec3(box_index * 2 + 1, shape_id, 0),
+            0
+        ).xyz + vec3(cell);
+        float enter_t;
+        float exit_t;
+        if (ph_sable_aabb_line_interval(
+                segment_origin,
+                segment_direction,
+                box_min,
+                box_max,
+                enter_t,
+                exit_t
+        ) && exit_t >= max(enter_t, 0.0f) - 1e-6f
+                && enter_t < endpoint_limit)
+            return true;
+    }
+
+    return false;
 }
 
 bool ph_sable_grid_segment_visible(
@@ -324,6 +379,7 @@ bool ph_sable_grid_segment_visible(
         0.25f,
         PH_SABLE_VISIBILITY_ENDPOINT_GUARD / max(ray_extent, 1e-6f)
     );
+    float endpoint_limit = 1.0f - endpoint_guard_t;
     ivec3 step = ivec3(sign(ray));
     vec3 t_delta = vec3(1e30f);
     vec3 t_max = vec3(1e30f);
@@ -349,7 +405,7 @@ bool ph_sable_grid_segment_visible(
         // The endpoint is already biased onto the receiver's exposed side.
         // Do not let conservative edge/corner coverage reinterpret the final
         // surface touch as an adjacent receiver block occluding itself.
-        if (next_t >= 1.0f - endpoint_guard_t)
+        if (next_t >= endpoint_limit)
             return true;
 
         bool cross_x = t_max.x <= next_t + 1e-6f;
@@ -365,35 +421,50 @@ bool ph_sable_grid_segment_visible(
         // touched side cell before the diagonal cell so shared voxel borders
         // remain conservatively closed.
         if (cross_x && ph_sable_visibility_cell_occludes(
-                x_cell, grid_size, atlas_z, receiver_cell)) return false;
+                x_cell, grid_size, atlas_z, receiver_cell,
+                start_grid, ray, endpoint_limit)) return false;
         if (cross_y && ph_sable_visibility_cell_occludes(
-                y_cell, grid_size, atlas_z, receiver_cell)) return false;
+                y_cell, grid_size, atlas_z, receiver_cell,
+                start_grid, ray, endpoint_limit)) return false;
         if (cross_z && ph_sable_visibility_cell_occludes(
-                z_cell, grid_size, atlas_z, receiver_cell)) return false;
+                z_cell, grid_size, atlas_z, receiver_cell,
+                start_grid, ray, endpoint_limit)) return false;
         if (cross_x && cross_y && ph_sable_visibility_cell_occludes(
                 x_cell + ivec3(0, step.y, 0),
                 grid_size,
                 atlas_z,
-                receiver_cell
+                receiver_cell,
+                start_grid,
+                ray,
+                endpoint_limit
         )) return false;
         if (cross_x && cross_z && ph_sable_visibility_cell_occludes(
                 x_cell + ivec3(0, 0, step.z),
                 grid_size,
                 atlas_z,
-                receiver_cell
+                receiver_cell,
+                start_grid,
+                ray,
+                endpoint_limit
         )) return false;
         if (cross_y && cross_z && ph_sable_visibility_cell_occludes(
                 y_cell + ivec3(0, 0, step.z),
                 grid_size,
                 atlas_z,
-                receiver_cell
+                receiver_cell,
+                start_grid,
+                ray,
+                endpoint_limit
         )) return false;
         if (cross_x && cross_y && cross_z
                 && ph_sable_visibility_cell_occludes(
                     x_cell + ivec3(0, step.y, step.z),
                     grid_size,
                     atlas_z,
-                    receiver_cell
+                    receiver_cell,
+                    start_grid,
+                    ray,
+                    endpoint_limit
                 )) return false;
 
         if (cross_x) {

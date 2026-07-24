@@ -17,8 +17,8 @@ import at.redi2go.photonics.core.rendering.sublevel.ExternalSubLevelMotion;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 import org.joml.Quaterniondc;
@@ -30,6 +30,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -46,6 +47,13 @@ public final class ContraptionLightsSableBridge {
     private static final int MAX_GEOMETRY_AXIS = 96;
     private static final int MAX_GEOMETRY_VOLUME = 300_000;
     private static final int MAX_GEOMETRY_ATLAS_DEPTH = 512;
+    // RGBA8: receiver flag, shape box count, shape-id low, shape-id high.
+    private static final int GEOMETRY_CELL_STRIDE = 4;
+    private static final int MAX_SHAPE_BOXES = 16;
+    private static final int MAX_SHAPE_DEFINITIONS = 1_023;
+    private static final int FULL_CELL_BOX_COUNT = 254;
+    private static final int CONSERVATIVE_CELL_BOX_COUNT = 255;
+    private static final double SHAPE_EPSILON = 1.0e-6;
     private static final double STATIC_LIGHT_POSITION_EPSILON_SQUARED = 1.0e-6;
     private static final long MOVING_LIGHT_HOLD_NANOS = 250_000_000L;
     private static final long REPLACEMENT_ALIAS_HOLD_NANOS = 250_000_000L;
@@ -87,8 +95,10 @@ public final class ContraptionLightsSableBridge {
     private static boolean skyLightDiagnosticsLogged;
 
     private static IGpuTexture3D geometryTexture;
+    private static IGpuTexture3D shapeTexture;
     private static List<GeometryKey> geometryKeys = List.of();
     private static List<GeometryLayoutKey> geometryLayoutKeys = List.of();
+    private static List<ShapeKey> geometryShapeKeys = List.of();
     private static int[] geometryOffsets = new int[0];
     private static byte[] geometryPayload = new byte[0];
     private static int geometryWidth;
@@ -96,6 +106,7 @@ public final class ContraptionLightsSableBridge {
     private static int geometryDepth;
     private static int geometryRebuilds;
     private static int geometryUnchangedScans;
+    private static long nextGeometryRevision = 1L;
 
     private ContraptionLightsSableBridge() {
     }
@@ -581,7 +592,14 @@ public final class ContraptionLightsSableBridge {
             int occupancyTexture = geometryTexture == null
                     ? 0
                     : IrisUtil.getTextureHandle(geometryTexture);
-            ExternalSubLevelMotion.submit(occupancyTexture, subLevels);
+            int localShapeTexture = shapeTexture == null
+                    ? 0
+                    : IrisUtil.getTextureHandle(shapeTexture);
+            ExternalSubLevelMotion.submit(
+                    occupancyTexture,
+                    localShapeTexture,
+                    subLevels
+            );
             previousWorldToMotionAnchor.keySet().retainAll(currentWorldToMotionAnchor.keySet());
             previousWorldToMotionAnchor.putAll(currentWorldToMotionAnchor);
             previousMotionCameraPosition = currentCameraPosition;
@@ -640,6 +658,8 @@ public final class ContraptionLightsSableBridge {
         int height = 1;
         int depth = 0;
         int accepted = 0;
+        int skippedOversized = 0;
+        int skippedAtlasDepth = 0;
 
         for (int i = 0; i < candidates.size(); i++) {
             MotionCandidate candidate = candidates.get(i);
@@ -647,9 +667,14 @@ public final class ContraptionLightsSableBridge {
             if (candidate.sizeX() > MAX_GEOMETRY_AXIS
                     || candidate.sizeY() > MAX_GEOMETRY_AXIS
                     || candidate.sizeZ() > MAX_GEOMETRY_AXIS
-                    || volume > MAX_GEOMETRY_VOLUME
-                    || depth + candidate.sizeZ() > MAX_GEOMETRY_ATLAS_DEPTH)
+                    || volume > MAX_GEOMETRY_VOLUME) {
+                skippedOversized++;
                 continue;
+            }
+            if (depth + candidate.sizeZ() > MAX_GEOMETRY_ATLAS_DEPTH) {
+                skippedAtlasDepth++;
+                continue;
+            }
 
             offsets[i] = depth;
             depth += candidate.sizeZ();
@@ -659,18 +684,34 @@ public final class ContraptionLightsSableBridge {
         }
 
         if (accepted == 0) {
-            closeGeometryTexture();
+            closeGeometryTextures();
             geometryKeys = List.copyOf(keys);
             geometryLayoutKeys = List.copyOf(layoutKeys);
+            geometryShapeKeys = List.of();
             geometryOffsets = offsets;
             geometryPayload = new byte[0];
+            if (!candidates.isEmpty()) {
+                Photonics.LOGGER.warn(
+                        "Photonics Sable occlusion has no uploadable local geometry: candidates={}, skippedOversized={}, skippedAtlasDepth={}, limits=axis:{} volume:{} atlasDepth:{}; same-domain direct visibility will fail closed",
+                        candidates.size(),
+                        skippedOversized,
+                        skippedAtlasDepth,
+                        MAX_GEOMETRY_AXIS,
+                        MAX_GEOMETRY_VOLUME,
+                        MAX_GEOMETRY_ATLAS_DEPTH
+                );
+            }
             return offsets;
         }
 
         width = (width + 3) & ~3;
-        byte[] payload = new byte[width * height * depth];
+        byte[] payload = new byte[width * height * depth * GEOMETRY_CELL_STRIDE];
+        var shapeIds = new LinkedHashMap<ShapeKey, Integer>();
         int receiverCells = 0;
-        int occluderCells = 0;
+        int fullCells = 0;
+        int exactShapeCells = 0;
+        int conservativeCells = 0;
+        int receiverOnlyCells = 0;
         var mutablePos = new BlockPos.MutableBlockPos();
 
         for (int i = 0; i < candidates.size(); i++) {
@@ -688,32 +729,52 @@ public final class ContraptionLightsSableBridge {
                                 candidate.minZ() + z
                         );
                         BlockState state = candidate.blockGetter().getBlockState(mutablePos);
-                        int cellFlags = 0;
-                        if (!state.isAir() || !state.getFluidState().isEmpty())
-                            cellFlags |= 0x40;
-                        if (isCoarseOccluder(candidate.blockGetter(), mutablePos, state))
-                            cellFlags |= 0x80;
-                        if (cellFlags == 0)
+                        boolean receiver = !state.isAir()
+                                || !state.getFluidState().isEmpty();
+                        CellOcclusion occlusion = classifyLocalOcclusion(
+                                candidate.blockGetter(),
+                                mutablePos,
+                                state,
+                                shapeIds
+                        );
+                        if (!receiver && occlusion.boxCount() == 0)
                             continue;
 
-                        int index = ((atlasZ + z) * height + y) * width + x;
-                        payload[index] = (byte) cellFlags;
-                        receiverCells++;
-                        if ((cellFlags & 0x80) != 0)
-                            occluderCells++;
+                        int index = (
+                                ((atlasZ + z) * height + y) * width + x
+                        ) * GEOMETRY_CELL_STRIDE;
+                        payload[index] = (byte) (receiver ? 0xff : 0);
+                        payload[index + 1] = (byte) occlusion.boxCount();
+                        payload[index + 2] = (byte) (occlusion.shapeId() & 0xff);
+                        payload[index + 3] = (byte) ((occlusion.shapeId() >>> 8) & 0xff);
+
+                        if (receiver)
+                            receiverCells++;
+                        if (occlusion.boxCount() == FULL_CELL_BOX_COUNT)
+                            fullCells++;
+                        else if (occlusion.boxCount() == CONSERVATIVE_CELL_BOX_COUNT)
+                            conservativeCells++;
+                        else if (occlusion.boxCount() > 0)
+                            exactShapeCells++;
+                        else if (receiver)
+                            receiverOnlyCells++;
                     }
                 }
             }
         }
 
+        List<ShapeKey> shapeKeys = List.copyOf(shapeIds.keySet());
         boolean unchanged = geometryTexture != null
                 && !geometryTexture.ph$isClosed()
+                && (shapeKeys.isEmpty()
+                    || (shapeTexture != null && !shapeTexture.ph$isClosed()))
                 && geometryWidth == width
                 && geometryHeight == height
                 && geometryDepth == depth
                 && layoutKeys.equals(geometryLayoutKeys)
                 && Arrays.equals(offsets, geometryOffsets)
-                && Arrays.equals(payload, geometryPayload);
+                && Arrays.equals(payload, geometryPayload)
+                && shapeKeys.equals(geometryShapeKeys);
         if (unchanged) {
             geometryKeys = List.copyOf(keys);
             geometryUnchangedScans++;
@@ -738,7 +799,7 @@ public final class ContraptionLightsSableBridge {
             geometryTexture = IRenderSystem.getDevice().ph$createTexture3D(
                     () -> "Photonics Sable Geometry Atlas",
                     TextureUsage.TEXTURE_BINDING | TextureUsage.COPY_DST,
-                    ITextureFormat.r8(),
+                    ITextureFormat.rgba8(),
                     width,
                     height,
                     depth,
@@ -757,69 +818,216 @@ public final class ContraptionLightsSableBridge {
                 new Vector3i(),
                 new Vector3i(width, height, depth)
         );
+        uploadShapeTable(shapeKeys);
         geometryRebuilds++;
         Photonics.LOGGER.info(
-                "Photonics v27 Sable geometry atlas rebuilt: rebuild={}, subLevels={}, receiverCells={}, occluderCells={}, size={}x{}x{}, precision=solid-block-cell, payloadHash={}",
+                "Photonics Sable local-occlusion atlas rebuilt: rebuild={}, subLevels={}, skippedOversized={}, skippedAtlasDepth={}, receiverCells={}, exactFullCells={}, exactShapeCells={}, conservativeFallbackCells={}, receiverOnlyCells={}, shapeDefinitions={}, maxBoxesPerShape={}, size={}x{}x{}, payloadBytes={}, payloadHash={}, authority=same-token-local-only",
                 geometryRebuilds,
                 accepted,
+                skippedOversized,
+                skippedAtlasDepth,
                 receiverCells,
-                occluderCells,
+                fullCells,
+                exactShapeCells,
+                conservativeCells,
+                receiverOnlyCells,
+                shapeKeys.size(),
+                MAX_SHAPE_BOXES,
                 width,
                 height,
                 depth,
+                payload.length,
                 Integer.toUnsignedString(Arrays.hashCode(payload), 16)
         );
         geometryKeys = List.copyOf(keys);
         geometryLayoutKeys = List.copyOf(layoutKeys);
+        geometryShapeKeys = shapeKeys;
         geometryOffsets = offsets;
         geometryPayload = payload;
         return offsets;
     }
 
-    private static boolean isCoarseOccluder(BlockGetter level, BlockPos pos, BlockState state) {
+    private static CellOcclusion classifyLocalOcclusion(
+            BlockGetter level,
+            BlockPos pos,
+            BlockState state,
+            Map<ShapeKey, Integer> shapeIds
+    ) {
         if (state.isAir() || state.getLightEmission() > 0 || !state.getFluidState().isEmpty())
-            return false;
+            return CellOcclusion.EMPTY;
 
-        var collision = state.getCollisionShape(level, pos);
-        if (collision.isEmpty())
-            return false;
+        List<AABB> sourceBoxes = state.getShape(level, pos).toAabbs();
+        if (sourceBoxes.isEmpty())
+            return CellOcclusion.EMPTY;
 
-        return state.canOcclude() && Block.isShapeFullBlock(collision);
+        if (sourceBoxes.size() > MAX_SHAPE_BOXES)
+            return CellOcclusion.CONSERVATIVE;
+
+        var boxes = new ArrayList<ShapeBox>(sourceBoxes.size());
+        for (AABB source : sourceBoxes) {
+            if (!isRepresentableShapeBox(source))
+                return CellOcclusion.CONSERVATIVE;
+            ShapeBox box = clippedShapeBox(source);
+            if (box != null)
+                boxes.add(box);
+        }
+        if (boxes.isEmpty())
+            return CellOcclusion.EMPTY;
+        if (boxes.size() > MAX_SHAPE_BOXES)
+            return CellOcclusion.CONSERVATIVE;
+        if (boxes.size() == 1 && boxes.get(0).isFullCell())
+            return CellOcclusion.FULL;
+
+        ShapeKey key = new ShapeKey(List.copyOf(boxes));
+        Integer shapeId = shapeIds.get(key);
+        if (shapeId == null) {
+            if (shapeIds.size() >= MAX_SHAPE_DEFINITIONS)
+                return CellOcclusion.CONSERVATIVE;
+            shapeId = shapeIds.size() + 1;
+            shapeIds.put(key, shapeId);
+        }
+
+        return new CellOcclusion(boxes.size(), shapeId);
+    }
+
+    private static boolean isRepresentableShapeBox(AABB source) {
+        return Double.isFinite(source.minX)
+                && Double.isFinite(source.minY)
+                && Double.isFinite(source.minZ)
+                && Double.isFinite(source.maxX)
+                && Double.isFinite(source.maxY)
+                && Double.isFinite(source.maxZ)
+                && source.minX >= -SHAPE_EPSILON
+                && source.minY >= -SHAPE_EPSILON
+                && source.minZ >= -SHAPE_EPSILON
+                && source.maxX <= 1.0d + SHAPE_EPSILON
+                && source.maxY <= 1.0d + SHAPE_EPSILON
+                && source.maxZ <= 1.0d + SHAPE_EPSILON
+                && source.minX <= source.maxX
+                && source.minY <= source.maxY
+                && source.minZ <= source.maxZ;
+    }
+
+    private static ShapeBox clippedShapeBox(AABB source) {
+        double minX = clampShapeCoordinate(source.minX);
+        double minY = clampShapeCoordinate(source.minY);
+        double minZ = clampShapeCoordinate(source.minZ);
+        double maxX = clampShapeCoordinate(source.maxX);
+        double maxY = clampShapeCoordinate(source.maxY);
+        double maxZ = clampShapeCoordinate(source.maxZ);
+        if (maxX - minX <= SHAPE_EPSILON
+                || maxY - minY <= SHAPE_EPSILON
+                || maxZ - minZ <= SHAPE_EPSILON)
+            return null;
+
+        return new ShapeBox(
+                (float) minX,
+                (float) minY,
+                (float) minZ,
+                (float) maxX,
+                (float) maxY,
+                (float) maxZ
+        );
+    }
+
+    private static double clampShapeCoordinate(double value) {
+        return Math.max(0.0d, Math.min(1.0d, value));
+    }
+
+    private static void uploadShapeTable(List<ShapeKey> shapeKeys) {
+        if (shapeKeys.isEmpty()) {
+            closeShapeTexture();
+            return;
+        }
+
+        int width = MAX_SHAPE_BOXES * 2;
+        int height = shapeKeys.size() + 1;
+        ByteBuffer data = ByteBuffer.allocateDirect(
+                width * height * 4 * Float.BYTES
+        ).order(ByteOrder.nativeOrder());
+        var values = data.asFloatBuffer();
+
+        for (int shapeIndex = 0; shapeIndex < shapeKeys.size(); shapeIndex++) {
+            List<ShapeBox> boxes = shapeKeys.get(shapeIndex).boxes();
+            int row = shapeIndex + 1;
+            for (int boxIndex = 0; boxIndex < boxes.size(); boxIndex++) {
+                ShapeBox box = boxes.get(boxIndex);
+                int minOffset = ((row * width + boxIndex * 2) * 4);
+                values.put(minOffset, box.minX());
+                values.put(minOffset + 1, box.minY());
+                values.put(minOffset + 2, box.minZ());
+                int maxOffset = minOffset + 4;
+                values.put(maxOffset, box.maxX());
+                values.put(maxOffset + 1, box.maxY());
+                values.put(maxOffset + 2, box.maxZ());
+            }
+        }
+
+        if (shapeTexture == null) {
+            shapeTexture = IRenderSystem.getDevice().ph$createTexture3D(
+                    () -> "Photonics Sable Shape Table",
+                    TextureUsage.TEXTURE_BINDING | TextureUsage.COPY_DST,
+                    ITextureFormat.rgba32f(),
+                    width,
+                    height,
+                    1,
+                    1
+            );
+        } else {
+            Vector3i requiredSize = new Vector3i(width, height, 1);
+            if (!shapeTexture.ph$size(0).equals(requiredSize))
+                shapeTexture.ph$resize(requiredSize);
+        }
+
+        IRenderSystem.getDevice().ph$createCommandEncoder().ph$writeToTexture(
+                shapeTexture,
+                data,
+                new Vector3i(),
+                new Vector3i(width, height, 1)
+        );
     }
 
     private static void resetGeometryAtlas() {
         geometryKeys = List.of();
         geometryLayoutKeys = List.of();
+        geometryShapeKeys = List.of();
         geometryOffsets = new int[0];
         geometryPayload = new byte[0];
         geometryRebuilds = 0;
         geometryUnchangedScans = 0;
-        closeGeometryTexture();
+        nextGeometryRevision = 1L;
+        closeGeometryTextures();
     }
 
-    private static void closeGeometryTexture() {
+    private static void closeGeometryTextures() {
         if (geometryTexture != null && !geometryTexture.ph$isClosed())
             geometryTexture.close();
         geometryTexture = null;
+        closeShapeTexture();
         geometryWidth = 0;
         geometryHeight = 0;
         geometryDepth = 0;
     }
 
+    private static void closeShapeTexture() {
+        if (shapeTexture != null && !shapeTexture.ph$isClosed())
+            shapeTexture.close();
+        shapeTexture = null;
+    }
+
     private static GeometryKey geometryKey(MotionCandidate candidate) {
-        byte[] currentRevision = candidate.occupancyRevision() == null
-                ? new byte[0]
-                : candidate.occupancyRevision();
+        byte[] currentRevision = candidate.occupancyRevision();
         GeometryRevisionSnapshot cached = geometryRevisionSnapshots.get(candidate.uniqueId());
-        ByteBuffer revisionContent;
-        if (cached != null && Arrays.equals(cached.sourceRevision(), currentRevision)) {
-            revisionContent = cached.content();
-        } else {
-            byte[] revisionSnapshot = Arrays.copyOf(currentRevision, currentRevision.length);
-            revisionContent = ByteBuffer.wrap(revisionSnapshot).asReadOnlyBuffer();
+        // Contraption Lights replaces this array on a topology rebuild. Its
+        // identity catches partial-shape changes that leave coarse bytes equal.
+        if (cached == null || cached.sourceRevision() != currentRevision) {
+            cached = new GeometryRevisionSnapshot(
+                    currentRevision,
+                    nextGeometryRevision++
+            );
             geometryRevisionSnapshots.put(
                     candidate.uniqueId(),
-                    new GeometryRevisionSnapshot(revisionSnapshot, revisionContent)
+                    cached
             );
         }
 
@@ -831,7 +1039,7 @@ public final class ContraptionLightsSableBridge {
                 candidate.sizeX(),
                 candidate.sizeY(),
                 candidate.sizeZ(),
-                revisionContent
+                cached.revision()
         );
     }
 
@@ -858,7 +1066,7 @@ public final class ContraptionLightsSableBridge {
         if (!motionActiveLogged && subLevels > 0) {
             motionActiveLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics v50 Sable receiver motion active: subLevels={}, classifier=normal-guided-receiver-cell-atlas+emissive-cells, emitterIdentity=explicit-sublevel-token, localVisibility=tri-state-token-gated-conservative-supercover-dda, temporalTransform=camera-relative-stable-anchor-double-compose",
+                    "Photonics Sable receiver motion active: subLevels={}, classifier=normal-guided-receiver-cell-atlas+emissive-cells, emitterIdentity=explicit-sublevel-token, localVisibility=same-token-rgba-cell-atlas+sparse-shape-aabb+fail-closed-supercover-dda, crossDomainVisibility=static-world-only, temporalTransform=camera-relative-stable-anchor-double-compose",
                     subLevels
             );
         }
@@ -999,6 +1207,35 @@ public final class ContraptionLightsSableBridge {
     ) {
     }
 
+    private record CellOcclusion(int boxCount, int shapeId) {
+        private static final CellOcclusion EMPTY = new CellOcclusion(0, 0);
+        private static final CellOcclusion FULL =
+                new CellOcclusion(FULL_CELL_BOX_COUNT, 0);
+        private static final CellOcclusion CONSERVATIVE =
+                new CellOcclusion(CONSERVATIVE_CELL_BOX_COUNT, 0);
+    }
+
+    private record ShapeBox(
+            float minX,
+            float minY,
+            float minZ,
+            float maxX,
+            float maxY,
+            float maxZ
+    ) {
+        private boolean isFullCell() {
+            return minX <= SHAPE_EPSILON
+                    && minY <= SHAPE_EPSILON
+                    && minZ <= SHAPE_EPSILON
+                    && maxX >= 1.0d - SHAPE_EPSILON
+                    && maxY >= 1.0d - SHAPE_EPSILON
+                    && maxZ >= 1.0d - SHAPE_EPSILON;
+        }
+    }
+
+    private record ShapeKey(List<ShapeBox> boxes) {
+    }
+
     private record GeometryKey(
             UUID uniqueId,
             int minX,
@@ -1007,11 +1244,11 @@ public final class ContraptionLightsSableBridge {
             int sizeX,
             int sizeY,
             int sizeZ,
-            ByteBuffer occupancyRevision
+            long topologyRevision
     ) {
     }
 
-    private record GeometryRevisionSnapshot(byte[] sourceRevision, ByteBuffer content) {
+    private record GeometryRevisionSnapshot(byte[] sourceRevision, long revision) {
     }
 
     private record GeometryLayoutKey(

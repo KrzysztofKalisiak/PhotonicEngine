@@ -1,111 +1,157 @@
-# Sable Occlusion Plan
+# Sable Occlusion
 
-This document describes the intended ownership and implementation order for
-direct-light visibility involving Sable sublevels.
+This document defines the visibility contract implemented by the optional
+Contraption Lights/Sable bridge and the remaining cross-domain roadmap.
 
-## Visibility Ownership
+## Implemented Baseline
 
-Visibility must have one authoritative coordinate domain for each ray:
+Photonics owns direct-light sampling, visibility, temporal reuse, denoising,
+and final composition. Contraption Lights supplies Sable state and rebuild
+notifications; Veil does not make a second visibility decision for a
+Photonics reservoir.
 
-| Receiver | Emitter | Current authority | Target authority |
+The bridge supports exact same-sublevel direct visibility when all of these
+conditions hold:
+
+- the receiver is classified into an uploaded Sable sublevel;
+- the light carries the same persistent sublevel token;
+- the sublevel fits the local geometry limits; and
+- the source and receiver can be transformed into that local grid.
+
+The v64 motion contract is unchanged. UUID-derived temporal tokens remain
+persistent, GPU slots remain frame-local, and the existing current/previous
+camera-relative transforms continue to drive history reprojection.
+
+## Local Geometry Data
+
+`ContraptionLightsSableBridge` builds two textures when Contraption Lights
+reports a topology revision:
+
+1. An `RGBA8` local-cell atlas.
+   - R: receiver-cell flag.
+   - G: shape box count.
+   - BA: little-endian 16-bit sparse shape-table row.
+   - G = 254: exact full cell.
+   - G = 255: conservative full-cell fallback.
+2. An `RGBA32F` sparse shape table.
+   - Two texels per local AABB: minimum then maximum.
+   - At most 16 AABBs per shape.
+   - At most 1023 distinct shape definitions per atlas rebuild.
+
+Full blocks stay on the one-fetch path. Partial blocks use Minecraft's
+`BlockState.getShape(...).toAabbs()` data only after DDA reaches that cell.
+Air, fluid, and emissive cells keep the existing non-occluding behavior.
+
+Malformed or out-of-cell shapes, shapes with more than 16 boxes, and shape
+table overflow are represented as conservative full cells. Sublevels larger
+than 96 blocks on an axis, 300,000 cells, or the 512-layer aggregate atlas
+limit receive no local atlas offset.
+
+Contraption Lights allocates a new occupancy array when it rebuilds a
+sublevel. The bridge uses that array identity as the topology generation.
+This detects changes to fences, panes, and other partial blocks even when
+Contraption Lights' own coarse occupancy bytes are unchanged. Byte-identical
+Photonics payloads skip the GPU upload.
+
+## Shader Visibility
+
+The direct-light shader first compares the receiver and emitter temporal
+tokens. A matching nonzero token selects one authoritative local visibility
+test:
+
+1. Transform the CPU-tokened light into the receiver's current local grid.
+2. Derive its source cell directly, without the old global 64-emissive-cell
+   visibility lookup.
+3. Resolve the receiver cell from its local position and surface normal.
+4. Run the existing endpoint-safe conservative supercover DDA.
+5. Treat full/fallback cells as opaque and intersect sparse AABBs for partial
+   cells.
+
+If a same-token ray cannot be classified or has no uploaded atlas, it fails
+closed. It does not fall back to the static world tree, because Sable plot
+sections are deliberately excluded from that tree and would provide a stale
+or contradictory answer.
+
+## Visibility Matrix
+
+| Receiver | Emitter | Implemented authority | Dynamic Sable occluders |
 | --- | --- | --- | --- |
-| World | World | Photonics world tracer | Photonics world tracer |
-| Sable A | Sable A | Sable A local DDA | Sable A local DDA |
-| Sable A | World | Photonics world tracer | World tracer plus intersected Sable DDAs |
-| World | Sable A | Photonics world tracer | World tracer plus intersected Sable DDAs |
-| Sable A | Sable B | Photonics world tracer | World tracer plus A/B/intersected Sable DDAs |
+| World | World | Photonics world tracer | Not applicable |
+| Sable A | Sable A | Sable A local DDA and sparse shapes | Yes, exact within the uploaded shape model |
+| Sable A | World | Photonics world tracer | No |
+| World | Sable A | Photonics world tracer | No |
+| Sable A | Sable B | Photonics world tracer | No |
 
-The same-sublevel row is deliberately local-only. Running that ray through the
-world voxel tree as well gives stale moving geometry a second, contradictory
-visibility vote.
+Cross-domain rows intentionally make no claim that moving Sable geometry is
+present. They retain the existing static-world visibility result. This avoids
+false shadows from Sable's reserved plot coordinates, but moving Sable
+occluders are currently absent from those rays.
 
-## Stage 1: Stable Receiver Identity
+## Performance
 
-Replace occupancy-based fragment ownership inference with an integer identity
-written while Sable draws the fragment:
+CPU work occurs on a Contraption Lights topology generation, not on rigid
+transform-only frames. It scans each accepted local grid once and deduplicates
+shape definitions. The cell atlas grows from one to four bytes per cell.
 
-- Keep a persistent 16-bit or 32-bit token per Sable UUID.
-- Keep the GPU table slot frame-local and separate from the persistent token.
-- Prefer writing the local cell and face together with the token. This removes
-  the current floor/probe ambiguity at block boundaries.
-- Retain geometric classification only as a compatibility fallback.
+GPU cost for same-token direct visibility is:
 
-The sidecar must be written by every Sable solid draw that contributes to the
-Photonics depth input. Batched draws need either a per-vertex identity or
-separate draw ranges.
+- the existing bounded supercover DDA;
+- one `RGBA8` fetch per tested cell;
+- up to 16 AABB pairs only for a reached partial cell.
 
-## Stage 2: Dynamic Sublevel Table
+World and cross-sublevel rays have no additional dynamic-sublevel loop in this
+baseline. The maximum 16 uploaded sublevels and all existing motion/history
+limits remain unchanged.
 
-Move sublevel metadata from fixed uniform arrays to an SSBO or texture buffer.
-Each entry should contain:
+## Diagnostics
 
-- persistent identity token and topology generation;
-- current and previous rigid transforms;
-- world-space AABB for broad-phase intersection;
-- occupancy-atlas offset and dimensions;
-- optional emissive-cell range.
+An atlas rebuild logs:
 
-This removes the current 16-sublevel truncation. Selection and upload order
-must not change temporal identity.
+- accepted and skipped sublevels;
+- receiver, full, exact-shape, fallback, and receiver-only cell counts;
+- distinct shape count and per-shape limit;
+- atlas dimensions, payload bytes, and payload hash; and
+- the `same-token-local-only` authority marker.
 
-## Stage 3: Cross-Domain Coarse Occlusion
+If no candidate fits the atlas limits, a warning states that same-domain
+visibility will fail closed. Startup logging also states that cross-domain
+visibility remains static-world-only.
 
-For each final direct-light visibility ray:
+## Validation Matrix
 
-1. Trace static world occupancy once.
-2. Intersect the finite ray segment with uploaded Sable world-space AABBs.
-3. Transform only intersecting intervals into each sublevel's local grid.
-4. Run a local DDA over coarse full-block occupancy.
-5. Ignore the classified receiver cell and the emitter's emissive cell to
-   avoid self-intersection.
+Run these cases after a centralized serial 1.21.1 build:
 
-Start with full-block occupancy. This supports world-to-Sable,
-Sable-to-world, and Sable-to-Sable shadows without coupling Photonics sampling
-to Veil. The AABB broad phase is required before enabling this path broadly;
-looping over every cell or every sublevel for every candidate is too costly.
+1. Move one rigid Sable structure containing a froglight, fence, trapdoor,
+   full block, and receiving wall. Shadows should remain attached to the
+   structure during translation and rotation.
+2. Repeat with a pane, stair, slab, flower, and several connected fences.
+   Partial silhouettes should replace full-cell shadows.
+3. Add and remove a partial block while stationary and moving. The atlas
+   rebuild log should increment once per topology update and transform-only
+   frames should not rebuild it.
+4. Exceed 16 AABBs with a modded shape. Its cell must remain conservatively
+   opaque and increment `conservativeFallbackCells`.
+5. Test an oversized sublevel. Its atlas offset should be absent and its
+   same-token direct contribution should fail closed without a crash.
+6. Test world-to-Sable, Sable-to-world, and Sable-A-to-Sable-B rays. Confirm
+   the known limitation: moving Sable geometry does not yet occlude them.
+7. Compare stationary and moving GPU timings against the base commit. The
+   stationary full-block scene should add only the wider atlas fetch; partial
+   shape cost should scale with reached partial cells.
 
-Only the final selected ReSTIR sample needs full cross-domain visibility.
-Proposal generation may use cheaper visibility or none, provided the estimator
-weights remain consistent.
+## Cross-Domain Roadmap
 
-## Stage 4: Fine Occlusion And Transmission
+Cross-domain dynamic occlusion needs a separate bounded path:
 
-Add sparse shape data only where coarse cells are insufficient:
+1. Upload each sublevel's world-space AABB with its current transform.
+2. Broad-phase the final selected direct ray against those AABBs.
+3. Transform only intersecting ray intervals into the corresponding local
+   grids.
+4. Trace static world occupancy once and each intersected Sable interval once.
+5. Define explicit source/receiver endpoint ownership for two independently
+   moving sublevels.
 
-- voxel-shape masks for fences, panes, trapdoors, and other partial blocks;
-- material or transmission data for colored glass;
-- optional per-face opacity where the shaderpack requires it.
-
-Keep the coarse atlas as the fast path. Fine data should be sparse and fetched
-only after a coarse occupied-cell hit.
-
-## Temporal Rules
-
-- Same-token receiver/emitter lighting is rigid-local and may retain full
-  history through the receiver motion transform.
-- Cross-domain lighting uses receiver-relative emitter motion and a bounded,
-  reactive history window.
-- Topology changes invalidate only the changed sublevel generation, not every
-  Sable receiver.
-- A visibility transition invalidates the affected lighting stream, while a
-  transform update alone does not.
-
-## Veil Boundary
-
-Veil may later provide a broad-phase occupancy hint or an additional dynamic
-light proposal source. It should not be the authoritative visibility result for
-Photonics reservoirs because it does not provide Photonics material, albedo,
-or bounced-radiance state. Photonics remains responsible for estimator weights,
-final visibility, denoising, and temporal validity.
-
-## Validation
-
-Each stage should be tested independently with:
-
-- a rigid light, fence, and receiver moving together at slow and high speed;
-- a world light illuminating a moving Sable wall;
-- a Sable light illuminating the world;
-- two independently moving sublevels;
-- more than 16 loaded sublevels;
-- Photon TAA both enabled and disabled;
-- GPU timings for final visibility and DDA intersection counts.
+Only the final selected ReSTIR sample should pay this full visibility cost.
+Veil occupancy can be a broad-phase hint, but it is not sufficient as the
+authoritative Photonics result because it lacks Photonics material,
+transmission, and bounced-radiance state.

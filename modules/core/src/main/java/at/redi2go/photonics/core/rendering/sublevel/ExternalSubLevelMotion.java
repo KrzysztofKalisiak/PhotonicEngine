@@ -29,8 +29,12 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
         return INSTANCE;
     }
 
-    public static void submit(int occupancyTexture, List<SubLevel> subLevels) {
-        snapshot = Snapshot.create(occupancyTexture, subLevels);
+    public static void submit(
+            int occupancyTexture,
+            int shapeTexture,
+            List<SubLevel> subLevels
+    ) {
+        snapshot = Snapshot.create(occupancyTexture, shapeTexture, subLevels);
     }
 
     public static void clear() {
@@ -95,6 +99,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
     @Override
     public void registerCustomTextures(ISamplerHolder samplers) {
         samplers.addExternalSampler3D("ph_sable_occupancy", () -> snapshot.occupancyTexture);
+        samplers.addExternalSampler3D("ph_sable_shape_table", () -> snapshot.shapeTexture);
     }
 
     public record SubLevel(
@@ -112,6 +117,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
         private static final int IDENTITY_TOKEN_GROUPS = (MAX_SUBLEVELS + 3) / 4;
 
         private final int occupancyTexture;
+        private final int shapeTexture;
         private final int subLevelCount;
         private final int emissiveCellCount;
         private final Matrix4f[] currentPlayerToGrid;
@@ -123,6 +129,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
 
         private Snapshot(
                 int occupancyTexture,
+                int shapeTexture,
                 int subLevelCount,
                 int emissiveCellCount,
                 Matrix4f[] currentPlayerToGrid,
@@ -133,6 +140,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
                 Vector4f[] emissiveCells
         ) {
             this.occupancyTexture = occupancyTexture;
+            this.shapeTexture = shapeTexture;
             this.subLevelCount = subLevelCount;
             this.emissiveCellCount = emissiveCellCount;
             this.currentPlayerToGrid = currentPlayerToGrid;
@@ -144,10 +152,14 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
         }
 
         private static Snapshot empty() {
-            return create(0, List.of());
+            return create(0, 0, List.of());
         }
 
-        private static Snapshot create(int occupancyTexture, List<SubLevel> source) {
+        private static Snapshot create(
+                int occupancyTexture,
+                int shapeTexture,
+                List<SubLevel> source
+        ) {
             int count = Math.min(source.size(), MAX_SUBLEVELS);
             Matrix4f[] currentPlayerToGrid = matrices(MAX_SUBLEVELS);
             Matrix4f[] currentPlayerToPreviousPlayer = matrices(MAX_SUBLEVELS);
@@ -181,6 +193,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
 
             return new Snapshot(
                     occupancyTexture,
+                    shapeTexture,
                     count,
                     emissiveCount,
                     currentPlayerToGrid,
