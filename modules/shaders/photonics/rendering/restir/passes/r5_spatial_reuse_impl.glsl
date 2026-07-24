@@ -18,6 +18,9 @@ const float ph_spatial_max_receiver_distance_sq = 0.5625f;
 const float ph_spatial_max_plane_distance = 0.05f;
 const float ph_spatial_min_normal_alignment = 0.99f;
 const int ph_indirect_spatial_candidate_attempts = 8;
+// The 1.21.1 property layer already clamps this to one. Keep the shader-side
+// ray budget explicit so a pack override cannot multiply GI validation cost.
+const int ph_indirect_spatial_validation_budget = 1;
 
 bool ph_spatial_is_finite(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
@@ -239,7 +242,6 @@ bool ph_spatial_indirect_reservoir_merge(
     if (!indirect_reservoir_has_sample(other))
         return false;
 
-    other.total_samples = effective_samples;
     float shift = indirect_sample_compute_shift(
         other.smple,
         _frag_data,
@@ -251,6 +253,24 @@ bool ph_spatial_indirect_reservoir_merge(
             || isinf(shift))
         return false;
 
+    uint path_validation = indirect_reservoir_classify_reused_path(
+        other,
+        frag_rt_pos
+    );
+    if (path_validation
+            == indirect_path_validation_blocked_current_receiver) {
+        // The neighbor represents a valid zero-target batch at this receiver.
+        // Account its clamped M once without making it selectable.
+        indirect_reservoir_add_batch_samples(
+            result,
+            effective_samples
+        );
+        return false;
+    }
+    if (path_validation != indirect_path_validation_valid)
+        return false;
+
+    other.total_samples = effective_samples;
     return indirect_reservoir_merge(
         result,
         other,
@@ -317,6 +337,10 @@ void main() {
 
     const float reuse_radius = PH_RESTIR_SPATIAL_REUSE_RADIUS * PH_ACTIVE_RENDER_SCALE;
     const int reuse_samples = PH_RESTIR_SPATIAL_REUSE_SAMPLES;
+    const int indirect_reuse_samples = min(
+        reuse_samples,
+        ph_indirect_spatial_validation_budget
+    );
     ivec2 spatial_texture_size = textureSize(ph_frag_data0, 0);
     bool spatial_receiver_can_reuse = ph_spatial_current_receiver_can_reuse();
 #if defined PH_ENABLE_RESTIR_GI
@@ -366,7 +390,7 @@ void main() {
             1171
         );
 
-        for (int i = 0; i < reuse_samples; i++) {
+        for (int i = 0; i < indirect_reuse_samples; i++) {
             bool candidate_found = false;
             ivec2 sample_texel = frag_tex_coord;
             FragData sample_frag;
@@ -443,13 +467,6 @@ void main() {
     indirect_reservoir_clamp_samples(indirect_result);
 
     indirect_reservoir_finalize_weight(indirect_result, indirect_sample_weight);
-    // This is the final selected indirect reservoir. Validate it before the
-    // encode so the standalone validation pass does not have to read and
-    // rewrite both high-precision indirect attachments.
-    indirect_reservoir_validate_visibility(
-        indirect_result,
-        frag_rt_pos
-    );
     indirect_reservoir_clamp_samples(indirect_result);
     indirect_reservoir_encode(indirect_result, gi_reservoir_0, gi_reservoir_1);
 #endif
