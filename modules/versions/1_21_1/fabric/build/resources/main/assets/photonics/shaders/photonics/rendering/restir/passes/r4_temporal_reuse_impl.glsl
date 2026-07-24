@@ -106,11 +106,16 @@ void main() {
     IndirectReservoir indirect_result = indirect_reservoir_empty();
     IndirectReservoir temp_indirect = indirect_reservoir_empty();
 
-    // Indirect samples do not yet encode a Sable hit domain or local-space hit
-    // point. Reuse world history only; moving receivers keep their current
-    // frame proposal until that representation exists.
-    if (sublevel_token == 0u
-            && !frag_is_hand
+    // The GI tracer currently intersects only the world voxel volume, so every
+    // finite stored hit is world-space even when its receiver belongs to a
+    // Sable sublevel. The receiver reprojection above already supplies that
+    // sublevel's previous rigid pose; reuse its world/sky hit and let the final
+    // visibility validation reject geometry changes. This avoids feeding the
+    // half-rate Sable GI path an unrelated one-sample reservoir every frame.
+    //
+    // Once GI can hit Sable geometry, the sample must also carry the hit
+    // sublevel identity and local-space point before this remains valid.
+    if (!frag_is_hand
             && !frag_data_is_hand(prev_frag)
             && indirect_reservoir_load_previous(temp_indirect, prev_texel)) {
         temp_indirect.total_samples = min(max_indirect_temporal_samples, temp_indirect.total_samples);
