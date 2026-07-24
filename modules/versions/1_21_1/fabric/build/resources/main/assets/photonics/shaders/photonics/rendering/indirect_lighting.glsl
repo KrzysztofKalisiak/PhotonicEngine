@@ -61,6 +61,19 @@ void prepare_next_gi_ray(
         ray_iter_offset_position(ray, ray.direction * 0.03f);
 }
 
+bool should_skip_transparent_gi_surface(
+        RayResult hit,
+        vec4 albedo,
+        inout uint rnd_state
+) {
+    if (!ray_result_is_transparent(hit))
+        return false;
+
+    // Alpha is unresolved geometric coverage. Sampling the binary event keeps
+    // the path unbiased; attenuating every path would darken GI systematically.
+    return ph_rand_next_float(rnd_state) > clamp(albedo.a, 0.0f, 1.0f);
+}
+
 void sample_indirect(
         inout vec3 indirect_color,
         vec3 sample_rt_pos,
@@ -76,7 +89,6 @@ void sample_indirect(
     first_normal = normal;
 
     vec4 running_tint_color = vec4(0.0f);
-    float running_light_transmittance = 1.0f;
     vec3 running_bounce_color = vec3(1.0f);
 
     int bounce_count = -1;
@@ -112,16 +124,15 @@ void sample_indirect(
             VoxelData voxel_data = ray_result_voxel_data(hit);
             albedo = voxel_data_albedo(voxel_data);
 
-            if (ray_result_is_transparent(hit)) {
-                if (voxel_data_is_thin_cutout(voxel_data)) {
-                    // Thin alpha is neutral coverage from unresolved cutout
-                    // geometry; it must not tint light with plant albedo.
-                    running_light_transmittance *= 1.0f - albedo.a;
-                } else {
-                    // Multiply alpha by 0.25 as it looks better with glass.
-                    running_light_transmittance *= 1.0f - (albedo.a * 0.25f);
+            if (should_skip_transparent_gi_surface(
+                    hit,
+                    albedo,
+                    rnd_state
+            )) {
+                // Thin cutouts model unresolved coverage, not colored glass.
+                // Preserve the existing neutral flower/plant pass-through.
+                if (!voxel_data_is_thin_cutout(voxel_data))
                     ray_iter_apply_transparency(running_tint_color, albedo);
-                }
                 ray_iter_skip_block(ray);
 
                 continue;
@@ -184,9 +195,8 @@ void sample_indirect(
 
         #define gi_tint_color (running_tint_color != vec4(0.0) ? running_tint_color.rgb : vec3(1.0f))
         #define gi_bounce_color running_bounce_color
-        #define gi_intensity running_light_transmittance
 
-        indirect_color += radiance_color * gi_tint_color * gi_bounce_color * gi_intensity;
+        indirect_color += radiance_color * gi_tint_color * gi_bounce_color;
 
         if (!ray_result_is_hit(hit)) return;
 

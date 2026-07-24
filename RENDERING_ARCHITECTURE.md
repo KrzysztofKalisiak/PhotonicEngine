@@ -787,9 +787,17 @@ tree and, at each hit:
 4. samples the next bounce direction;
 5. stops at the configured bounce or traversal limit.
 
+Transparent GI intersections use stochastic alpha coverage: a path either
+accepts the surface or passes through it, with probability determined by
+opacity. This avoids the downward bias caused by attenuating every path.
+Pass-through glass still tints the path, while tagged thin cutouts remain
+neutral because their alpha represents unresolved plant geometry rather than a
+colored transmissive medium.
+
 The indirect reservoir stores more state than the direct one because it must be
-able to re-evaluate a path: visible point/normal, first hit point/normal, random
-state, RGB result, weight, and sample count.
+able to shift and validate a path: first hit point/normal, sky-hit identity, RGB
+result, weight, and sample count. The receiver position and normals come from
+the matching fragment-data texture; RNG state is not persisted.
 
 The rendering equation behind this is conceptually:
 

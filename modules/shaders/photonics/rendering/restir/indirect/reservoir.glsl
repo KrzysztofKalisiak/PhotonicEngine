@@ -194,15 +194,18 @@ void indirect_reservoir_validate_visibility(
             return;
         }
 
+        // A transparent surface may be the stochastic alpha-coverage hit that
+        // produced this sample. Accept its stored endpoint before treating
+        // other transparent surfaces as pass-through blockers.
+        vec3 position_delta = ray_result_position(result) - hit_point;
+        if (dot(position_delta, position_delta) < 0.05f)
+            return;
+
         if (ray_result_is_transparent(result)) {
             ray_iter_skip_block(ray);
             ray_iter_offset_position(ray, ray.direction * 0.03f);
             continue;
         }
-
-        vec3 position_delta = ray_result_position(result) - hit_point;
-        if (dot(position_delta, position_delta) < 0.05f)
-            return;
 
         indirect_reservoir_reject(reservoir);
         return;
