@@ -14,7 +14,131 @@
 //ph_required: uniform sampler2D other_handheld;
 #endif
 
+#if defined PH_RESTIR_SPLIT_GI
+//ph_required: uniform sampler2D ph_frag_data0;
+//ph_required: uniform sampler2D ph_frag_data1;
+//ph_required: uniform sampler2D ph_gi_frag_data0;
+//ph_required: uniform sampler2D ph_gi_frag_data1;
+#if PH_RESTIR_GI_DENOISER_PASSES != 0
+//ph_required: uniform sampler2D restir_gi_denoise_result;
+#else
+//ph_required: uniform sampler2D restir_gi_lighting;
+#endif
+
+#include "/photonics/utility/normal_encoding.glsl"
+
+bool ph_gi_upsample_matches(
+    vec4 center_data0,
+    uvec4 center_data1,
+    vec4 sample_data0,
+    uvec4 sample_data1
+) {
+    const uint in_world_bit = 1u;
+    const uint hand_bit = 1u << 2;
+    const uint sublevel_token_mask = 0xffff00u;
+    const uint receiver_identity_mask = in_world_bit
+        | hand_bit
+        | sublevel_token_mask;
+
+    if ((center_data1.w & in_world_bit) == 0u
+            || (sample_data1.w & in_world_bit) == 0u
+            || (center_data1.w & receiver_identity_mask)
+                != (sample_data1.w & receiver_identity_mask))
+        return false;
+
+    vec3 center_normal = ph_decode_normal(unpackSnorm2x16(center_data1.y));
+    vec3 sample_normal = ph_decode_normal(unpackSnorm2x16(sample_data1.y));
+    if (dot(center_normal, sample_normal) < 0.9f)
+        return false;
+
+    vec3 position_delta = sample_data0.xyz - center_data0.xyz;
+    if (dot(position_delta, position_delta) > 4.0f)
+        return false;
+
+    float plane_distance = max(
+        abs(dot(position_delta, center_normal)),
+        abs(dot(position_delta, sample_normal))
+    );
+    return plane_distance <= 0.15f;
+}
+
+vec3 ph_gi_radiance_at(ivec2 texel) {
+#if PH_RESTIR_GI_DENOISER_PASSES != 0
+    return texelFetch(restir_gi_denoise_result, texel, 0).rgb;
+#else
+    vec4 lighting = texelFetch(restir_gi_lighting, texel, 0);
+    return lighting.rgb / max(lighting.a, 1.0f);
+#endif
+}
+
+vec3 ph_sample_split_gi(vec2 tex_coord) {
+    ivec2 direct_size = textureSize(ph_frag_data0, 0);
+    ivec2 direct_texel = clamp(
+        ivec2(tex_coord * vec2(direct_size)),
+        ivec2(0),
+        direct_size - ivec2(1)
+    );
+    vec4 center_data0 = texelFetch(ph_frag_data0, direct_texel, 0);
+    uvec4 center_data1 = floatBitsToUint(
+        texelFetch(ph_frag_data1, direct_texel, 0)
+    );
+
+    ivec2 gi_size = textureSize(ph_gi_frag_data0, 0);
+    vec2 gi_position = tex_coord * vec2(gi_size) - 0.5f;
+    ivec2 gi_base = ivec2(floor(gi_position));
+    vec2 gi_fraction = fract(gi_position);
+
+    vec3 result = vec3(0.0f);
+    float weight_sum = 0.0f;
+    for (int y = 0; y <= 1; y++) {
+        for (int x = 0; x <= 1; x++) {
+            ivec2 offset = ivec2(x, y);
+            ivec2 texel = clamp(
+                gi_base + offset,
+                ivec2(0),
+                gi_size - ivec2(1)
+            );
+            vec4 sample_data0 = texelFetch(ph_gi_frag_data0, texel, 0);
+            uvec4 sample_data1 = floatBitsToUint(
+                texelFetch(ph_gi_frag_data1, texel, 0)
+            );
+            if (!ph_gi_upsample_matches(
+                    center_data0,
+                    center_data1,
+                    sample_data0,
+                    sample_data1
+            )) continue;
+
+            vec2 axis_weight = mix(
+                vec2(1.0f) - gi_fraction,
+                gi_fraction,
+                vec2(offset)
+            );
+            float weight = axis_weight.x * axis_weight.y;
+            result += ph_gi_radiance_at(texel) * weight;
+            weight_sum += weight;
+        }
+    }
+
+    return weight_sum > 0.0001f ? result / weight_sum : vec3(0.0f);
+}
+#endif
+
 vec3 sample_photonics_direct(vec2 tex_coord) {
+#if defined PH_RESTIR_SPLIT_GI
+    vec3 result = vec3(0.0f);
+    #if defined PH_ENABLE_BLOCKLIGHT
+    #if PH_RESTIR_DENOISER_PASSES != 0
+    result = texture(denoise_result, tex_coord).rgb;
+    #else
+    vec4 lighting = texture(restir_lighting, tex_coord);
+    result = lighting.rgb / max(lighting.a, 1.0f);
+    vec4 external_lighting = texture(restir_external_lighting, tex_coord);
+    result += external_lighting.rgb / max(external_lighting.a, 1.0f);
+    #endif
+    #endif
+    result += ph_sample_split_gi(tex_coord);
+#else
     #if PH_RESTIR_DENOISER_PASSES != 0
     vec3 result = texture(denoise_result, tex_coord).rgb;
     #else
@@ -25,6 +149,7 @@ vec3 sample_photonics_direct(vec2 tex_coord) {
     result += external_lighting.rgb / max(external_lighting.a, 1.0f);
     #endif
     #endif
+#endif
 
     #if defined PH_ENABLE_BLOCKLIGHT
     result += texture(restir_local_lighting, tex_coord).rgb;

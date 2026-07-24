@@ -1,5 +1,9 @@
 #version 430
 
+#if defined PH_RESTIR_SPLIT_GI
+#define PH_RESTIR_DIRECT_PASS
+#endif
+
 #define FRAG_USE_RT_POS
 #define FRAG_USE_GEO_NORMAL
 #define FRAG_USE_TEX_NORMAL

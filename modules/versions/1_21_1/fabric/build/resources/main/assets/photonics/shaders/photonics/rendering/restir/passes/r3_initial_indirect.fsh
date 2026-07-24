@@ -1,5 +1,9 @@
 #version 430
 
+#if defined PH_RESTIR_SPLIT_GI
+#define PH_RESTIR_GI_PASS
+#endif
+
 #include "/photonics/rendering/frag/common.glsl"
 #include "/photonics/rendering/restir/restir.glsl"
 

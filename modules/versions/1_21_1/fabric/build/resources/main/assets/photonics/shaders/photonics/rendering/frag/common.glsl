@@ -1,10 +1,11 @@
+#include "/photonics/rendering/restir/pass_mode.glsl"
 #include "/photonics/rendering/frag/world_interface.glsl"
 #include "/photonics/utility/normal_encoding.glsl"
 #include "/photonics/rendering/frag/frag_data.glsl"
 #include "/photonics/utility/random.glsl"
 
 #define frag_tex_coord ivec2(gl_FragCoord.xy)
-#define PH_VIEW_SIZE (vec2(viewWidth, viewHeight) * PH_RENDER_SCALE)
+#define PH_VIEW_SIZE (vec2(viewWidth, viewHeight) * PH_ACTIVE_RENDER_SCALE)
 
 uint frag_rnd_state = 0u;
 
