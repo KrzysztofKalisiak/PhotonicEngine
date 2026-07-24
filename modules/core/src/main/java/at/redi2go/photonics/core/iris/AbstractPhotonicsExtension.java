@@ -45,7 +45,7 @@ public abstract class AbstractPhotonicsExtension extends AbstractRenderingCompon
         var sectionManager = registerComponent(new SectionManager(Minecraft::getRenderDistance));
 
         var worldAllocator = registerComponent(new BufferWorldAllocator(1 << 29));
-        var paletteTexture = registerComponent(new BufferPaletteTexture(2048, 600));
+        var paletteTexture = registerComponent(new BufferPaletteTexture(2048, 1024));
 
         var worldRegistry = new WorldRegistry(worldAllocator, paletteTexture, atlasDownloader);
 

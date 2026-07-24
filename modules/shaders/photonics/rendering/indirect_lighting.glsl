@@ -89,6 +89,7 @@ void sample_indirect(
     first_normal = normal;
 
     vec4 running_tint_color = vec4(0.0f);
+    float running_light_transmittance = 1.0f;
     vec3 running_bounce_color = vec3(1.0f);
 
     int bounce_count = -1;
@@ -124,15 +125,25 @@ void sample_indirect(
             VoxelData voxel_data = ray_result_voxel_data(hit);
             albedo = voxel_data_albedo(voxel_data);
 
+            if (ray_result_is_transparent(hit)
+                    && voxel_data_is_thin_cutout(voxel_data)) {
+                // Crossed plants and other unresolved cutouts are common enough
+                // that binary alpha events become persistent one-pixel GI
+                // outliers. Integrate their neutral coverage deterministically;
+                // unlike glass, plant coverage must not tint transmitted light.
+                running_light_transmittance *= 1.0f
+                    - clamp(albedo.a, 0.0f, 1.0f);
+                ray_iter_skip_block(ray);
+
+                continue;
+            }
+
             if (should_skip_transparent_gi_surface(
                     hit,
                     albedo,
                     rnd_state
             )) {
-                // Thin cutouts model unresolved coverage, not colored glass.
-                // Preserve the existing neutral flower/plant pass-through.
-                if (!voxel_data_is_thin_cutout(voxel_data))
-                    ray_iter_apply_transparency(running_tint_color, albedo);
+                ray_iter_apply_transparency(running_tint_color, albedo);
                 ray_iter_skip_block(ray);
 
                 continue;
@@ -196,7 +207,10 @@ void sample_indirect(
         #define gi_tint_color (running_tint_color != vec4(0.0) ? running_tint_color.rgb : vec3(1.0f))
         #define gi_bounce_color running_bounce_color
 
-        indirect_color += radiance_color * gi_tint_color * gi_bounce_color;
+        indirect_color += radiance_color
+            * gi_tint_color
+            * gi_bounce_color
+            * running_light_transmittance;
 
         if (!ray_result_is_hit(hit)) return;
 
