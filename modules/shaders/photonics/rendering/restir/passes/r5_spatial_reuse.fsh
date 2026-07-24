@@ -178,6 +178,66 @@ bool ph_spatial_direct_reservoir_merge(
 #endif
 #endif
 
+#if defined PH_ENABLE_RESTIR_GI
+#if PH_RESTIR_SPATIAL_REUSE_SAMPLES > 0
+//ph_required: uniform sampler2D restir_indirect_spatial_input0;
+//ph_required: uniform usampler2D restir_indirect_spatial_input1;
+
+void ph_spatial_indirect_reservoir_load(
+    out IndirectReservoir reservoir,
+    ivec2 texel
+) {
+    indirect_reservoir_decode(
+        reservoir,
+        texelFetch(restir_indirect_spatial_input0, texel, 0),
+        texelFetch(restir_indirect_spatial_input1, texel, 0).rgb
+    );
+    if (!indirect_reservoir_is_finite(reservoir))
+        reservoir = indirect_reservoir_empty();
+}
+
+bool ph_spatial_indirect_reservoir_merge(
+    inout IndirectReservoir result,
+    IndirectReservoir other,
+    FragData source_frag,
+    inout float sample_weight
+) {
+    float effective_samples = min(
+        other.total_samples,
+        max_indirect_reservoir_samples
+    );
+    if (effective_samples <= 0.0f
+            || isnan(effective_samples)
+            || isinf(effective_samples))
+        return false;
+
+    // An empty neighboring history has no representative sample that can be
+    // re-evaluated at this receiver, so it must not darken the local batch.
+    if (!indirect_reservoir_has_sample(other))
+        return false;
+
+    other.total_samples = effective_samples;
+    float shift = indirect_sample_compute_shift(
+        other.smple,
+        _frag_data,
+        source_frag
+    );
+    if (shift <= 0.0f
+            || shift >= 1.2f
+            || isnan(shift)
+            || isinf(shift))
+        return false;
+
+    return indirect_reservoir_merge(
+        result,
+        other,
+        shift,
+        sample_weight
+    );
+}
+#endif
+#endif
+
 void main() {
     setup_frag_data(31);
     if (!frag_is_in_world) {
@@ -236,6 +296,11 @@ void main() {
     const int reuse_samples = PH_RESTIR_SPATIAL_REUSE_SAMPLES;
     ivec2 spatial_texture_size = textureSize(ph_frag_data0, 0);
     bool spatial_receiver_can_reuse = ph_spatial_current_receiver_can_reuse();
+#if defined PH_ENABLE_RESTIR_GI
+    bool indirect_spatial_receiver_can_reuse =
+        spatial_receiver_can_reuse
+        && frag_data_sublevel_token(_frag_data) == 0u;
+#endif
 
     for (int i = 0; i < reuse_samples; i++) {
         if (!spatial_receiver_can_reuse || reuse_radius <= 0.0f) break;
@@ -267,6 +332,23 @@ void main() {
                 direct_result,
                 temp_direct,
                 direct_sample_weight
+            );
+        }
+#endif
+#endif
+
+#if defined PH_ENABLE_RESTIR_GI
+#if PH_RESTIR_SPATIAL_REUSE_SAMPLES > 0
+        if (indirect_spatial_receiver_can_reuse) {
+            ph_spatial_indirect_reservoir_load(
+                temp_indirect,
+                sample_texel
+            );
+            ph_spatial_indirect_reservoir_merge(
+                indirect_result,
+                temp_indirect,
+                sample_frag,
+                indirect_sample_weight
             );
         }
 #endif
