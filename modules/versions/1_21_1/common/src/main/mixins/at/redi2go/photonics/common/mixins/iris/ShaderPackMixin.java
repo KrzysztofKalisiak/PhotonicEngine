@@ -71,7 +71,7 @@ public abstract class ShaderPackMixin implements IShaderPack {
     ) {
         var properties = loadShaderProperties(root);
         supportsPhotonics = properties.containsKey(PhotonicsProperties.ENABLED_KEY);
-        enableV67CombinedGi(
+        enableV68CombinedGi(
                 changedConfigs,
                 supportsPhotonics,
                 properties.containsKey(PhotonicsProperties.RESTIR_COMBINED_GI_KEY)
@@ -91,7 +91,7 @@ public abstract class ShaderPackMixin implements IShaderPack {
     }
 
     @Unique
-    private static void enableV67CombinedGi(
+    private static void enableV68CombinedGi(
             Map<String, String> changedConfigs,
             boolean shaderPackSupportsPhotonics,
             boolean shaderPackSupportsCombinedGi
@@ -101,7 +101,7 @@ public abstract class ShaderPackMixin implements IShaderPack {
 
         if (!shaderPackSupportsCombinedGi) {
             Photonics.LOGGER.warn(
-                    "Photonics ReSTIR GI v67: shader pack does not declare {}; keeping its existing GI path",
+                    "Photonics ReSTIR GI v68: shader pack does not declare {}; keeping its existing GI path",
                     PhotonicsProperties.RESTIR_COMBINED_GI_KEY
             );
             return;
@@ -115,13 +115,13 @@ public abstract class ShaderPackMixin implements IShaderPack {
         try {
             changedConfigs.put(PHOTON_RESTIR_COMBINED_GI_OPTION, "true");
             Photonics.LOGGER.info(
-                    "Photonics ReSTIR GI v67: forcing {} on for the world-temporal test (configured={})",
+                    "Photonics ReSTIR GI v68: forcing {} on for the packed-reservoir test (configured={})",
                     PHOTON_RESTIR_COMBINED_GI_OPTION,
                     configuredValue
             );
         } catch (UnsupportedOperationException e) {
             Photonics.LOGGER.warn(
-                    "Photonics ReSTIR GI v67: could not force {} on; leaving the shader-pack setting unchanged",
+                    "Photonics ReSTIR GI v68: could not force {} on; leaving the shader-pack setting unchanged",
                     PHOTON_RESTIR_COMBINED_GI_OPTION
             );
         }

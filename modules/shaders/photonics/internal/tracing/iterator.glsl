@@ -24,6 +24,10 @@ void _ray_iter_setup(inout RayIterator ray) {
     vec3 dir_inv = 1.0f / ray.direction;
     float t0 = ph_intersects_world(dir_inv, ray.position);
     if (t0 == -1) {
+        // A ray can begin while the tree is not ready or point away from the
+        // active bounds after a bounce. Never return an uninitialized or stale
+        // hit in either case.
+        ray.hit = ph_ray_miss;
         ray.state = PH_RAY_STATE_OUT_OF_BOUNDS;
         return;
     }

@@ -26,9 +26,12 @@ public class GlTexture2D extends AbstractGlTexture<Vector2ic> implements IGpuTex
     public void ph$resize(Vector2ic newSize) {
         size.set(newSize);
         var glFormat = GlEnums.textureFormat(format);
+        int filter = format == ITextureFormat.Values.RGB32UI
+                ? GL11.GL_NEAREST
+                : GL11.GL_LINEAR;
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, handle);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, filter);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, filter);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, glFormat.internalFormat(), size.x(), size.y(), 0, glFormat.format(), glFormat.type(), 0L);
         GL30.glBindTexture(GL11.GL_TEXTURE_2D, 0);
     }

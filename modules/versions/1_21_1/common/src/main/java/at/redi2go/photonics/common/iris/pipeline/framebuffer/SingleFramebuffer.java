@@ -1,6 +1,7 @@
 package at.redi2go.photonics.common.iris.pipeline.framebuffer;
 
 import at.redi2go.photonics.core.Photonics;
+import at.redi2go.photonics.api.gpu.textures.ITextureFormat;
 import at.redi2go.photonics.core.iris.pipeline.texture.ISamplerHolder;
 import at.redi2go.photonics.impl.mc.blaze3d.opengl.textures.IGlTexture;
 import com.google.common.collect.ImmutableList;
@@ -10,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import org.joml.Vector2i;
 import org.joml.Vector2ic;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL45;
 import org.lwjgl.system.MemoryStack;
@@ -35,6 +37,27 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
         this.sizeSupplier = sizeSupplier;
         this.diagnosticRole = diagnosticRole;
 
+        int maximumDrawBuffers = GL11.glGetInteger(GL20.GL_MAX_DRAW_BUFFERS);
+        int maximumColorAttachments = GL11.glGetInteger(GL30.GL_MAX_COLOR_ATTACHMENTS);
+        if (attachments.size() > maximumDrawBuffers
+                || attachments.size() > maximumColorAttachments) {
+            throw new IllegalStateException(
+                    "Framebuffer requires " + attachments.size()
+                            + " attachments, but OpenGL exposes "
+                            + maximumDrawBuffers + " draw buffers and "
+                            + maximumColorAttachments + " color attachments"
+            );
+        }
+        if (attachments.size() >= 7) {
+            Photonics.LOGGER.info(
+                    "Photonics framebuffer capacity v68: buffer={}, attachments={}, maxDrawBuffers={}, maxColorAttachments={}",
+                    diagnosticRole,
+                    attachments.size(),
+                    maximumDrawBuffers,
+                    maximumColorAttachments
+            );
+        }
+
         setDrawBuffers();
     }
 
@@ -55,6 +78,17 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
         }
 
         IrisRenderSystem.drawBuffers(getGlId(), drawBuffers);
+        int framebufferStatus = GL45.glCheckNamedFramebufferStatus(
+                getGlId(),
+                GL30.GL_FRAMEBUFFER
+        );
+        if (framebufferStatus != GL30.GL_FRAMEBUFFER_COMPLETE) {
+            throw new IllegalStateException(
+                    "Incomplete Photonics framebuffer " + diagnosticRole
+                            + ": status=0x"
+                            + Integer.toHexString(framebufferStatus)
+            );
+        }
     }
 
     private void clearAttachments() {
@@ -63,7 +97,17 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             for (int i = 0; i < attachments.size(); i++) {
-                String name = attachments.get(i).name();
+                var attachment = attachments.get(i);
+                String name = attachment.name();
+                if (attachment.texture().ph$format() == ITextureFormat.Values.RGB32UI) {
+                    GL30.glClearBufferuiv(
+                            GL11.GL_COLOR,
+                            i,
+                            stack.ints(0, 0, 0, 0)
+                    );
+                    continue;
+                }
+
                 float invalidComponent = name.equals("restir_lighting")
                         || name.equals("restir_lighting_variance")
                         || name.equals("restir_external_lighting")

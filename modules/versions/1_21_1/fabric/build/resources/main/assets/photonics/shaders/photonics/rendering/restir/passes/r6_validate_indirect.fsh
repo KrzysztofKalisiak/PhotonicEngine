@@ -6,8 +6,7 @@
 #include "/photonics/rendering/restir/restir.glsl"
 
 layout(location = INDIRECT_RESERVOIR_0) out vec4 gi_reservoir_0;
-layout(location = INDIRECT_RESERVOIR_1) out vec4 gi_reservoir_1;
-layout(location = INDIRECT_RESERVOIR_2) out vec4 gi_reservoir_2;
+layout(location = INDIRECT_RESERVOIR_1) out uvec3 gi_reservoir_1;
 
 void main() {
     setup_frag_data(0);
@@ -21,7 +20,6 @@ void main() {
     indirect_reservoir_encode(
         reservoir,
         gi_reservoir_0,
-        gi_reservoir_1,
-        gi_reservoir_2
+        gi_reservoir_1
     );
 }

@@ -37,6 +37,7 @@ public final class GlEnums {
             case RG32F -> new Format(GL30.GL_RG32F, GL30.GL_RG, GL11.GL_FLOAT);
             case RGB32F -> new Format(GL30.GL_RGB32F, GL11.GL_RGB, GL11.GL_FLOAT);
             case RGBA32F -> new Format(GL30.GL_RGBA32F, GL11.GL_RGBA, GL11.GL_FLOAT);
+            case RGB32UI -> new Format(GL30.GL_RGB32UI, GL30.GL_RGB_INTEGER, GL11.GL_UNSIGNED_INT);
             case DEPTH32F -> new Format(GL30.GL_DEPTH_COMPONENT32F, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT);
             default -> Format.RGBA8;
         };

@@ -3,20 +3,17 @@
 #include "/photonics/utility/normal_encoding.glsl"
 
 struct IndirectSample {
-    uint packed_visible_normal;
+    vec3 hit_point;
     uint packed_hit_normal;
-
-    vec3 visible_point;
-    float trace_distance;
+    bool hit_sky;
 
     vec3 color;
-    uint rnd_state;
 };
 
 const float indirect_sky_distance = 1000.0f;
 
 IndirectSample indirect_sample_empty() {
-    return IndirectSample(0u, 0u, vec3(0.0f), 0.0f, vec3(0.0f), 0u);
+    return IndirectSample(vec3(0.0f), 0u, false, vec3(0.0f));
 }
 
 float indirect_normal_factor(FragData frag, vec3 hit_pos) {
@@ -48,26 +45,6 @@ void indirect_sample_set_color(inout IndirectSample smple, vec3 color) {
     smple.color = color;
 }
 
-void indirect_sample_set_rnd_state(inout IndirectSample smple, uint rnd_state) {
-    smple.rnd_state = rnd_state;
-}
-
-vec3 indirect_sample_get_visible_normal(IndirectSample smple) {
-    return ph_decode_normal(unpackUnorm2x16(smple.packed_visible_normal));
-}
-
-void indirect_sample_set_visible_normal(inout IndirectSample smple, vec3 visible_normal) {
-    smple.packed_visible_normal = packUnorm2x16(ph_encode_normal(visible_normal));
-}
-
-vec3 indirect_sample_get_visible_point(IndirectSample smple) {
-    return smple.visible_point;
-}
-
-void indirect_sample_set_visible_point(inout IndirectSample smple, vec3 visible_point) {
-    smple.visible_point = visible_point;
-}
-
 vec3 indirect_sample_get_hit_normal(IndirectSample smple) {
     return ph_decode_normal(unpackUnorm2x16(smple.packed_hit_normal));
 }
@@ -77,18 +54,33 @@ void indirect_sample_set_hit_normal(inout IndirectSample smple, vec3 hit_normal)
 }
 
 vec3 indirect_sample_get_hit_point(IndirectSample smple) {
-    vec3 direction = ph_rand_direction(smple.rnd_state, indirect_sample_get_visible_normal(smple));
-    return smple.visible_point + (direction * abs(smple.trace_distance));
+    return smple.hit_point;
 }
 
-void indirect_sample_set_hit_position(inout IndirectSample smple, vec3 hit_position) {
-    smple.trace_distance = isinf(hit_position.x)
-        ? -indirect_sky_distance
-        : distance(smple.visible_point, hit_position);
+void indirect_sample_set_hit_point(
+        inout IndirectSample smple,
+        vec3 hit_position,
+        vec3 visible_point,
+        vec3 visible_normal,
+        uint rnd_state
+) {
+    if (any(isinf(hit_position))) {
+        uint direction_rnd_state = rnd_state;
+        vec3 direction = ph_rand_direction(direction_rnd_state, visible_normal);
+        smple.hit_point = visible_point + direction * indirect_sky_distance;
+        smple.hit_sky = true;
+    } else if (any(isnan(hit_position))) {
+        // A zero-length finite sample is rejected by visibility validation.
+        smple.hit_point = visible_point;
+        smple.hit_sky = false;
+    } else {
+        smple.hit_point = hit_position;
+        smple.hit_sky = false;
+    }
 }
 
 bool indirect_sample_hits_sky(IndirectSample smple) {
-    return smple.trace_distance < 0.0f;
+    return smple.hit_sky;
 }
 
 float indirect_sample_compute_jacobian(
