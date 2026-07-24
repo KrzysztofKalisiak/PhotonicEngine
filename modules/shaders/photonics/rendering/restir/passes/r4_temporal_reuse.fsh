@@ -114,6 +114,7 @@ void main() {
     // frame proposal until that representation exists.
     if (sublevel_token == 0u
             && !frag_is_hand
+            && !frag_data_is_hand(prev_frag)
             && indirect_reservoir_load_previous(temp_indirect, prev_texel)) {
         temp_indirect.total_samples = min(max_indirect_temporal_samples, temp_indirect.total_samples);
 

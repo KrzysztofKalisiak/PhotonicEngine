@@ -69,12 +69,15 @@ public abstract class ShaderPackMixin implements IShaderPack {
             boolean isZip,
             CallbackInfo ci
     ) {
-        disableUnsupportedCombinedGi(changedConfigs);
+        var properties = loadShaderProperties(root);
+        supportsPhotonics = properties.containsKey(PhotonicsProperties.ENABLED_KEY);
+        enableV67CombinedGi(
+                changedConfigs,
+                supportsPhotonics,
+                properties.containsKey(PhotonicsProperties.RESTIR_COMBINED_GI_KEY)
+        );
 
         phProperties = new PhotonicsPropertiesImpl();
-        var properties = loadShaderProperties(root);
-
-        supportsPhotonics = properties.containsKey(PhotonicsProperties.ENABLED_KEY);
         patcher = new ShaderPatcher(this);
         PatcherBridge.PATCHER = patcher;
         ShaderPropertiesBridge.PHOTONICS_ENABLED_OPTION = Boolean.parseBoolean(
@@ -88,19 +91,37 @@ public abstract class ShaderPackMixin implements IShaderPack {
     }
 
     @Unique
-    private static void disableUnsupportedCombinedGi(Map<String, String> changedConfigs) {
-        try {
-            if (Boolean.parseBoolean(changedConfigs.getOrDefault(PHOTON_RESTIR_COMBINED_GI_OPTION, "false"))) {
-                Photonics.LOGGER.info(
-                        "Photonics diagnostic: forcing {} off because combined GI is disabled in this 1.21.1 build",
-                        PHOTON_RESTIR_COMBINED_GI_OPTION
-                );
-            }
+    private static void enableV67CombinedGi(
+            Map<String, String> changedConfigs,
+            boolean shaderPackSupportsPhotonics,
+            boolean shaderPackSupportsCombinedGi
+    ) {
+        if (!shaderPackSupportsPhotonics)
+            return;
 
-            changedConfigs.put(PHOTON_RESTIR_COMBINED_GI_OPTION, "false");
+        if (!shaderPackSupportsCombinedGi) {
+            Photonics.LOGGER.warn(
+                    "Photonics ReSTIR GI v67: shader pack does not declare {}; keeping its existing GI path",
+                    PhotonicsProperties.RESTIR_COMBINED_GI_KEY
+            );
+            return;
+        }
+
+        String configuredValue = changedConfigs.getOrDefault(
+                PHOTON_RESTIR_COMBINED_GI_OPTION,
+                "false"
+        );
+
+        try {
+            changedConfigs.put(PHOTON_RESTIR_COMBINED_GI_OPTION, "true");
+            Photonics.LOGGER.info(
+                    "Photonics ReSTIR GI v67: forcing {} on for the world-temporal test (configured={})",
+                    PHOTON_RESTIR_COMBINED_GI_OPTION,
+                    configuredValue
+            );
         } catch (UnsupportedOperationException e) {
             Photonics.LOGGER.warn(
-                    "Photonics diagnostic: could not force {} off; shaderpack combined-GI option may conflict with this 1.21.1 build",
+                    "Photonics ReSTIR GI v67: could not force {} on; leaving the shader-pack setting unchanged",
                     PHOTON_RESTIR_COMBINED_GI_OPTION
             );
         }

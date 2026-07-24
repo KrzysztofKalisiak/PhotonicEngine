@@ -145,7 +145,7 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public boolean useRestirCombinedGi() {
-        return false;
+        return restirCombinedGi;
     }
 
     @Override
