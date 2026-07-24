@@ -18,6 +18,9 @@ const float ph_spatial_max_receiver_distance_sq = 0.5625f;
 const float ph_spatial_max_plane_distance = 0.05f;
 const float ph_spatial_min_normal_alignment = 0.99f;
 const int ph_indirect_spatial_candidate_attempts = 8;
+// The 1.21.1 property layer already clamps this to one. Keep the shader-side
+// ray budget explicit so a pack override cannot multiply GI validation cost.
+const int ph_indirect_spatial_validation_budget = 1;
 
 bool ph_spatial_is_finite(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
@@ -251,6 +254,11 @@ bool ph_spatial_indirect_reservoir_merge(
             || isinf(shift))
         return false;
 
+    // Reject stale geometry before this history contributes either weighted
+    // energy or its effective sample count to the current estimator.
+    if (!indirect_reservoir_validate_visibility(other, frag_rt_pos))
+        return false;
+
     return indirect_reservoir_merge(
         result,
         other,
@@ -305,12 +313,8 @@ void main() {
     float indirect_sample_weight = 0.0f;
     IndirectReservoir indirect_result = indirect_reservoir_empty();
     IndirectReservoir temp_indirect = indirect_reservoir_empty();
-    IndirectReservoir indirect_fallback = indirect_reservoir_empty();
-    bool selected_spatial_history = false;
 
     indirect_reservoir_load(temp_indirect, frag_tex_coord);
-    indirect_fallback = temp_indirect;
-    indirect_reservoir_clamp_samples(indirect_fallback);
     indirect_reservoir_merge_current_batch(
         indirect_result,
         temp_indirect,
@@ -321,6 +325,10 @@ void main() {
 
     const float reuse_radius = PH_RESTIR_SPATIAL_REUSE_RADIUS * PH_ACTIVE_RENDER_SCALE;
     const int reuse_samples = PH_RESTIR_SPATIAL_REUSE_SAMPLES;
+    const int indirect_reuse_samples = min(
+        reuse_samples,
+        ph_indirect_spatial_validation_budget
+    );
     ivec2 spatial_texture_size = textureSize(ph_frag_data0, 0);
     bool spatial_receiver_can_reuse = ph_spatial_current_receiver_can_reuse();
 #if defined PH_ENABLE_RESTIR_GI
@@ -370,7 +378,7 @@ void main() {
             1171
         );
 
-        for (int i = 0; i < reuse_samples; i++) {
+        for (int i = 0; i < indirect_reuse_samples; i++) {
             bool candidate_found = false;
             ivec2 sample_texel = frag_tex_coord;
             FragData sample_frag;
@@ -406,12 +414,12 @@ void main() {
                 temp_indirect,
                 sample_texel
             );
-            if (ph_spatial_indirect_reservoir_merge(
+            ph_spatial_indirect_reservoir_merge(
                 indirect_result,
                 temp_indirect,
                 sample_frag,
                 indirect_sample_weight
-            )) selected_spatial_history = true;
+            );
         }
     }
 #endif
@@ -447,17 +455,6 @@ void main() {
     indirect_reservoir_clamp_samples(indirect_result);
 
     indirect_reservoir_finalize_weight(indirect_result, indirect_sample_weight);
-    if (selected_spatial_history
-            && !indirect_reservoir_validate_visibility(
-                indirect_result,
-                frag_rt_pos
-            )) {
-        // Temporal reuse already validated its selected history. If a shifted
-        // neighbor path is blocked or its first-hit material changed, retain
-        // that local reservoir instead of producing a one-frame energy hole.
-        indirect_result = indirect_fallback;
-    }
-
     indirect_reservoir_clamp_samples(indirect_result);
     indirect_reservoir_encode(indirect_result, gi_reservoir_0, gi_reservoir_1);
 #endif

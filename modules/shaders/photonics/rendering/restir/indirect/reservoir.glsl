@@ -22,6 +22,11 @@
 
 const float max_indirect_temporal_samples = 20.0f;
 const float max_indirect_reservoir_samples = 20.0f;
+// Stored hit points are full-precision block coordinates. One tracing voxel
+// (1/16 block) covers DDA boundary roundoff without accepting a remote face.
+const float indirect_endpoint_tolerance = 1.0f / 16.0f;
+const float indirect_endpoint_tolerance_sq =
+    indirect_endpoint_tolerance * indirect_endpoint_tolerance;
 
 struct IndirectReservoir {
     IndirectSample smple;
@@ -202,7 +207,8 @@ bool indirect_reservoir_validate_visibility(
         }
 
         vec3 position_delta = ray_result_position(result) - hit_point;
-        if (dot(position_delta, position_delta) < 0.05f) {
+        if (dot(position_delta, position_delta)
+                <= indirect_endpoint_tolerance_sq) {
             path_hash = indirect_path_hash_surface(path_hash, result);
             bool path_matches = indirect_sample_matches_finite_path(
                 reservoir.smple,
@@ -217,7 +223,6 @@ bool indirect_reservoir_validate_visibility(
         if (ray_result_is_transparent(result)) {
             path_hash = indirect_path_hash_surface(path_hash, result);
             ray_iter_skip_block(ray);
-            ray_iter_offset_position(ray, ray.direction * 0.03f);
             continue;
         }
 

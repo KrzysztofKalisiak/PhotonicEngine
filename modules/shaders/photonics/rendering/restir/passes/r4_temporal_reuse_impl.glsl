@@ -107,23 +107,20 @@ void main() {
     IndirectReservoir temp_indirect = indirect_reservoir_empty();
     IndirectReservoir current_indirect = indirect_reservoir_empty();
     indirect_reservoir_load(current_indirect, frag_tex_coord);
-    IndirectReservoir indirect_fallback = current_indirect;
-    bool selected_temporal_history = false;
 
     // The GI tracer currently intersects only the world voxel volume, so every
     // finite stored hit is world-space even when its receiver belongs to a
     // Sable sublevel. The receiver reprojection above already supplies that
-    // sublevel's previous rigid pose; reuse its world/sky hit and let the final
-    // visibility validation reject geometry changes. This avoids feeding the
+    // sublevel's previous rigid pose. Revalidate its world/sky hit from this
+    // receiver before it enters the estimator. This avoids feeding the
     // half-rate Sable GI path an unrelated one-sample reservoir every frame.
     //
     // Once GI can hit Sable geometry, the sample must also carry the hit
     // sublevel identity and local-space point before this remains valid.
     if (!frag_is_hand
             && !frag_data_is_hand(prev_frag)
-            && indirect_reservoir_load_previous(temp_indirect, prev_texel)) {
-        temp_indirect.total_samples = min(max_indirect_temporal_samples, temp_indirect.total_samples);
-
+            && indirect_reservoir_load_previous(temp_indirect, prev_texel)
+            && indirect_reservoir_has_sample(temp_indirect)) {
         // Previous fragment positions are camera-relative. Convert the source
         // receiver into the current camera space without changing the local
         // direct-light reprojection contract.
@@ -135,8 +132,17 @@ void main() {
             _frag_data,
             shift_source_frag
         );
-        if (shift > 0.0f && shift < 1.2f) {
-            selected_temporal_history = indirect_reservoir_merge(
+        if (shift > 0.0f
+                && shift < 1.2f
+                && indirect_reservoir_validate_visibility(
+                    temp_indirect,
+                    frag_rt_pos
+                )) {
+            temp_indirect.total_samples = min(
+                max_indirect_temporal_samples,
+                temp_indirect.total_samples
+            );
+            indirect_reservoir_merge(
                 indirect_result,
                 temp_indirect,
                 shift,
@@ -145,25 +151,14 @@ void main() {
         }
     }
 
-    if (indirect_reservoir_merge_current_batch(
+    indirect_reservoir_merge_current_batch(
         indirect_result,
         current_indirect,
         1.0f,
         indirect_sample_weight
-    )) selected_temporal_history = false;
+    );
 
     indirect_reservoir_finalize_weight(indirect_result, indirect_sample_weight);
-    if (selected_temporal_history
-            && !indirect_reservoir_validate_visibility(
-                indirect_result,
-                frag_rt_pos
-            )) {
-        // The current one-path proposal was generated against this frame's
-        // scene. Keep it when a stale temporal representative no longer
-        // reaches the same first-hit surface.
-        indirect_result = indirect_fallback;
-    }
-
     indirect_reservoir_encode(indirect_result, gi_reservoir_0, gi_reservoir_1);
 #endif
 }
