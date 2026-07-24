@@ -242,7 +242,6 @@ bool ph_spatial_indirect_reservoir_merge(
     if (!indirect_reservoir_has_sample(other))
         return false;
 
-    other.total_samples = effective_samples;
     float shift = indirect_sample_compute_shift(
         other.smple,
         _frag_data,
@@ -254,11 +253,24 @@ bool ph_spatial_indirect_reservoir_merge(
             || isinf(shift))
         return false;
 
-    // Reject stale geometry before this history contributes either weighted
-    // energy or its effective sample count to the current estimator.
-    if (!indirect_reservoir_validate_visibility(other, frag_rt_pos))
+    uint path_validation = indirect_reservoir_classify_reused_path(
+        other,
+        frag_rt_pos
+    );
+    if (path_validation
+            == indirect_path_validation_blocked_current_receiver) {
+        // The neighbor represents a valid zero-target batch at this receiver.
+        // Account its clamped M once without making it selectable.
+        indirect_reservoir_add_batch_samples(
+            result,
+            effective_samples
+        );
+        return false;
+    }
+    if (path_validation != indirect_path_validation_valid)
         return false;
 
+    other.total_samples = effective_samples;
     return indirect_reservoir_merge(
         result,
         other,

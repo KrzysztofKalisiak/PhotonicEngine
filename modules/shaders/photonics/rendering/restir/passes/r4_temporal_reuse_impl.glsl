@@ -132,22 +132,38 @@ void main() {
             _frag_data,
             shift_source_frag
         );
+        float effective_samples = min(
+            max_indirect_temporal_samples,
+            temp_indirect.total_samples
+        );
         if (shift > 0.0f
                 && shift < 1.2f
-                && indirect_reservoir_validate_visibility(
+                && effective_samples > 0.0f
+                && !isnan(effective_samples)
+                && !isinf(effective_samples)) {
+            uint path_validation =
+                indirect_reservoir_classify_reused_path(
                     temp_indirect,
                     frag_rt_pos
-                )) {
-            temp_indirect.total_samples = min(
-                max_indirect_temporal_samples,
-                temp_indirect.total_samples
-            );
-            indirect_reservoir_merge(
-                indirect_result,
-                temp_indirect,
-                shift,
-                indirect_sample_weight
-            );
+                );
+            if (path_validation == indirect_path_validation_valid) {
+                temp_indirect.total_samples = effective_samples;
+                indirect_reservoir_merge(
+                    indirect_result,
+                    temp_indirect,
+                    shift,
+                    indirect_sample_weight
+                );
+            } else if (path_validation
+                    == indirect_path_validation_blocked_current_receiver) {
+                // This is a valid historical proposal with zero target at the
+                // current receiver. Its represented M remains in the
+                // normalization exactly once, without adding energy.
+                indirect_reservoir_add_batch_samples(
+                    indirect_result,
+                    effective_samples
+                );
+            }
         }
     }
 

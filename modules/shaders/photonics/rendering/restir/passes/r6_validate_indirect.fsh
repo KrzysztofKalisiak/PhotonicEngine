@@ -14,7 +14,16 @@ void main() {
 
     IndirectReservoir reservoir = indirect_reservoir_empty();
     indirect_reservoir_load(reservoir, frag_tex_coord);
-    indirect_reservoir_validate_visibility(reservoir, frag_rt_pos);
+    uint path_validation = indirect_reservoir_classify_reused_path(
+        reservoir,
+        frag_rt_pos
+    );
+    if (path_validation
+            == indirect_path_validation_blocked_current_receiver) {
+        indirect_reservoir_reject(reservoir);
+    } else if (path_validation != indirect_path_validation_valid) {
+        reservoir = indirect_reservoir_empty();
+    }
     indirect_reservoir_clamp_samples(reservoir);
 
     indirect_reservoir_encode(

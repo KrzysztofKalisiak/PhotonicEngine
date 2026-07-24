@@ -28,6 +28,10 @@ const float indirect_endpoint_tolerance = 1.0f / 16.0f;
 const float indirect_endpoint_tolerance_sq =
     indirect_endpoint_tolerance * indirect_endpoint_tolerance;
 
+const uint indirect_path_validation_stale = 0u;
+const uint indirect_path_validation_valid = 1u;
+const uint indirect_path_validation_blocked_current_receiver = 2u;
+
 struct IndirectReservoir {
     IndirectSample smple;
 
@@ -68,16 +72,34 @@ bool indirect_reservoir_has_sample(IndirectReservoir reservoir) {
         && ph_luminance(reservoir.smple.color) > 0.0f;
 }
 
+bool indirect_reservoir_add_batch_samples(
+    inout IndirectReservoir reservoir,
+    float samples
+) {
+    if (samples <= 0.0f
+            || isnan(samples)
+            || isinf(samples)
+            || !indirect_reservoir_is_finite(reservoir)
+            || reservoir.total_samples < 0.0f)
+        return false;
+
+    float combined_samples = reservoir.total_samples + samples;
+    if (isnan(combined_samples) || isinf(combined_samples))
+        return false;
+
+    reservoir.total_samples = combined_samples;
+    return true;
+}
+
 bool indirect_reservoir_update(
     inout IndirectReservoir reservoir,
     IndirectSample smple,
     float weight,
     float samples
 ) {
-    if (samples <= 0.0f || isnan(samples) || isinf(samples))
+    if (!indirect_reservoir_add_batch_samples(reservoir, samples))
         return false;
 
-    reservoir.total_samples += samples;
     if (weight <= 0.0f || isnan(weight) || isinf(weight))
         return false;
 
@@ -140,7 +162,10 @@ bool indirect_reservoir_merge_current_batch(
     // A fresh zero-radiance proposal still belongs in this frame's sample
     // count. Empty temporal or spatial histories are deliberately not copied.
     if (indirect_reservoir_has_batch(current))
-        result.total_samples += current.total_samples;
+        indirect_reservoir_add_batch_samples(
+            result,
+            current.total_samples
+        );
     return false;
 }
 
@@ -161,38 +186,33 @@ void indirect_reservoir_reject(inout IndirectReservoir reservoir) {
     reservoir.smple.color = vec3(0.0f);
 }
 
-bool indirect_reservoir_validate_visibility(
-    inout IndirectReservoir reservoir,
+uint indirect_reservoir_classify_reused_path(
+    IndirectReservoir reservoir,
     vec3 rt_pos
 ) {
     if (!indirect_reservoir_has_sample(reservoir))
-        return false;
-    if (ph_world_ready == 0) {
-        indirect_reservoir_reject(reservoir);
-        return false;
-    }
+        return indirect_path_validation_stale;
+    if (ph_world_ready == 0)
+        return indirect_path_validation_stale;
 
     vec3 hit_point = indirect_sample_get_hit_point(reservoir.smple);
     vec3 to_hit = hit_point - rt_pos;
     float hit_distance_sq = dot(to_hit, to_hit);
     if (hit_distance_sq <= 0.0000001f
             || any(isnan(hit_point))
-            || any(isinf(hit_point))) {
-        indirect_reservoir_reject(reservoir);
-        return false;
-    }
+            || any(isinf(hit_point)))
+        return indirect_path_validation_stale;
 
     RayIterator ray;
     ray_iter_begin(ray, rt_pos, to_hit * inversesqrt(hit_distance_sq));
     ray.iterations = 128;
+    float endpoint_distance = sqrt(hit_distance_sq);
     uint path_hash = indirect_path_hash_seed;
 
     while (ray.iterations > 0) {
         RayResult result = ray_iter_next(ray);
-        if (ray.iterations <= 0) {
-            indirect_reservoir_reject(reservoir);
-            return false;
-        }
+        if (ray.iterations <= 0)
+            return indirect_path_validation_stale;
 
         if (!ray_result_is_hit(result)) {
             bool valid_sky_path = indirect_sample_hits_sky(reservoir.smple)
@@ -201,12 +221,16 @@ bool indirect_reservoir_validate_visibility(
                     reservoir.smple,
                     path_hash
                 );
-            if (!valid_sky_path)
-                indirect_reservoir_reject(reservoir);
-            return valid_sky_path;
+            return valid_sky_path
+                ? indirect_path_validation_valid
+                : indirect_path_validation_stale;
         }
 
-        vec3 position_delta = ray_result_position(result) - hit_point;
+        vec3 result_position = ray_result_position(result);
+        if (any(isnan(result_position)) || any(isinf(result_position)))
+            return indirect_path_validation_stale;
+
+        vec3 position_delta = result_position - hit_point;
         if (dot(position_delta, position_delta)
                 <= indirect_endpoint_tolerance_sq) {
             path_hash = indirect_path_hash_surface(path_hash, result);
@@ -215,23 +239,36 @@ bool indirect_reservoir_validate_visibility(
                 ray_result_normal(result),
                 path_hash
             );
-            if (!path_matches)
-                indirect_reservoir_reject(reservoir);
-            return path_matches;
+            return path_matches
+                ? indirect_path_validation_valid
+                : indirect_path_validation_stale;
         }
 
+        float result_progress = dot(
+            result_position - rt_pos,
+            ray.direction
+        );
+        if (isnan(result_progress) || isinf(result_progress))
+            return indirect_path_validation_stale;
+
         if (ray_result_is_transparent(result)) {
+            if (!indirect_sample_hits_sky(reservoir.smple)
+                    && result_progress
+                        > endpoint_distance + indirect_endpoint_tolerance)
+                return indirect_path_validation_stale;
+
             path_hash = indirect_path_hash_surface(path_hash, result);
             ray_iter_skip_block(ray);
             continue;
         }
 
-        indirect_reservoir_reject(reservoir);
-        return false;
+        return result_progress
+                < endpoint_distance - indirect_endpoint_tolerance
+            ? indirect_path_validation_blocked_current_receiver
+            : indirect_path_validation_stale;
     }
 
-    indirect_reservoir_reject(reservoir);
-    return false;
+    return indirect_path_validation_stale;
 }
 
 void indirect_reservoir_finalize_weight(

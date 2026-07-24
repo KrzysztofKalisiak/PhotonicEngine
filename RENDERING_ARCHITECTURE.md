@@ -408,7 +408,7 @@ runs:
 | 0 | Flip history | current/previous attachments swap roles | Preserve last frame without copying it |
 | 1 | `r1_initial_direct` | direct reservoir | Propose direct-light candidates, retain one weighted representative, and validate its visibility |
 | 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace one full-rate initial GI path |
-| 3 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject compatible previous-frame reservoirs; validate each stale GI candidate before merging it |
+| 3 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject compatible previous-frame reservoirs; classify each historical GI candidate before merging it |
 | 4 | `r5_copy_spatial_input` | immutable reservoir copies | Prevent reads from observing writes from the same spatial pass |
 | 5 | `r5_spatial_reuse` | direct and indirect reservoirs | Validate and merge at most one shifted GI neighbor, then clamp history |
 | 6 | `r6_diffuse` | raw lighting, direct state, reservoirs | Evaluate selected direct/GI samples at the current receiver |
@@ -425,11 +425,13 @@ attachments.
 
 The pipeline invokes initial direct visibility from `r1_initial_direct`.
 Indirect history validation is candidate-scoped: `r4_temporal_reuse` validates
-its one stale temporal candidate before merging it, and `r5_spatial_reuse`
-validates at most one shifted neighbor before merging it. Invalid history
-contributes neither weight nor effective sample count. The fresh current-frame
-proposal, including a genuine zero-radiance batch, keeps its existing estimator
-semantics. The standalone `r2_validate_initial_direct` and
+its one historical temporal candidate before merging it, and `r5_spatial_reuse`
+validates at most one shifted neighbor before merging it. A blocked but
+otherwise valid path contributes its represented effective sample count once
+with zero weight. Stale or malformed history contributes neither weight nor
+sample count. The fresh current-frame proposal, including a genuine
+zero-radiance batch, keeps its existing estimator semantics. The standalone
+`r2_validate_initial_direct` and
 `r6_validate_indirect` shader sources remain for upstream comparison, but are
 not scheduled.
 
@@ -692,12 +694,22 @@ The previous and fresh reservoirs are then merged using their effective sample
 counts and current target values. This improves candidate selection before any
 radiance averaging happens.
 
-For GI, the stale temporal candidate is traced from the current receiver before
-it enters the reservoir merge. Finite paths also compare a compact signature
-of every transparent pass-through and the first-hit voxel face/material. If
-geometry, material, transparency, or skylight metadata changed, that history is
-excluded before it can affect the selected sample or normalization. The fresh
-one-path proposal is still merged normally.
+For GI, the historical temporal candidate is traced from the current receiver
+before it enters the reservoir merge. Finite paths also compare a compact
+signature of every transparent pass-through and the first-hit voxel
+face/material. The result has three states:
+
+| Validation state | Weight/energy | Effective sample count `M` |
+|---|---:|---:|
+| valid path | merged normally | added once |
+| opaque blocker before stored endpoint | zero | added once |
+| stale signature, endpoint, world, or traversal | zero | not added |
+
+This distinction matters when the fresh proposal also has zero radiance:
+blocked history plus the fresh batch remains a finite zero-weight reservoir
+with both represented counts, whereas stale history leaves only the fresh
+batch. If blocked history is the only batch, finalization preserves its finite
+`M` and emits zero radiance.
 
 ### 11.2 Spatial reservoir reuse
 
@@ -714,11 +726,12 @@ to describe the same kind of surface:
 For direct light, the neighbor's selected light is re-evaluated for the current
 receiver before merging. For GI, cheap receiver and Jacobian checks run first,
 then the shifted path is visibility- and surface-signature-validated before it
-can contribute weight or sample count. The 1.21.1 property layer and shader
-both cap this to one spatial validation ray per receiver per frame. Spatial
-reuse is valuable because nearby pixels often found different good samples. It
-can also create flicker or leaks if receiver matching is too permissive. The
-immutable copy pass prevents pass-order-dependent feedback.
+can contribute. Valid, blocked, and stale spatial candidates follow the same
+weight/`M` table as temporal history. The 1.21.1 property layer and shader both
+cap this to one spatial validation ray per receiver per frame. Spatial reuse is
+valuable because nearby pixels often found different good samples. It can also
+create flicker or leaks if receiver matching is too permissive. The immutable
+copy pass prevents pass-order-dependent feedback.
 
 ### 11.3 Radiance accumulation
 
