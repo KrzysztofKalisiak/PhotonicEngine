@@ -32,9 +32,15 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
     public static void submit(
             int occupancyTexture,
             int shapeTexture,
+            int shapeDefinitionCount,
             List<SubLevel> subLevels
     ) {
-        snapshot = Snapshot.create(occupancyTexture, shapeTexture, subLevels);
+        snapshot = Snapshot.create(
+                occupancyTexture,
+                shapeTexture,
+                shapeDefinitionCount,
+                subLevels
+        );
     }
 
     public static void clear() {
@@ -52,6 +58,16 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
                 IUniformUpdateFrequency.perFrame(),
                 "ph_sable_emissive_cell_count",
                 () -> snapshot.emissiveCellCount
+        );
+        uniforms.uniform1i(
+                IUniformUpdateFrequency.perFrame(),
+                "ph_sable_geometry_atlas_ready",
+                () -> snapshot.occupancyTexture != 0 ? 1 : 0
+        );
+        uniforms.uniform1i(
+                IUniformUpdateFrequency.perFrame(),
+                "ph_sable_shape_definition_count",
+                () -> snapshot.shapeDefinitionCount
         );
         for (int i = 0; i < MAX_SUBLEVELS; i++) {
             final int slot = i;
@@ -118,6 +134,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
 
         private final int occupancyTexture;
         private final int shapeTexture;
+        private final int shapeDefinitionCount;
         private final int subLevelCount;
         private final int emissiveCellCount;
         private final Matrix4f[] currentPlayerToGrid;
@@ -130,6 +147,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
         private Snapshot(
                 int occupancyTexture,
                 int shapeTexture,
+                int shapeDefinitionCount,
                 int subLevelCount,
                 int emissiveCellCount,
                 Matrix4f[] currentPlayerToGrid,
@@ -141,6 +159,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
         ) {
             this.occupancyTexture = occupancyTexture;
             this.shapeTexture = shapeTexture;
+            this.shapeDefinitionCount = shapeDefinitionCount;
             this.subLevelCount = subLevelCount;
             this.emissiveCellCount = emissiveCellCount;
             this.currentPlayerToGrid = currentPlayerToGrid;
@@ -152,12 +171,13 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
         }
 
         private static Snapshot empty() {
-            return create(0, 0, List.of());
+            return create(0, 0, 0, List.of());
         }
 
         private static Snapshot create(
                 int occupancyTexture,
                 int shapeTexture,
+                int shapeDefinitionCount,
                 List<SubLevel> source
         ) {
             int count = Math.min(source.size(), MAX_SUBLEVELS);
@@ -194,6 +214,7 @@ public final class ExternalSubLevelMotion implements RenderingComponent {
             return new Snapshot(
                     occupancyTexture,
                     shapeTexture,
+                    shapeTexture == 0 ? 0 : Math.max(0, shapeDefinitionCount),
                     count,
                     emissiveCount,
                     currentPlayerToGrid,

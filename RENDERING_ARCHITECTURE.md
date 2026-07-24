@@ -328,7 +328,8 @@ The bridge also publishes, for at most 16 sublevels:
 - current player-space to previous player-space transform;
 - previous player-space to current local-grid transform;
 - stable identity token;
-- grid dimensions and local-cell-atlas offset;
+- grid dimensions and local-cell-atlas offset, which can be `-1` when bounded
+  fine geometry is unavailable;
 - up to 64 emissive local cells.
 
 These are registered by
@@ -344,10 +345,23 @@ cell. It stores:
 Consequences of this bounded local policy:
 
 - a full block can occlude same-sublevel direct light;
-- fences, panes, trapdoors, flowers, and other partial shapes use up to 16
+- fences, panes, trapdoors, flowers, and other partial shapes use up to 8
   Minecraft shape AABBs per definition;
 - malformed, out-of-cell, over-complex, or table-overflow shapes fail closed as
   full cells;
+- the atlas is capped at 786,432 cells and a 3 MiB `RGBA8` payload, while the
+  shape table is capped at 511 rows and 512 texels on either dimension;
+- sublevel shape payloads are cached by topology generation, so a dirty
+  sublevel does not rescan every other sublevel;
+- stable layouts upload only changed 3D slices; additions, removals, resized
+  bounds, reordered offsets, and texture recreation require a bounded full
+  atlas upload;
+- receiver identity remains available through conservative local-bounds
+  classification when a sublevel has no atlas slice, and its matching direct
+  visibility fails closed instead of using the static world tree;
+- partial receiver endpoints come from the selected AABB, and only the final
+  epsilon endpoint intersection is ignored, so another AABB in the same cell
+  can occlude;
 - the atlas cannot supply albedo, normals, or specular material for bounced GI;
 - only matching receiver/emitter Sable tokens use this local visibility;
 - world-to-Sable, Sable-to-world, and cross-sublevel rays still have no moving
@@ -951,7 +965,7 @@ Use the earliest stage capable of producing the symptom.
 | Old shadow trails a moving emitter | previous light position, temporal-domain token, external-stream history limit |
 | Correct moving shadow flickers | too little valid history, receiver reprojection, moving-light candidate coverage, denoiser variance |
 | Whole moving contraption changes brightness together | Sable receiver classification, current/previous transforms, identity token, stable/external partition |
-| Sable fence does not block same-sublevel light | expected with current block-resolution full-block-only occupancy |
+| Sable fence does not block same-sublevel light | shape-table validity/count, selected receiver AABB, local supercover DDA, atlas budget warning |
 | One Sable sublevel borrows another's history | token assignment/checks, slot mapping, previous fragment metadata |
 | Sable light and receiver move together but lose accumulation | receiver-relative motion calculation or emitter temporal-domain metadata |
 | Sable geometry edit causes a brief reset | occupancy-atlas revision/rebuild and the resulting receiver/history validity change |

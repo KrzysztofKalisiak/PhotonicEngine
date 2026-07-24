@@ -47,10 +47,14 @@ public final class ContraptionLightsSableBridge {
     private static final int MAX_GEOMETRY_AXIS = 96;
     private static final int MAX_GEOMETRY_VOLUME = 300_000;
     private static final int MAX_GEOMETRY_ATLAS_DEPTH = 512;
+    private static final int MAX_GEOMETRY_ATLAS_CELLS = 786_432;
     // RGBA8: receiver flag, shape box count, shape-id low, shape-id high.
     private static final int GEOMETRY_CELL_STRIDE = 4;
-    private static final int MAX_SHAPE_BOXES = 16;
-    private static final int MAX_SHAPE_DEFINITIONS = 1_023;
+    private static final int MAX_GEOMETRY_PAYLOAD_BYTES =
+            MAX_GEOMETRY_ATLAS_CELLS * GEOMETRY_CELL_STRIDE;
+    private static final int MAX_SHAPE_BOXES = 8;
+    private static final int MAX_SHAPE_DEFINITIONS = 511;
+    private static final int MAX_SHAPE_TEXTURE_DIMENSION = 512;
     private static final int FULL_CELL_BOX_COUNT = 254;
     private static final int CONSERVATIVE_CELL_BOX_COUNT = 255;
     private static final double SHAPE_EPSILON = 1.0e-6;
@@ -96,16 +100,25 @@ public final class ContraptionLightsSableBridge {
 
     private static IGpuTexture3D geometryTexture;
     private static IGpuTexture3D shapeTexture;
-    private static List<GeometryKey> geometryKeys = List.of();
+    private static final Map<UUID, CachedSubLevelGeometry> geometryCache = new HashMap<>();
+    private static final LinkedHashMap<ShapeKey, Integer> geometryShapeIds =
+            new LinkedHashMap<>();
     private static List<GeometryLayoutKey> geometryLayoutKeys = List.of();
-    private static List<ShapeKey> geometryShapeKeys = List.of();
     private static int[] geometryOffsets = new int[0];
     private static byte[] geometryPayload = new byte[0];
     private static int geometryWidth;
     private static int geometryHeight;
     private static int geometryDepth;
+    private static int geometryShapeDefinitionCount;
     private static int geometryRebuilds;
     private static int geometryUnchangedScans;
+    private static long geometryCacheHits;
+    private static long geometryCacheRescans;
+    private static long geometryScannedCells;
+    private static long geometryFullUploads;
+    private static long geometrySliceUploads;
+    private static long geometryUploadedBytes;
+    private static AtlasSkipSummary lastAtlasSkipSummary;
     private static long nextGeometryRevision = 1L;
 
     private ContraptionLightsSableBridge() {
@@ -574,7 +587,8 @@ public final class ContraptionLightsSableBridge {
             if (candidates.size() > ExternalSubLevelMotion.MAX_SUBLEVELS)
                 candidates.subList(ExternalSubLevelMotion.MAX_SUBLEVELS, candidates.size()).clear();
 
-            int[] atlasOffsets = updateGeometryAtlas(candidates);
+            GeometryAtlasState atlasState = updateGeometryAtlas(candidates);
+            int[] atlasOffsets = atlasState.offsets();
             var subLevels = new ArrayList<ExternalSubLevelMotion.SubLevel>(candidates.size());
             for (int i = 0; i < candidates.size(); i++) {
                 MotionCandidate candidate = candidates.get(i);
@@ -598,6 +612,7 @@ public final class ContraptionLightsSableBridge {
             ExternalSubLevelMotion.submit(
                     occupancyTexture,
                     localShapeTexture,
+                    atlasState.shapeDefinitionCount(),
                     subLevels
             );
             previousWorldToMotionAnchor.keySet().retainAll(currentWorldToMotionAnchor.keySet());
@@ -633,33 +648,17 @@ public final class ContraptionLightsSableBridge {
         }
     }
 
-    private static int[] updateGeometryAtlas(List<MotionCandidate> candidates) {
-        var keys = new ArrayList<GeometryKey>(candidates.size());
-        var layoutKeys = new ArrayList<GeometryLayoutKey>(candidates.size());
-        for (MotionCandidate candidate : candidates) {
-            keys.add(geometryKey(candidate));
-            layoutKeys.add(new GeometryLayoutKey(
-                    candidate.uniqueId(),
-                    candidate.minX(),
-                    candidate.minY(),
-                    candidate.minZ(),
-                    candidate.sizeX(),
-                    candidate.sizeY(),
-                    candidate.sizeZ()
-            ));
-        }
-
-        if (keys.equals(geometryKeys))
-            return geometryOffsets;
-
+    private static GeometryAtlasState updateGeometryAtlas(List<MotionCandidate> candidates) {
+        long updateStarted = System.nanoTime();
         int[] offsets = new int[candidates.size()];
         Arrays.fill(offsets, -1);
-        int width = 1;
+        var accepted = new ArrayList<AcceptedGeometry>(candidates.size());
+        int unalignedWidth = 1;
         int height = 1;
         int depth = 0;
-        int accepted = 0;
         int skippedOversized = 0;
         int skippedAtlasDepth = 0;
+        int skippedCellBudget = 0;
 
         for (int i = 0; i < candidates.size(); i++) {
             MotionCandidate candidate = candidates.get(i);
@@ -676,36 +675,326 @@ public final class ContraptionLightsSableBridge {
                 continue;
             }
 
+            int projectedWidth = alignGeometryWidth(Math.max(unalignedWidth, candidate.sizeX()));
+            int projectedHeight = Math.max(height, candidate.sizeY());
+            int projectedDepth = depth + candidate.sizeZ();
+            long projectedCells = (long) projectedWidth * projectedHeight * projectedDepth;
+            long projectedBytes = projectedCells * GEOMETRY_CELL_STRIDE;
+            if (projectedCells > MAX_GEOMETRY_ATLAS_CELLS
+                    || projectedBytes > MAX_GEOMETRY_PAYLOAD_BYTES) {
+                skippedCellBudget++;
+                continue;
+            }
+
             offsets[i] = depth;
+            accepted.add(new AcceptedGeometry(candidate, depth));
             depth += candidate.sizeZ();
-            width = Math.max(width, candidate.sizeX());
+            unalignedWidth = Math.max(unalignedWidth, candidate.sizeX());
             height = Math.max(height, candidate.sizeY());
-            accepted++;
         }
 
-        if (accepted == 0) {
+        if (accepted.isEmpty()) {
             closeGeometryTextures();
-            geometryKeys = List.copyOf(keys);
-            geometryLayoutKeys = List.copyOf(layoutKeys);
-            geometryShapeKeys = List.of();
+            geometryCache.clear();
+            geometryShapeIds.clear();
+            geometryLayoutKeys = List.of();
             geometryOffsets = offsets;
             geometryPayload = new byte[0];
-            if (!candidates.isEmpty()) {
-                Photonics.LOGGER.warn(
-                        "Photonics Sable occlusion has no uploadable local geometry: candidates={}, skippedOversized={}, skippedAtlasDepth={}, limits=axis:{} volume:{} atlasDepth:{}; same-domain direct visibility will fail closed",
-                        candidates.size(),
-                        skippedOversized,
-                        skippedAtlasDepth,
-                        MAX_GEOMETRY_AXIS,
-                        MAX_GEOMETRY_VOLUME,
-                        MAX_GEOMETRY_ATLAS_DEPTH
-                );
-            }
-            return offsets;
+            geometryShapeDefinitionCount = 0;
+            logGeometrySkips(
+                    candidates.size(),
+                    0,
+                    skippedOversized,
+                    skippedAtlasDepth,
+                    skippedCellBudget
+            );
+            return new GeometryAtlasState(offsets, 0);
         }
 
-        width = (width + 3) & ~3;
-        byte[] payload = new byte[width * height * depth * GEOMETRY_CELL_STRIDE];
+        int width = alignGeometryWidth(unalignedWidth);
+        int atlasCells = Math.toIntExact((long) width * height * depth);
+        int atlasPayloadBytes = Math.multiplyExact(atlasCells, GEOMETRY_CELL_STRIDE);
+        if (atlasCells > MAX_GEOMETRY_ATLAS_CELLS
+                || atlasPayloadBytes > MAX_GEOMETRY_PAYLOAD_BYTES)
+            throw new IllegalStateException("Sable atlas planner exceeded its hard payload budget");
+
+        var layoutKeys = new ArrayList<GeometryLayoutKey>(accepted.size());
+        var prepared = new ArrayList<PreparedGeometry>(accepted.size());
+        var acceptedIds = new HashSet<UUID>();
+        int frameCacheHits = 0;
+        int frameRescans = 0;
+        long frameScannedCells = 0L;
+        long frameScanNanos = 0L;
+
+        for (AcceptedGeometry entry : accepted) {
+            MotionCandidate candidate = entry.candidate();
+            acceptedIds.add(candidate.uniqueId());
+            layoutKeys.add(new GeometryLayoutKey(
+                    candidate.uniqueId(),
+                    candidate.minX(),
+                    candidate.minY(),
+                    candidate.minZ(),
+                    candidate.sizeX(),
+                    candidate.sizeY(),
+                    candidate.sizeZ(),
+                    entry.atlasZ()
+            ));
+
+            GeometryKey key = geometryKey(candidate);
+            CachedSubLevelGeometry previous = geometryCache.get(candidate.uniqueId());
+            CachedSubLevelGeometry current;
+            boolean contentChanged;
+            if (previous != null && previous.key().equals(key)) {
+                current = previous;
+                contentChanged = false;
+                frameCacheHits++;
+            } else {
+                long scanStarted = System.nanoTime();
+                current = scanSubLevelGeometry(candidate, key);
+                frameScanNanos += System.nanoTime() - scanStarted;
+                frameScannedCells += current.cellCount();
+                frameRescans++;
+                contentChanged = previous == null
+                        || !sameGeometryContent(previous, current);
+                geometryCache.put(candidate.uniqueId(), current);
+            }
+            prepared.add(new PreparedGeometry(entry, current, contentChanged));
+        }
+        geometryCache.keySet().retainAll(acceptedIds);
+
+        int newShapeDefinitions = registerPersistentShapes(prepared);
+        List<ShapeKey> shapeKeys = List.copyOf(geometryShapeIds.keySet());
+        boolean shapeUploadRequired = !shapeKeys.isEmpty()
+                && (newShapeDefinitions > 0 || !shapeTextureMatches(shapeKeys.size()));
+
+        boolean layoutChanged = geometryTexture == null
+                || geometryTexture.ph$isClosed()
+                || geometryWidth != width
+                || geometryHeight != height
+                || geometryDepth != depth
+                || geometryPayload.length != atlasPayloadBytes
+                || !layoutKeys.equals(geometryLayoutKeys)
+                || !Arrays.equals(offsets, geometryOffsets);
+
+        int frameSliceUploads = 0;
+        long frameAtlasUploadBytes = 0L;
+        int globalShapeFallbackCells = 0;
+        long uploadStarted = System.nanoTime();
+        if (layoutChanged) {
+            byte[] payload = new byte[atlasPayloadBytes];
+            for (PreparedGeometry entry : prepared) {
+                EncodedGeometry encoded = encodeGeometry(entry.geometry());
+                globalShapeFallbackCells += encoded.globalShapeFallbackCells();
+                copySliceToAtlas(
+                        encoded.payload(),
+                        entry.accepted().candidate(),
+                        entry.accepted().atlasZ(),
+                        payload,
+                        width,
+                        height
+                );
+            }
+
+            ensureGeometryTexture(width, height, depth);
+            uploadGeometryRegion(
+                    payload,
+                    new Vector3i(),
+                    new Vector3i(width, height, depth)
+            );
+            geometryPayload = payload;
+            geometryFullUploads++;
+            frameAtlasUploadBytes = payload.length;
+        } else {
+            for (PreparedGeometry entry : prepared) {
+                if (!entry.contentChanged())
+                    continue;
+
+                EncodedGeometry encoded = encodeGeometry(entry.geometry());
+                globalShapeFallbackCells += encoded.globalShapeFallbackCells();
+                if (sliceMatchesAtlas(
+                        encoded.payload(),
+                        entry.accepted().candidate(),
+                        entry.accepted().atlasZ(),
+                        geometryPayload,
+                        width,
+                        height
+                ))
+                    continue;
+
+                copySliceToAtlas(
+                        encoded.payload(),
+                        entry.accepted().candidate(),
+                        entry.accepted().atlasZ(),
+                        geometryPayload,
+                        width,
+                        height
+                );
+                MotionCandidate candidate = entry.accepted().candidate();
+                uploadGeometryRegion(
+                        encoded.payload(),
+                        new Vector3i(0, 0, entry.accepted().atlasZ()),
+                        new Vector3i(
+                                candidate.sizeX(),
+                                candidate.sizeY(),
+                                candidate.sizeZ()
+                        )
+                );
+                frameSliceUploads++;
+                frameAtlasUploadBytes += encoded.payload().length;
+            }
+        }
+
+        long frameShapeUploadBytes = 0L;
+        if (shapeUploadRequired) {
+            geometryShapeDefinitionCount = uploadShapeTable(shapeKeys);
+            if (geometryShapeDefinitionCount > 0) {
+                frameShapeUploadBytes = shapeTablePayloadBytes(
+                        geometryShapeDefinitionCount
+                );
+            }
+        } else if (shapeKeys.isEmpty()) {
+            closeShapeTexture();
+            geometryShapeDefinitionCount = 0;
+        } else if (shapeTextureMatches(shapeKeys.size())) {
+            geometryShapeDefinitionCount = shapeKeys.size();
+        } else {
+            geometryShapeDefinitionCount = 0;
+        }
+
+        long frameUploadedBytes = frameAtlasUploadBytes + frameShapeUploadBytes;
+        long frameUploadNanos = System.nanoTime() - uploadStarted;
+        geometryWidth = width;
+        geometryHeight = height;
+        geometryDepth = depth;
+        geometryLayoutKeys = List.copyOf(layoutKeys);
+        geometryOffsets = offsets;
+        geometryCacheHits += frameCacheHits;
+        geometryCacheRescans += frameRescans;
+        geometryScannedCells += frameScannedCells;
+        geometrySliceUploads += frameSliceUploads;
+        geometryUploadedBytes += frameUploadedBytes;
+
+        GeometryCellStats cellStats = aggregateCellStats(prepared);
+        boolean atlasUploaded = layoutChanged || frameSliceUploads > 0;
+        boolean anythingUploaded = atlasUploaded || frameShapeUploadBytes > 0;
+        if (anythingUploaded) {
+            geometryRebuilds++;
+            Photonics.LOGGER.info(
+                    "Photonics Sable local-occlusion atlas update: update={}, subLevels={}, skippedOversized={}, skippedAtlasDepth={}, skippedCellBudget={}, cacheHits={}/{} total, rescans={}/{} total, scannedCells={}/{} total, scanMs={}, updateMs={}, uploadMode={}, fullUploads={} total, sliceUploads={}/{} total, uploadedBytes={}/{} total, uploadMs={}, receiverCells={}, exactFullCells={}, exactShapeCells={}, localConservativeCells={}, frameGlobalShapeFallbackCells={}, receiverOnlyCells={}, shapeDefinitions={}, maxBoxesPerShape={}, size={}x{}x{}, atlasCells={}/{}, payloadBytes={}/{}, authority=same-token-local-only",
+                    geometryRebuilds,
+                    accepted.size(),
+                    skippedOversized,
+                    skippedAtlasDepth,
+                    skippedCellBudget,
+                    frameCacheHits,
+                    geometryCacheHits,
+                    frameRescans,
+                    geometryCacheRescans,
+                    frameScannedCells,
+                    geometryScannedCells,
+                    nanosToMilliseconds(frameScanNanos),
+                    nanosToMilliseconds(System.nanoTime() - updateStarted),
+                    layoutChanged ? "full" : "slice",
+                    geometryFullUploads,
+                    frameSliceUploads,
+                    geometrySliceUploads,
+                    frameUploadedBytes,
+                    geometryUploadedBytes,
+                    nanosToMilliseconds(frameUploadNanos),
+                    cellStats.receiverCells(),
+                    cellStats.fullCells(),
+                    cellStats.exactShapeCells(),
+                    cellStats.conservativeCells(),
+                    globalShapeFallbackCells,
+                    cellStats.receiverOnlyCells(),
+                    geometryShapeDefinitionCount,
+                    MAX_SHAPE_BOXES,
+                    width,
+                    height,
+                    depth,
+                    atlasCells,
+                    MAX_GEOMETRY_ATLAS_CELLS,
+                    atlasPayloadBytes,
+                    MAX_GEOMETRY_PAYLOAD_BYTES
+            );
+        } else if (frameRescans > 0) {
+            geometryUnchangedScans++;
+            if (Integer.bitCount(geometryUnchangedScans) == 1) {
+                Photonics.LOGGER.info(
+                        "Photonics skipped byte-identical Sable topology upload: skipped={}, cacheHits={}, rescans={}, scannedCells={}, scanMs={}, atlasCells={}, payloadBytes={}",
+                        geometryUnchangedScans,
+                        frameCacheHits,
+                        frameRescans,
+                        frameScannedCells,
+                        nanosToMilliseconds(frameScanNanos),
+                        atlasCells,
+                        atlasPayloadBytes
+                );
+            }
+        }
+
+        logGeometrySkips(
+                candidates.size(),
+                accepted.size(),
+                skippedOversized,
+                skippedAtlasDepth,
+                skippedCellBudget
+        );
+
+        return new GeometryAtlasState(offsets, geometryShapeDefinitionCount);
+    }
+
+    private static void logGeometrySkips(
+            int candidateCount,
+            int acceptedCount,
+            int skippedOversized,
+            int skippedAtlasDepth,
+            int skippedCellBudget
+    ) {
+        if (skippedOversized + skippedAtlasDepth + skippedCellBudget == 0) {
+            lastAtlasSkipSummary = null;
+            return;
+        }
+
+        var summary = new AtlasSkipSummary(
+                candidateCount,
+                acceptedCount,
+                skippedOversized,
+                skippedAtlasDepth,
+                skippedCellBudget
+        );
+        if (summary.equals(lastAtlasSkipSummary))
+            return;
+
+        lastAtlasSkipSummary = summary;
+        Photonics.LOGGER.warn(
+                "Photonics omitted Sable local geometry under bounded atlas policy: oversized={}, atlasDepth={}, cellBudget={}, uploaded={}, candidates={}, limits=axis:{} volume:{} atlasDepth:{} atlasCells:{} payloadBytes:{}; omitted receivers retain bounds-classified motion identity and matching same-domain direct visibility fails closed",
+                skippedOversized,
+                skippedAtlasDepth,
+                skippedCellBudget,
+                acceptedCount,
+                candidateCount,
+                MAX_GEOMETRY_AXIS,
+                MAX_GEOMETRY_VOLUME,
+                MAX_GEOMETRY_ATLAS_DEPTH,
+                MAX_GEOMETRY_ATLAS_CELLS,
+                MAX_GEOMETRY_PAYLOAD_BYTES
+        );
+    }
+
+    private static int alignGeometryWidth(int width) {
+        return (width + 3) & ~3;
+    }
+
+    private static CachedSubLevelGeometry scanSubLevelGeometry(
+            MotionCandidate candidate,
+            GeometryKey key
+    ) {
+        int cellCount = Math.multiplyExact(
+                Math.multiplyExact(candidate.sizeX(), candidate.sizeY()),
+                candidate.sizeZ()
+        );
+        byte[] payload = new byte[Math.multiplyExact(cellCount, GEOMETRY_CELL_STRIDE)];
         var shapeIds = new LinkedHashMap<ShapeKey, Integer>();
         int receiverCells = 0;
         int fullCells = 0;
@@ -714,88 +1003,175 @@ public final class ContraptionLightsSableBridge {
         int receiverOnlyCells = 0;
         var mutablePos = new BlockPos.MutableBlockPos();
 
-        for (int i = 0; i < candidates.size(); i++) {
-            int atlasZ = offsets[i];
-            if (atlasZ < 0)
-                continue;
+        for (int z = 0; z < candidate.sizeZ(); z++) {
+            for (int y = 0; y < candidate.sizeY(); y++) {
+                for (int x = 0; x < candidate.sizeX(); x++) {
+                    mutablePos.set(
+                            candidate.minX() + x,
+                            candidate.minY() + y,
+                            candidate.minZ() + z
+                    );
+                    BlockState state = candidate.blockGetter().getBlockState(mutablePos);
+                    boolean receiver = !state.isAir()
+                            || !state.getFluidState().isEmpty();
+                    CellOcclusion occlusion = classifyLocalOcclusion(
+                            candidate.blockGetter(),
+                            mutablePos,
+                            state,
+                            shapeIds
+                    );
+                    if (!receiver && occlusion.boxCount() == 0)
+                        continue;
 
-            MotionCandidate candidate = candidates.get(i);
-            for (int z = 0; z < candidate.sizeZ(); z++) {
-                for (int y = 0; y < candidate.sizeY(); y++) {
-                    for (int x = 0; x < candidate.sizeX(); x++) {
-                        mutablePos.set(
-                                candidate.minX() + x,
-                                candidate.minY() + y,
-                                candidate.minZ() + z
-                        );
-                        BlockState state = candidate.blockGetter().getBlockState(mutablePos);
-                        boolean receiver = !state.isAir()
-                                || !state.getFluidState().isEmpty();
-                        CellOcclusion occlusion = classifyLocalOcclusion(
-                                candidate.blockGetter(),
-                                mutablePos,
-                                state,
-                                shapeIds
-                        );
-                        if (!receiver && occlusion.boxCount() == 0)
-                            continue;
+                    int index = (
+                            ((z * candidate.sizeY()) + y) * candidate.sizeX() + x
+                    ) * GEOMETRY_CELL_STRIDE;
+                    payload[index] = (byte) (receiver ? 0xff : 0);
+                    payload[index + 1] = (byte) occlusion.boxCount();
+                    payload[index + 2] = (byte) (occlusion.shapeId() & 0xff);
+                    payload[index + 3] = (byte) ((occlusion.shapeId() >>> 8) & 0xff);
 
-                        int index = (
-                                ((atlasZ + z) * height + y) * width + x
-                        ) * GEOMETRY_CELL_STRIDE;
-                        payload[index] = (byte) (receiver ? 0xff : 0);
-                        payload[index + 1] = (byte) occlusion.boxCount();
-                        payload[index + 2] = (byte) (occlusion.shapeId() & 0xff);
-                        payload[index + 3] = (byte) ((occlusion.shapeId() >>> 8) & 0xff);
-
-                        if (receiver)
-                            receiverCells++;
-                        if (occlusion.boxCount() == FULL_CELL_BOX_COUNT)
-                            fullCells++;
-                        else if (occlusion.boxCount() == CONSERVATIVE_CELL_BOX_COUNT)
-                            conservativeCells++;
-                        else if (occlusion.boxCount() > 0)
-                            exactShapeCells++;
-                        else if (receiver)
-                            receiverOnlyCells++;
-                    }
+                    if (receiver)
+                        receiverCells++;
+                    if (occlusion.boxCount() == FULL_CELL_BOX_COUNT)
+                        fullCells++;
+                    else if (occlusion.boxCount() == CONSERVATIVE_CELL_BOX_COUNT)
+                        conservativeCells++;
+                    else if (occlusion.boxCount() > 0)
+                        exactShapeCells++;
+                    else if (receiver)
+                        receiverOnlyCells++;
                 }
             }
         }
 
-        List<ShapeKey> shapeKeys = List.copyOf(shapeIds.keySet());
-        boolean unchanged = geometryTexture != null
-                && !geometryTexture.ph$isClosed()
-                && (shapeKeys.isEmpty()
-                    || (shapeTexture != null && !shapeTexture.ph$isClosed()))
-                && geometryWidth == width
-                && geometryHeight == height
-                && geometryDepth == depth
-                && layoutKeys.equals(geometryLayoutKeys)
-                && Arrays.equals(offsets, geometryOffsets)
-                && Arrays.equals(payload, geometryPayload)
-                && shapeKeys.equals(geometryShapeKeys);
-        if (unchanged) {
-            geometryKeys = List.copyOf(keys);
-            geometryUnchangedScans++;
-            if (Integer.bitCount(geometryUnchangedScans) == 1) {
-                Photonics.LOGGER.info(
-                        "Photonics v27 skipped unchanged Sable geometry upload: skipped={}, subLevels={}, size={}x{}x{}, payloadHash={}",
-                        geometryUnchangedScans,
-                        accepted,
-                        width,
-                        height,
-                        depth,
-                        Integer.toUnsignedString(Arrays.hashCode(payload), 16)
-                );
-            }
-            return geometryOffsets;
-        }
+        return new CachedSubLevelGeometry(
+                key,
+                payload,
+                List.copyOf(shapeIds.keySet()),
+                new GeometryCellStats(
+                        receiverCells,
+                        fullCells,
+                        exactShapeCells,
+                        conservativeCells,
+                        receiverOnlyCells
+                ),
+                cellCount
+        );
+    }
 
-        ByteBuffer data = ByteBuffer.allocateDirect(payload.length);
-        data.put(payload);
-        data.flip();
-        if (geometryTexture == null) {
+    private static boolean sameGeometryContent(
+            CachedSubLevelGeometry first,
+            CachedSubLevelGeometry second
+    ) {
+        return first.shapeKeys().equals(second.shapeKeys())
+                && Arrays.equals(first.localPayload(), second.localPayload());
+    }
+
+    private static int registerPersistentShapes(List<PreparedGeometry> prepared) {
+        int added = 0;
+        for (PreparedGeometry entry : prepared) {
+            for (ShapeKey shape : entry.geometry().shapeKeys()) {
+                if (geometryShapeIds.containsKey(shape))
+                    continue;
+                if (geometryShapeIds.size() >= MAX_SHAPE_DEFINITIONS)
+                    continue;
+
+                geometryShapeIds.put(shape, geometryShapeIds.size() + 1);
+                added++;
+            }
+        }
+        return added;
+    }
+
+    private static EncodedGeometry encodeGeometry(CachedSubLevelGeometry geometry) {
+        byte[] encoded = Arrays.copyOf(
+                geometry.localPayload(),
+                geometry.localPayload().length
+        );
+        int globalFallbackCells = 0;
+        for (int index = 0; index < encoded.length; index += GEOMETRY_CELL_STRIDE) {
+            int boxCount = Byte.toUnsignedInt(encoded[index + 1]);
+            if (boxCount <= 0 || boxCount > MAX_SHAPE_BOXES)
+                continue;
+
+            int localShapeId = Byte.toUnsignedInt(encoded[index + 2])
+                    | (Byte.toUnsignedInt(encoded[index + 3]) << 8);
+            Integer globalShapeId = localShapeId > 0
+                    && localShapeId <= geometry.shapeKeys().size()
+                    ? geometryShapeIds.get(geometry.shapeKeys().get(localShapeId - 1))
+                    : null;
+            if (globalShapeId == null
+                    || globalShapeId <= 0
+                    || globalShapeId > MAX_SHAPE_DEFINITIONS) {
+                encoded[index + 1] = (byte) CONSERVATIVE_CELL_BOX_COUNT;
+                encoded[index + 2] = 0;
+                encoded[index + 3] = 0;
+                globalFallbackCells++;
+                continue;
+            }
+
+            encoded[index + 2] = (byte) (globalShapeId & 0xff);
+            encoded[index + 3] = (byte) ((globalShapeId >>> 8) & 0xff);
+        }
+        return new EncodedGeometry(encoded, globalFallbackCells);
+    }
+
+    private static void copySliceToAtlas(
+            byte[] slice,
+            MotionCandidate candidate,
+            int atlasZ,
+            byte[] atlas,
+            int atlasWidth,
+            int atlasHeight
+    ) {
+        int rowBytes = candidate.sizeX() * GEOMETRY_CELL_STRIDE;
+        for (int z = 0; z < candidate.sizeZ(); z++) {
+            for (int y = 0; y < candidate.sizeY(); y++) {
+                int source = (
+                        (z * candidate.sizeY() + y) * candidate.sizeX()
+                ) * GEOMETRY_CELL_STRIDE;
+                int target = (
+                        ((atlasZ + z) * atlasHeight + y) * atlasWidth
+                ) * GEOMETRY_CELL_STRIDE;
+                System.arraycopy(slice, source, atlas, target, rowBytes);
+            }
+        }
+    }
+
+    private static boolean sliceMatchesAtlas(
+            byte[] slice,
+            MotionCandidate candidate,
+            int atlasZ,
+            byte[] atlas,
+            int atlasWidth,
+            int atlasHeight
+    ) {
+        int rowBytes = candidate.sizeX() * GEOMETRY_CELL_STRIDE;
+        for (int z = 0; z < candidate.sizeZ(); z++) {
+            for (int y = 0; y < candidate.sizeY(); y++) {
+                int source = (
+                        (z * candidate.sizeY() + y) * candidate.sizeX()
+                ) * GEOMETRY_CELL_STRIDE;
+                int target = (
+                        ((atlasZ + z) * atlasHeight + y) * atlasWidth
+                ) * GEOMETRY_CELL_STRIDE;
+                if (Arrays.mismatch(
+                        slice,
+                        source,
+                        source + rowBytes,
+                        atlas,
+                        target,
+                        target + rowBytes
+                ) >= 0)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    private static void ensureGeometryTexture(int width, int height, int depth) {
+        if (geometryTexture == null || geometryTexture.ph$isClosed()) {
             geometryTexture = IRenderSystem.getDevice().ph$createTexture3D(
                     () -> "Photonics Sable Geometry Atlas",
                     TextureUsage.TEXTURE_BINDING | TextureUsage.COPY_DST,
@@ -805,46 +1181,56 @@ public final class ContraptionLightsSableBridge {
                     depth,
                     1
             );
-        } else if (geometryWidth != width || geometryHeight != height || geometryDepth != depth) {
+        } else if (geometryWidth != width
+                || geometryHeight != height
+                || geometryDepth != depth) {
             geometryTexture.ph$resize(new Vector3i(width, height, depth));
         }
+    }
 
-        geometryWidth = width;
-        geometryHeight = height;
-        geometryDepth = depth;
+    private static void uploadGeometryRegion(
+            byte[] payload,
+            Vector3i offset,
+            Vector3i size
+    ) {
+        ByteBuffer data = ByteBuffer.allocateDirect(payload.length);
+        data.put(payload);
+        data.flip();
         IRenderSystem.getDevice().ph$createCommandEncoder().ph$writeToTexture(
                 geometryTexture,
                 data,
-                new Vector3i(),
-                new Vector3i(width, height, depth)
+                offset,
+                size
         );
-        uploadShapeTable(shapeKeys);
-        geometryRebuilds++;
-        Photonics.LOGGER.info(
-                "Photonics Sable local-occlusion atlas rebuilt: rebuild={}, subLevels={}, skippedOversized={}, skippedAtlasDepth={}, receiverCells={}, exactFullCells={}, exactShapeCells={}, conservativeFallbackCells={}, receiverOnlyCells={}, shapeDefinitions={}, maxBoxesPerShape={}, size={}x{}x{}, payloadBytes={}, payloadHash={}, authority=same-token-local-only",
-                geometryRebuilds,
-                accepted,
-                skippedOversized,
-                skippedAtlasDepth,
+    }
+
+    private static GeometryCellStats aggregateCellStats(
+            List<PreparedGeometry> prepared
+    ) {
+        int receiverCells = 0;
+        int fullCells = 0;
+        int exactShapeCells = 0;
+        int conservativeCells = 0;
+        int receiverOnlyCells = 0;
+        for (PreparedGeometry entry : prepared) {
+            GeometryCellStats stats = entry.geometry().stats();
+            receiverCells += stats.receiverCells();
+            fullCells += stats.fullCells();
+            exactShapeCells += stats.exactShapeCells();
+            conservativeCells += stats.conservativeCells();
+            receiverOnlyCells += stats.receiverOnlyCells();
+        }
+        return new GeometryCellStats(
                 receiverCells,
                 fullCells,
                 exactShapeCells,
                 conservativeCells,
-                receiverOnlyCells,
-                shapeKeys.size(),
-                MAX_SHAPE_BOXES,
-                width,
-                height,
-                depth,
-                payload.length,
-                Integer.toUnsignedString(Arrays.hashCode(payload), 16)
+                receiverOnlyCells
         );
-        geometryKeys = List.copyOf(keys);
-        geometryLayoutKeys = List.copyOf(layoutKeys);
-        geometryShapeKeys = shapeKeys;
-        geometryOffsets = offsets;
-        geometryPayload = payload;
-        return offsets;
+    }
+
+    private static double nanosToMilliseconds(long nanos) {
+        return nanos / 1_000_000.0d;
     }
 
     private static CellOcclusion classifyLocalOcclusion(
@@ -934,16 +1320,66 @@ public final class ContraptionLightsSableBridge {
         return Math.max(0.0d, Math.min(1.0d, value));
     }
 
-    private static void uploadShapeTable(List<ShapeKey> shapeKeys) {
+    private static boolean shapeTextureMatches(int shapeDefinitionCount) {
+        if (shapeDefinitionCount <= 0
+                || shapeDefinitionCount > MAX_SHAPE_DEFINITIONS
+                || shapeTexture == null
+                || shapeTexture.ph$isClosed())
+            return false;
+
+        int width = MAX_SHAPE_BOXES * 2;
+        int height = shapeDefinitionCount + 1;
+        if (width > MAX_SHAPE_TEXTURE_DIMENSION
+                || height > MAX_SHAPE_TEXTURE_DIMENSION)
+            return false;
+
+        return shapeTexture.ph$size(0).equals(new Vector3i(width, height, 1));
+    }
+
+    private static long shapeTablePayloadBytes(int shapeDefinitionCount) {
+        return (long) MAX_SHAPE_BOXES
+                * 2L
+                * (shapeDefinitionCount + 1L)
+                * 4L
+                * Float.BYTES;
+    }
+
+    private static int uploadShapeTable(List<ShapeKey> shapeKeys) {
         if (shapeKeys.isEmpty()) {
             closeShapeTexture();
-            return;
+            return 0;
         }
 
         int width = MAX_SHAPE_BOXES * 2;
         int height = shapeKeys.size() + 1;
+        if (shapeKeys.size() > MAX_SHAPE_DEFINITIONS
+                || width > MAX_SHAPE_TEXTURE_DIMENSION
+                || height > MAX_SHAPE_TEXTURE_DIMENSION) {
+            closeShapeTexture();
+            Photonics.LOGGER.error(
+                    "Photonics rejected invalid Sable shape-table dimensions: definitions={}, size={}x{}x1, limits=definitions:{} dimension:{}; partial cells will fail closed",
+                    shapeKeys.size(),
+                    width,
+                    height,
+                    MAX_SHAPE_DEFINITIONS,
+                    MAX_SHAPE_TEXTURE_DIMENSION
+            );
+            return 0;
+        }
+        for (ShapeKey shape : shapeKeys) {
+            if (shape.boxes().isEmpty() || shape.boxes().size() > MAX_SHAPE_BOXES) {
+                closeShapeTexture();
+                Photonics.LOGGER.error(
+                        "Photonics rejected invalid Sable shape-table row: boxes={}, limit={}; partial cells will fail closed",
+                        shape.boxes().size(),
+                        MAX_SHAPE_BOXES
+                );
+                return 0;
+            }
+        }
+
         ByteBuffer data = ByteBuffer.allocateDirect(
-                width * height * 4 * Float.BYTES
+                Math.toIntExact(shapeTablePayloadBytes(shapeKeys.size()))
         ).order(ByteOrder.nativeOrder());
         var values = data.asFloatBuffer();
 
@@ -963,7 +1399,7 @@ public final class ContraptionLightsSableBridge {
             }
         }
 
-        if (shapeTexture == null) {
+        if (shapeTexture == null || shapeTexture.ph$isClosed()) {
             shapeTexture = IRenderSystem.getDevice().ph$createTexture3D(
                     () -> "Photonics Sable Shape Table",
                     TextureUsage.TEXTURE_BINDING | TextureUsage.COPY_DST,
@@ -985,16 +1421,25 @@ public final class ContraptionLightsSableBridge {
                 new Vector3i(),
                 new Vector3i(width, height, 1)
         );
+        return shapeKeys.size();
     }
 
     private static void resetGeometryAtlas() {
-        geometryKeys = List.of();
+        geometryCache.clear();
+        geometryShapeIds.clear();
         geometryLayoutKeys = List.of();
-        geometryShapeKeys = List.of();
         geometryOffsets = new int[0];
         geometryPayload = new byte[0];
+        geometryShapeDefinitionCount = 0;
         geometryRebuilds = 0;
         geometryUnchangedScans = 0;
+        geometryCacheHits = 0L;
+        geometryCacheRescans = 0L;
+        geometryScannedCells = 0L;
+        geometryFullUploads = 0L;
+        geometrySliceUploads = 0L;
+        geometryUploadedBytes = 0L;
+        lastAtlasSkipSummary = null;
         nextGeometryRevision = 1L;
         closeGeometryTextures();
     }
@@ -1007,6 +1452,7 @@ public final class ContraptionLightsSableBridge {
         geometryWidth = 0;
         geometryHeight = 0;
         geometryDepth = 0;
+        geometryShapeDefinitionCount = 0;
     }
 
     private static void closeShapeTexture() {
@@ -1066,7 +1512,7 @@ public final class ContraptionLightsSableBridge {
         if (!motionActiveLogged && subLevels > 0) {
             motionActiveLogged = true;
             Photonics.LOGGER.info(
-                    "Photonics Sable receiver motion active: subLevels={}, classifier=normal-guided-receiver-cell-atlas+emissive-cells, emitterIdentity=explicit-sublevel-token, localVisibility=same-token-rgba-cell-atlas+sparse-shape-aabb+fail-closed-supercover-dda, crossDomainVisibility=static-world-only, temporalTransform=camera-relative-stable-anchor-double-compose",
+                    "Photonics Sable receiver motion active: subLevels={}, classifier=normal-guided-receiver-cell-atlas+emissive-cells+atlasless-bounds-token-fallback, emitterIdentity=explicit-sublevel-token, localVisibility=same-token-rgba-cell-atlas+sparse-shape-aabb+fail-closed-supercover-dda, crossDomainVisibility=static-world-only, temporalTransform=camera-relative-stable-anchor-double-compose",
                     subLevels
             );
         }
@@ -1236,6 +1682,52 @@ public final class ContraptionLightsSableBridge {
     private record ShapeKey(List<ShapeBox> boxes) {
     }
 
+    private record GeometryAtlasState(int[] offsets, int shapeDefinitionCount) {
+    }
+
+    private record AcceptedGeometry(
+            MotionCandidate candidate,
+            int atlasZ
+    ) {
+    }
+
+    private record AtlasSkipSummary(
+            int candidateCount,
+            int acceptedCount,
+            int skippedOversized,
+            int skippedAtlasDepth,
+            int skippedCellBudget
+    ) {
+    }
+
+    private record PreparedGeometry(
+            AcceptedGeometry accepted,
+            CachedSubLevelGeometry geometry,
+            boolean contentChanged
+    ) {
+    }
+
+    private record CachedSubLevelGeometry(
+            GeometryKey key,
+            byte[] localPayload,
+            List<ShapeKey> shapeKeys,
+            GeometryCellStats stats,
+            int cellCount
+    ) {
+    }
+
+    private record GeometryCellStats(
+            int receiverCells,
+            int fullCells,
+            int exactShapeCells,
+            int conservativeCells,
+            int receiverOnlyCells
+    ) {
+    }
+
+    private record EncodedGeometry(byte[] payload, int globalShapeFallbackCells) {
+    }
+
     private record GeometryKey(
             UUID uniqueId,
             int minX,
@@ -1258,7 +1750,8 @@ public final class ContraptionLightsSableBridge {
             int minZ,
             int sizeX,
             int sizeY,
-            int sizeZ
+            int sizeZ,
+            int atlasZ
     ) {
     }
 
