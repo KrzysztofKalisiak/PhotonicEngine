@@ -1,5 +1,6 @@
 package at.redi2go.photonics.core.rendering.world.registry;
 
+import at.redi2go.photonics.api.gpu.buffers.heap.GpuBufferHeapStats;
 import at.redi2go.photonics.core.rendering.RenderingComponent;
 import at.redi2go.photonics.core.rendering.world.allocator.WorldAllocator;
 import at.redi2go.photonics.core.rendering.world.bakery.BlockBakery;
@@ -11,6 +12,7 @@ import at.redi2go.photonics.core.rendering.world.registry.light.WorldLightRegist
 import at.redi2go.photonics.core.rendering.world.registry.object.ObjectRegistry;
 import at.redi2go.photonics.core.rendering.world.registry.palete.PaletteRegistry;
 
+import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -81,9 +83,32 @@ public class WorldRegistry {
                 + ", models=" + blockModelRegistry.stats();
     }
 
+    public GpuBufferHeapStats worldHeapStats() {
+        return worldAllocator.heapStats();
+    }
+
+    public GpuBufferHeapStats paletteHeapStats() {
+        return paletteTexture.heapStats();
+    }
+
     public String memoryDiagnosticSummary() {
-        return "worldHeap=" + worldAllocator.heapStats()
-                + ", paletteHeap=" + paletteTexture.heapStats()
+        Runtime runtime = Runtime.getRuntime();
+        long committedHeap = runtime.totalMemory();
+        long usedHeap = committedHeap - runtime.freeMemory();
+        long gcCollections = 0;
+        long gcTimeMillis = 0;
+        for (var collector : ManagementFactory.getGarbageCollectorMXBeans()) {
+            gcCollections += Math.max(0, collector.getCollectionCount());
+            gcTimeMillis += Math.max(0, collector.getCollectionTime());
+        }
+
+        return "jvmHeap={usedBytes=" + usedHeap
+                + ", committedBytes=" + committedHeap
+                + ", maxBytes=" + runtime.maxMemory()
+                + "}, jvmGc={collections=" + gcCollections
+                + ", timeMs=" + gcTimeMillis
+                + "}, worldHeap=" + worldHeapStats()
+                + ", paletteHeap=" + paletteHeapStats()
                 + ", registries={" + diagnosticSummary() + "}";
     }
 

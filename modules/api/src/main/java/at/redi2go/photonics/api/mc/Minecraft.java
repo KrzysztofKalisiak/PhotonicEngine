@@ -16,6 +16,10 @@ public interface Minecraft {
         throw new AssertionError(); // TO BE IMPLEMENTED BY MIXIN
     }
 
+    static boolean isLevelActive() {
+        throw new AssertionError(); // TO BE IMPLEMENTED BY MIXIN
+    }
+
     static Vector3d getCameraPos() {
         throw new AssertionError(); // TO BE IMPLEMENTED BY MIXIN
     }

@@ -139,6 +139,27 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
     }
 
     @Override
+    public void closePhotonics(String reason) {
+        if (photonics != null) {
+            Photonics.LOGGER.info(
+                    "Photonics history reset v72: reason={}, generation={}",
+                    reason,
+                    photonicsGeneration
+            );
+            photonics.close();
+            photonics = null;
+
+            clearRenderers();
+            renderers.clear();
+        }
+
+        if (lightsProvider != null) {
+            PhConfig.removeLightProvider(lightsProvider);
+            lightsProvider = null;
+        }
+    }
+
+    @Override
     public List<DeferredIrisRenderer> getRenderers() {
         return renderers;
     }
@@ -165,21 +186,6 @@ public abstract class PipelineManagerMixin implements PipelineManagerExt {
 
     @Inject(method = "destroyPipeline", at = @At("HEAD"))
     private void destroyEverything(CallbackInfo ci) {
-        if (photonics != null) {
-            Photonics.LOGGER.info(
-                    "Photonics history reset v18: reason=pipeline-destroyed, generation={}",
-                    photonicsGeneration
-            );
-            photonics.close();
-            photonics = null;
-
-            clearRenderers();
-            renderers.clear();
-        }
-
-        if (lightsProvider != null) {
-            PhConfig.removeLightProvider(lightsProvider);
-            lightsProvider = null;
-        }
+        closePhotonics("pipeline-destroyed");
     }
 }

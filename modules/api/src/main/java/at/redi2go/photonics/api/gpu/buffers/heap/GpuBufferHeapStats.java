@@ -14,4 +14,11 @@ public record GpuBufferHeapStats(
     public static GpuBufferHeapStats unavailable(long capacityBytes) {
         return new GpuBufferHeapStats(capacityBytes, -1, -1, -1, -1, -1, -1, -1, -1);
     }
+
+    public long allocatableBytes() {
+        if (reservedBytes < 0 || reusableBytes < 0)
+            return -1;
+
+        return Math.max(0, capacityBytes - reservedBytes) + reusableBytes;
+    }
 }

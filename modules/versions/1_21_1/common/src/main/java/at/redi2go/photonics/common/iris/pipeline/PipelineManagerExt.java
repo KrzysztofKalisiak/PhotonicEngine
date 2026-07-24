@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface PipelineManagerExt {
     Optional<PhotonicsExtension> photonics();
 
+    void closePhotonics(String reason);
+
     List<DeferredIrisRenderer> getRenderers();
 
     void setRenderers(@Nullable List<PhotonicsRenderer> renderers);

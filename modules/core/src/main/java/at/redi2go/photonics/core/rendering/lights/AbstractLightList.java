@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -51,8 +52,9 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     private final Thread compilerThread;
     private final ReentrantLock lock = new ReentrantLock();
+    private final AtomicBoolean closed = new AtomicBoolean();
 
-    private boolean needsReload = false;
+    private volatile boolean needsReload = false;
     private LightRegistry lightRegistry;
     private final PhConfigWatcher<LightRegistry> lightsRegistryObserver;
 
@@ -103,6 +105,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                 .build();
 
         this.compilerThread = new Thread(this, "Photonics Light List Compiler");
+        this.compilerThread.setDaemon(true);
         this.compilerThread.start();
 
         this.lightRegistry = PhConfig.getLightRegistry();
@@ -113,6 +116,8 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
     }
 
     private void setLightRegistry(LightRegistry lightRegistry) {
+        if (closed.get()) return;
+
         this.lightRegistry = lightRegistry;
 
         needsReload = true;
@@ -121,9 +126,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     @Override
     public void run() {
-        while (true) {
-            if (Thread.interrupted() && !needsReload) return;
-
+        while (!closed.get()) {
             try {
                 boolean needsUpload = reloadLights();
                 if (!needsUpload)
@@ -144,7 +147,7 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                     storeSectionLights(newLights);
                 }
             } catch (InterruptedException e) {
-                if (!needsReload) return;
+                if (closed.get()) return;
             }
         }
     }
@@ -788,10 +791,25 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true))
+            return;
+
+        lightsRegistryObserver.close();
         needsReload = false;
         compilerThread.interrupt();
 
-        lightsRegistryObserver.close();
+        boolean interrupted = false;
+        while (compilerThread.isAlive()) {
+            try {
+                compilerThread.join();
+            } catch (InterruptedException ignored) {
+                interrupted = true;
+                compilerThread.interrupt();
+            }
+        }
+
+        if (interrupted)
+            Thread.currentThread().interrupt();
     }
 
     private static final Vector3i[] NEIGHBORS = new Vector3i[]{

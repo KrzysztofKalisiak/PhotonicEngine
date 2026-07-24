@@ -42,6 +42,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
     private static final int THREAD_POOL_SIZE = 3;
     private static final long SETTLED_DIAGNOSTIC_DELAY_NANOS = 2_000_000_000L;
+    private static final long ACTIVE_DIAGNOSTIC_INTERVAL_NANOS = 1_000_000_000L;
     private static final ExecutorService THREAD_POOL;
 
     private final SectionManager.TaskQueue<ChunkCompiler.BuildResult> taskQueue;
@@ -84,6 +85,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     private long mostRecentCompilationRevision = 0;
     private long lastObservedCompilationRevision = -1;
     private long lastCompilationChangeNanos = 0;
+    private long nextActiveDiagnosticNanos = 0;
     private boolean settledDiagnosticLogged = false;
 
     private int mostRecentCompiledSections = 0;
@@ -334,7 +336,10 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                 lastObservedCompilationRevision = mostRecentCompilationRevision;
                 lastCompilationChangeNanos = now;
                 settledDiagnosticLogged = false;
-                logWorldTracingDiagnostic(false, depth, worldReady, blockBoundsFallback);
+                if (now >= nextActiveDiagnosticNanos) {
+                    nextActiveDiagnosticNanos = now + ACTIVE_DIAGNOSTIC_INTERVAL_NANOS;
+                    logWorldTracingDiagnostic(false, depth, worldReady, blockBoundsFallback);
+                }
             } else if (!settledDiagnosticLogged
                     && lastObservedCompilationRevision > 0
                     && now - lastCompilationChangeNanos >= SETTLED_DIAGNOSTIC_DELAY_NANOS) {
@@ -357,7 +362,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             boolean blockBoundsFallback
     ) {
         Photonics.LOGGER.info(
-                "Photonics world tracing v71: revision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, boundsSource={}, compileMs={}",
+                "Photonics world tracing v72: revision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, boundsSource={}, compileMs={}",
                 mostRecentCompilationRevision,
                 settled,
                 mostRecentCompiledSections,
@@ -378,7 +383,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         );
 
         if (settled)
-            Photonics.LOGGER.info("Photonics memory v71: {}", registry.memoryDiagnosticSummary());
+            Photonics.LOGGER.info("Photonics memory v72: {}", registry.memoryDiagnosticSummary());
     }
 
     @Override

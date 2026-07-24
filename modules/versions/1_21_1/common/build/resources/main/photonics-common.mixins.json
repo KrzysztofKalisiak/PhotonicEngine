@@ -5,6 +5,7 @@
   "minVersion": "0.8",
   "client": [
     "BlockRenderDispatcherMixin",
+    "MinecraftLevelLifecycleMixin",
     "iris.IncludeGraphMixin",
     "iris.ShaderPackMixin",
     "iris.ShaderPackAccessor",

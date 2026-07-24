@@ -2,6 +2,7 @@ package at.redi2go.photonics.core.rendering.world.compiler;
 
 import at.redi2go.photonics.api.Disposable;
 import at.redi2go.photonics.api.gpu.buffers.heap.GpuBufferHeapOutOfMemoryError;
+import at.redi2go.photonics.api.gpu.buffers.heap.GpuBufferHeapStats;
 import at.redi2go.photonics.api.mc.Minecraft;
 import at.redi2go.photonics.api.mc.world.level.IBlockState;
 import at.redi2go.photonics.api.mc.world.level.ILevel;
@@ -34,8 +35,8 @@ import java.util.concurrent.locks.LockSupport;
 
 public class ChunkCompiler implements Runnable, RenderingComponent {
     private static final int THREAD_COUNT = 2;
-    private static final long MIN_HEAP_RETRY_MILLIS = 100;
-    private static final long MAX_HEAP_RETRY_MILLIS = 2_000;
+    private static final long HEAP_RECOVERY_RELEASE_BYTES = 8L * 1024L * 1024L;
+    private static final long COMPILER_IDLE_POLL_NANOS = 100_000_000L;
     private static final long FAILURE_LOG_INTERVAL_NANOS = 10_000_000_000L;
 
     private final Queue<Vector3i> unloadQueue;
@@ -49,7 +50,8 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
     private final Thread[] threads = new Thread[THREAD_COUNT];
     private final AtomicInteger consecutiveHeapFailures = new AtomicInteger();
-    private final AtomicLong heapBackoffUntilNanos = new AtomicLong();
+    private final AtomicReference<HeapPressure> heapPressure = new AtomicReference<>();
+    private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicLong nextHeapFailureLogNanos = new AtomicLong();
     private final AtomicLong nextHeapRecoveryLogNanos = new AtomicLong();
     private final AtomicLong nextCompilerFailureLogNanos = new AtomicLong();
@@ -69,14 +71,14 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             var thread = new Thread(this, "Photonic Chunk Compiler #" + i);
             threads[i] = thread;
 
-            thread.setDaemon(false);
+            thread.setDaemon(true);
             thread.start();
         }
     }
 
     @Override
     public void run() {
-        while (!Thread.currentThread().isInterrupted()) {
+        while (!closed.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 compileNextSection();
             } catch (InterruptedException ignored) {
@@ -93,8 +95,9 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
     }
 
     private void compileNextSection() throws InterruptedException, ExecutionException {
-        awaitHeapBackoff();
+        awaitCompilerReady();
         sectionQueue.awaitTask();
+        awaitCompilerReady();
         var result = sectionQueue.take();
 
         if (result.isEmpty()) return;
@@ -111,6 +114,8 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         long hash = section.computeSectionHash(level);
         if (isDuplicateSection(section.pos(), hash)) return;
 
+        GpuBufferHeapStats worldHeapBefore = worldRegistry.worldHeapStats();
+        GpuBufferHeapStats paletteHeapBefore = worldRegistry.paletteHeapStats();
         var buildResult = new BuildResult(section.pos(), section.blockPos(), hash, section.priority());
         boolean submitted = false;
         try {
@@ -152,7 +157,9 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                         section,
                         buildResult.failureCount(),
                         failure,
-                        buildResult.heapFailure()
+                        buildResult.heapFailure(),
+                        worldHeapBefore,
+                        paletteHeapBefore
                 );
                 return;
             }
@@ -170,7 +177,9 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             SectionCopy section,
             int failedBlocks,
             Throwable failure,
-            @Nullable GpuBufferHeapOutOfMemoryError heapFailure
+            @Nullable GpuBufferHeapOutOfMemoryError heapFailure,
+            GpuBufferHeapStats worldHeapBefore,
+            GpuBufferHeapStats paletteHeapBefore
     ) throws InterruptedException {
         worldRegistry.freeUnusedObjects();
 
@@ -186,28 +195,80 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             return;
         }
 
+        HeapKind heapKind = classifyHeap(heapFailure.heapStats(), worldHeapBefore, paletteHeapBefore);
+        if (heapKind == null) {
+            if (shouldLog(nextCompilerFailureLogNanos)) {
+                Photonics.LOGGER.error(
+                        "Photonics rejected section {} after pressure from an unknown GPU heap; failedHeap={}, memory={}",
+                        section.pos(),
+                        heapFailure.heapStats(),
+                        worldRegistry.memoryDiagnosticSummary(),
+                        failure
+                );
+            }
+            return;
+        }
+
+        GpuBufferHeapStats heapBefore = heapKind == HeapKind.WORLD ? worldHeapBefore : paletteHeapBefore;
+        GpuBufferHeapStats heapNow = heapStats(heapKind);
+        long attemptHeadroom = heapBefore.allocatableBytes();
+        long currentHeadroom = heapNow.allocatableBytes();
+        long capacity = heapNow.capacityBytes();
+
+        if (attemptHeadroom < 0 || currentHeadroom < 0 || capacity <= 0) {
+            if (shouldLog(nextCompilerFailureLogNanos)) {
+                Photonics.LOGGER.error(
+                        "Photonics rejected section {} because heap headroom is unavailable; heap={}, failedHeap={}, memory={}",
+                        section.pos(),
+                        heapKind.logName,
+                        heapFailure.heapStats(),
+                        worldRegistry.memoryDiagnosticSummary(),
+                        failure
+                );
+            }
+            return;
+        }
+
+        if (heapKind == HeapKind.PALETTE
+                && attemptHeadroom >= capacity - heapFailure.requestedBytes()) {
+            if (shouldLog(nextHeapFailureLogNanos)) {
+                Photonics.LOGGER.error(
+                        "Photonics rejected section {} until it changes: it exhausted the palette heap after starting with {} of {} bytes free; failedBlocks={}, requestedBytes={}, memory={}",
+                        section.pos(),
+                        attemptHeadroom,
+                        capacity,
+                        failedBlocks,
+                        heapFailure.requestedBytes(),
+                        worldRegistry.memoryDiagnosticSummary()
+                );
+            }
+            return;
+        }
+
         int consecutiveFailures = consecutiveHeapFailures.incrementAndGet();
-        long retryMillis = Math.min(
-                MAX_HEAP_RETRY_MILLIS,
-                MIN_HEAP_RETRY_MILLIS << Math.min(5, Math.max(0, consecutiveFailures - 1))
+        long resumeHeadroom = Math.max(
+                saturatedAdd(attemptHeadroom, heapFailure.requestedBytes(), capacity),
+                saturatedAdd(currentHeadroom, HEAP_RECOVERY_RELEASE_BYTES, capacity)
         );
-        long retryAt = System.nanoTime() + retryMillis * 1_000_000L;
-        heapBackoffUntilNanos.accumulateAndGet(retryAt, Math::max);
+        requireHeapHeadroom(heapKind, resumeHeadroom);
 
         if (shouldLog(nextHeapFailureLogNanos)) {
             Photonics.LOGGER.warn(
-                    "Photonics GPU heap pressure v71: section={}, failedBlocks={}, consecutiveFailures={}, retryMs={}, requestedBytes={}, failedHeap={}, memory={}",
+                    "Photonics GPU heap pressure v72: section={}, heap={}, failedBlocks={}, consecutiveFailures={}, attemptHeadroomBytes={}, currentHeadroomBytes={}, resumeHeadroomBytes={}, requestedBytes={}, memory={}",
                     section.pos(),
+                    heapKind.logName,
                     failedBlocks,
                     consecutiveFailures,
-                    retryMillis,
+                    attemptHeadroom,
+                    currentHeadroom,
+                    resumeHeadroom,
                     heapFailure.requestedBytes(),
-                    heapFailure.heapStats(),
                     worldRegistry.memoryDiagnosticSummary()
             );
         }
 
-        sectionQueue.offer(section.pos(), section);
+        if (Minecraft.isLevelActive() && !closed.get())
+            sectionQueue.offer(section.pos(), section);
     }
 
     private void recordSuccessfulBuild(SectionCopy section) {
@@ -216,7 +277,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
         if (shouldLog(nextHeapRecoveryLogNanos)) {
             Photonics.LOGGER.info(
-                    "Photonics GPU heap recovery v71: section={} compiled after {} deferred failure(s); memory={}",
+                    "Photonics GPU heap recovery v72: section={} compiled after {} deferred failure(s); memory={}",
                     section.pos(),
                     recoveredFailures,
                     worldRegistry.memoryDiagnosticSummary()
@@ -224,15 +285,63 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         }
     }
 
-    private void awaitHeapBackoff() throws InterruptedException {
+    private void awaitCompilerReady() throws InterruptedException {
         while (true) {
-            long remaining = heapBackoffUntilNanos.get() - System.nanoTime();
-            if (remaining <= 0) return;
-
-            LockSupport.parkNanos(Math.min(remaining, 50_000_000L));
-            if (Thread.currentThread().isInterrupted())
+            if (closed.get() || Thread.currentThread().isInterrupted())
                 throw new InterruptedException();
+
+            if (!Minecraft.isLevelActive()) {
+                LockSupport.parkNanos(COMPILER_IDLE_POLL_NANOS);
+                continue;
+            }
+
+            HeapPressure pressure = heapPressure.get();
+            if (pressure == null)
+                return;
+
+            long worldHeadroom = worldRegistry.worldHeapStats().allocatableBytes();
+            long paletteHeadroom = worldRegistry.paletteHeapStats().allocatableBytes();
+            if (pressure.isSatisfied(worldHeadroom, paletteHeadroom)) {
+                heapPressure.compareAndSet(pressure, null);
+                continue;
+            }
+
+            LockSupport.parkNanos(COMPILER_IDLE_POLL_NANOS);
         }
+    }
+
+    private void requireHeapHeadroom(HeapKind kind, long headroomBytes) {
+        heapPressure.updateAndGet(current -> {
+            HeapPressure next = current == null ? HeapPressure.NONE : current;
+            return next.withRequiredHeadroom(kind, headroomBytes);
+        });
+    }
+
+    private GpuBufferHeapStats heapStats(HeapKind kind) {
+        return kind == HeapKind.WORLD
+                ? worldRegistry.worldHeapStats()
+                : worldRegistry.paletteHeapStats();
+    }
+
+    private static @Nullable HeapKind classifyHeap(
+            GpuBufferHeapStats failedHeap,
+            GpuBufferHeapStats worldHeap,
+            GpuBufferHeapStats paletteHeap
+    ) {
+        boolean matchesWorld = failedHeap.capacityBytes() == worldHeap.capacityBytes();
+        boolean matchesPalette = failedHeap.capacityBytes() == paletteHeap.capacityBytes();
+
+        if (matchesWorld == matchesPalette)
+            return null;
+
+        return matchesWorld ? HeapKind.WORLD : HeapKind.PALETTE;
+    }
+
+    private static long saturatedAdd(long value, long increment, long limit) {
+        if (value >= limit || increment >= limit - value)
+            return limit;
+
+        return value + increment;
     }
 
     private static @Nullable GpuBufferHeapOutOfMemoryError findHeapFailure(Throwable failure) {
@@ -286,6 +395,10 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true))
+            return;
+
+        heapPressure.set(null);
         for (var thread : threads)
             thread.interrupt();
 
@@ -303,6 +416,48 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
         if (interrupted)
             Thread.currentThread().interrupt();
+
+        Photonics.LOGGER.info(
+                "Photonics chunk compiler v72 stopped: pendingSections={}, memory={}",
+                sectionQueue.pendingCount(),
+                worldRegistry.memoryDiagnosticSummary()
+        );
+    }
+
+    private enum HeapKind {
+        WORLD("world"),
+        PALETTE("palette");
+
+        private final String logName;
+
+        HeapKind(String logName) {
+            this.logName = logName;
+        }
+    }
+
+    private record HeapPressure(
+            long worldHeadroomBytes,
+            long paletteHeadroomBytes
+    ) {
+        private static final HeapPressure NONE = new HeapPressure(0, 0);
+
+        private HeapPressure withRequiredHeadroom(HeapKind kind, long headroomBytes) {
+            return switch (kind) {
+                case WORLD -> new HeapPressure(
+                        Math.max(worldHeadroomBytes, headroomBytes),
+                        paletteHeadroomBytes
+                );
+                case PALETTE -> new HeapPressure(
+                        worldHeadroomBytes,
+                        Math.max(paletteHeadroomBytes, headroomBytes)
+                );
+            };
+        }
+
+        private boolean isSatisfied(long worldHeadroom, long paletteHeadroom) {
+            return worldHeadroom >= worldHeadroomBytes
+                    && paletteHeadroom >= paletteHeadroomBytes;
+        }
     }
 
     public class BuildResult implements PrioritizedTask, Disposable {

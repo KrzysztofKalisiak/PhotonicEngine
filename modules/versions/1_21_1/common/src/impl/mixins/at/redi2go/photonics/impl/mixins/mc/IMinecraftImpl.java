@@ -23,6 +23,12 @@ public interface IMinecraftImpl {
     }
 
     @Overwrite
+    static boolean isLevelActive() {
+        var minecraft = net.minecraft.client.Minecraft.getInstance();
+        return minecraft.level != null && minecraft.getConnection() != null;
+    }
+
+    @Overwrite
     static Vector3d getCameraPos() {
         Vec3 position = net.minecraft.client.Minecraft.getInstance()
                 .gameRenderer
