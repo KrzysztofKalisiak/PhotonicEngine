@@ -69,11 +69,12 @@ void main() {
         return;
     }
 
-    // Stable world receivers already have a validated temporal proposal. Trace
-    // alternating pixels so disocclusions, hand geometry, and Sable receivers
-    // still receive a fresh GI path every frame.
-    bool deferred_to_history = ((frag_tex_coord.x + frag_tex_coord.y + frameCounter) & 1) != 0
-        && ph_has_reusable_world_indirect_history();
+    // Group the interleave mask into coherent tiles. A one-pixel checkerboard
+    // makes every GPU wave execute both branches and does not avoid the ray.
+    ivec2 interleave_tile = frag_tex_coord / 16;
+    bool deferred_to_history = false;
+    if (((interleave_tile.x + interleave_tile.y + frameCounter) & 1) != 0)
+        deferred_to_history = ph_has_reusable_world_indirect_history();
     if (deferred_to_history) {
         indirect_reservoir_encode(
             reservoir,

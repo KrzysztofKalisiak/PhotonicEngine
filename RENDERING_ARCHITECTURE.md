@@ -406,7 +406,7 @@ runs:
 |---:|---|---|---|
 | 0 | Flip history | current/previous attachments swap roles | Preserve last frame without copying it |
 | 1 | `r1_initial_direct` | direct reservoir | Propose direct-light candidates, retain one weighted representative, and validate its visibility |
-| 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace an initial GI path; stable world history permits alternating-pixel tracing |
+| 2 | `r3_initial_indirect` | two indirect reservoir textures | Trace an initial GI path; stable world history permits alternating-tile tracing |
 | 3 | `r4_temporal_reuse` | direct and indirect reservoirs | Reproject and merge compatible previous-frame reservoirs |
 | 4 | `r5_copy_spatial_input` | immutable reservoir copies | Prevent reads from observing writes from the same spatial pass |
 | 5 | `r5_spatial_reuse` | direct and indirect reservoirs | Merge compatible current-frame neighbors, clamp history, and validate the final indirect representative |
@@ -428,12 +428,14 @@ final indirect visibility from `r5_spatial_reuse`. The standalone
 for upstream comparison, but are not scheduled. This removes two full-screen
 reservoir read/write cycles without removing either visibility ray.
 
-Starting with v75, `r3_initial_indirect` omits the expensive new GI trace on
-alternating pixels only when a finite previous indirect reservoir reprojects to
-the same ordinary-world surface. The temporal pass supplies that pixel's
-proposal. Disocclusions, missing history, hand geometry, and Sable receivers
-remain full rate so the optimization does not create uncovered pixels or rely
-on unsupported moving-hit history.
+Starting with v76, `r3_initial_indirect` omits the expensive new GI trace in
+alternating 16 x 16 screen tiles only when a finite previous indirect reservoir
+reprojects to the same ordinary-world surface. The temporal pass supplies that
+pixel's proposal. Coherent tiles let neighboring GPU lanes avoid the ray
+together; the v75 one-pixel checkerboard diverged inside every GPU wave and
+saved effectively no trace time. Disocclusions, missing history, hand geometry,
+and Sable receivers remain full rate so the optimization does not create
+uncovered pixels or rely on unsupported moving-hit history.
 
 ### 8.4 The shader pack composes the result
 
