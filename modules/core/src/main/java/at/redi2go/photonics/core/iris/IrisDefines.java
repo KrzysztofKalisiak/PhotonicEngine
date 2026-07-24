@@ -15,6 +15,10 @@ public class IrisDefines {
         defines.floatDefine("PH_RENDER_SCALE", phProperties.getRenderScale());
         defines.floatDefine("PH_GI_RENDER_SCALE", phProperties.getGiRenderScale());
         defines.floatDefine("PH_SHADERPACK_RENDER_SCALE", phProperties.getShaderPackRenderScale());
+        defines.intDefine(
+                "PH_TEMPORAL_UPSCALER_HISTORY_FRAMES",
+                phProperties.getTemporalUpscalerHistoryFrames()
+        );
         defines.intDefine("PH_MAX_LIGHTS", phProperties.getMaxLights());
         defines.intDefine("PH_MAX_GI_BOUNCES", phProperties.getMaxGiBounces());
 
@@ -37,6 +41,9 @@ public class IrisDefines {
 
         if (phProperties.isHandheldLightEnabled())
             defines.stringDefine("PH_ENABLE_HANDHELD_LIGHT", "");
+
+        if (phProperties.isTemporalUpscalerActive())
+            defines.stringDefine("PH_TEMPORAL_UPSCALER", "");
 
         if (phProperties.isLightBinningEnabled() || phProperties.getLightingMode() == LightingMode.BASIC)
             defines.stringDefine("PH_ENABLE_LIGHT_BINNING", "");

@@ -19,6 +19,27 @@ public interface PhotonicsProperties {
         return getRenderScale();
     }
 
+    boolean DEFAULT_USE_TEMPORAL_UPSCALER = false;
+    String TEMPORAL_UPSCALER_KEY = "photonics.temporalUpscaler";
+
+    default boolean useTemporalUpscaler() {
+        return DEFAULT_USE_TEMPORAL_UPSCALER;
+    }
+
+    default boolean isTemporalUpscalerActive() {
+        return useTemporalUpscaler()
+                && getLightingMode() == LightingMode.RESTIR
+                && (isBlockLightEnabled() || (isGiEnabled() && useRestirCombinedGi()))
+                && getRenderScale() < getShaderPackRenderScale() - 0.0001f;
+    }
+
+    int DEFAULT_TEMPORAL_UPSCALER_HISTORY_FRAMES = 8;
+    String TEMPORAL_UPSCALER_HISTORY_FRAMES_KEY = "photonics.temporalUpscalerHistoryFrames";
+
+    default int getTemporalUpscalerHistoryFrames() {
+        return DEFAULT_TEMPORAL_UPSCALER_HISTORY_FRAMES;
+    }
+
     int getMaxLights();
     int DEFAULT_MAX_LIGHTS = 1000;
     String MAX_LIGHTS_KEY = "photonics.maxLights";

@@ -1,4 +1,9 @@
+#if !defined PH_RESTIR_SPLIT_GI || defined PH_ENABLE_BLOCKLIGHT
 //ph_required: uniform sampler2D restir_lighting;
+#endif
+#if defined PH_TEMPORAL_UPSCALER && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
+//ph_required: uniform sampler2D photonics_temporal_lighting;
+#endif
 #if PH_RESTIR_DENOISER_PASSES != 0
 //ph_required: uniform sampler2D denoise_result;
 #endif
@@ -203,6 +208,9 @@ vec3 ph_sample_split_gi(vec2 tex_coord) {
 #endif
 
 vec3 sample_photonics_direct(vec2 tex_coord) {
+#if defined PH_TEMPORAL_UPSCALER && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
+    return texture(photonics_temporal_lighting, tex_coord).rgb;
+#else
 #if defined PH_RESTIR_SPLIT_GI
     vec3 result = vec3(0.0f);
     #if defined PH_ENABLE_BLOCKLIGHT
@@ -233,6 +241,37 @@ vec3 sample_photonics_direct(vec2 tex_coord) {
     result += texture(restir_local_lighting, tex_coord).rgb;
     #endif
     return result;
+#endif
+}
+
+float ph_sample_photonics_source_variance(vec2 tex_coord) {
+#if defined PH_TEMPORAL_UPSCALER && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
+    return 0.0f;
+#else
+    float variance = 0.0f;
+#if defined PH_RESTIR_SPLIT_GI
+    #if defined PH_ENABLE_BLOCKLIGHT
+        #if PH_RESTIR_DENOISER_PASSES != 0
+        variance = max(texture(denoise_result, tex_coord).a, 0.0f);
+        #else
+        variance = 1.0f / max(texture(restir_lighting, tex_coord).a, 1.0f);
+        #endif
+    #endif
+
+    #if PH_RESTIR_GI_DENOISER_PASSES != 0
+    variance += max(texture(restir_gi_denoise_result, tex_coord).a, 0.0f);
+    #else
+    variance += 1.0f / max(texture(restir_gi_lighting, tex_coord).a, 1.0f);
+    #endif
+#else
+    #if PH_RESTIR_DENOISER_PASSES != 0
+    variance = max(texture(denoise_result, tex_coord).a, 0.0f);
+    #else
+    variance = 1.0f / max(texture(restir_lighting, tex_coord).a, 1.0f);
+    #endif
+#endif
+    return variance;
+#endif
 }
 
 vec3 sample_photonics_handheld(vec2 tex_coord) {

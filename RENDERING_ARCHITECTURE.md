@@ -1,5 +1,8 @@
 # PhotonicEngine Rendering Architecture
 
+The optional Photonics-only temporal lighting reconstruction path is documented
+separately in [TEMPORAL_UPSCALER.md](TEMPORAL_UPSCALER.md).
+
 This guide explains how this repository turns Minecraft state into lighting on
 the screen. It is written for an engineer who is comfortable with Python,
 probability, and numerical methods, but is new to real-time rendering.

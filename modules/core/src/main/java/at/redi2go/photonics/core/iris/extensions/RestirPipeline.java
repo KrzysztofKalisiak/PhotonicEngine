@@ -88,6 +88,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
             buildCombinedPipeline(irisFactory);
         }
         buildAuxiliaryLightingPipeline(irisFactory);
+        buildTemporalUpscalerPipeline(irisFactory);
     }
 
     private void buildCombinedPipeline(IrisFactory irisFactory) {
@@ -393,6 +394,67 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .debugGroup("restir handheld")
                 .withFramebuffer(otherFramebuffer)
                 .deferredPass("handheld", "/photonics/rendering/restir/passes/r10_handheld.fsh", null, this::isHandheldLightingEnabled)
+                .build(this::registerRenderer);
+    }
+
+    private void buildTemporalUpscalerPipeline(IrisFactory irisFactory) {
+        if (!properties.isTemporalUpscalerActive()) {
+            if (properties.useTemporalUpscaler()) {
+                Photonics.LOGGER.info(
+                        "Photonics temporal upscaler bypassed: mode={}, reconstructableRestirLighting={}, sourceScale={}, outputScale={}",
+                        properties.getLightingMode(),
+                        isRestirEnabled(),
+                        properties.getRenderScale(),
+                        properties.getShaderPackRenderScale()
+                );
+            }
+            return;
+        }
+
+        var sourceFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
+                .addAttachment(
+                        "photonics_temporal_source",
+                        ITextureFormat.rgba16f(),
+                        CREATE_SAMPLER
+                )
+                .build(this::registerComponent);
+        var historyFramebuffer = irisFactory.newFramebuffer(properties.getShaderPackRenderScale())
+                .addAttachment(
+                        "photonics_temporal_lighting",
+                        ITextureFormat.rgba16f(),
+                        FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER
+                )
+                .addAttachment(
+                        "photonics_temporal_surface",
+                        ITextureFormat.rgba16f(),
+                        FLIP | CREATE_PREV_SAMPLER
+                )
+                .build(this::registerComponent);
+
+        Photonics.LOGGER.info(
+                "Photonics temporal upscaler: enabled=true, sourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, composition=private-lighting-texture",
+                properties.getRenderScale(),
+                properties.getGiRenderScale(),
+                properties.getShaderPackRenderScale(),
+                properties.getTemporalUpscalerHistoryFrames()
+        );
+
+        irisFactory.newPipeline()
+                .debugGroup("photonics temporal source")
+                .withFramebuffer(sourceFramebuffer)
+                .deferredPass(
+                        "compose low-resolution lighting",
+                        "/photonics/rendering/temporal_upscaler/source.fsh",
+                        null
+                )
+                .debugGroup("photonics temporal reconstruction")
+                .thenFlip(historyFramebuffer)
+                .withFramebuffer(historyFramebuffer)
+                .deferredPass(
+                        "reconstruct lighting",
+                        "/photonics/rendering/temporal_upscaler/reconstruct.fsh",
+                        null
+                )
                 .build(this::registerRenderer);
     }
 
