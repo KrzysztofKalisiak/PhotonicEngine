@@ -156,13 +156,21 @@ converge, while coherent low-variance multi-tap changes retain the fast path at
 every history age.
 
 When geometric history is unavailable, the previous same-screen pixel is used
-only as a one-sided upper envelope for a low-confidence positive estimate. It is
-never copied into the result and cannot add old light to the current surface.
-This closes the raw-current bypass on animated cutouts and disocclusions without
-introducing ordinary temporal light leakage. Once one valid geometric history
-sample exists, confidence gating applies immediately; unstable young history
-uses the configured stable-history denominator instead of the large startup
-weights.
+only as a one-sided upper envelope for a positive estimate. It is never copied
+into the result and cannot add old light to the current surface. This closes the
+raw-current bypass on animated cutouts and disocclusions without introducing
+ordinary temporal light leakage. Once one valid geometric history sample
+exists, confidence gating applies immediately; unstable young history uses the
+configured stable-history denominator instead of the large startup weights.
+
+The final resolved radiance also has a one-sided, history-relative HDR growth
+bound. Reducing a suspicious sample's temporal weight is insufficient when its
+radiance is orders of magnitude above history: even a small contribution can
+become a white point after shaderpack exposure and bloom. Large positive steps
+therefore cannot bypass the bound even when source variance reports high
+confidence. Small coherent changes remain immediate. A persistent large change
+advances by the permitted amount every rendered frame and converges rapidly;
+negative changes are never restricted.
 
 A reactive weight increases current-frame influence for:
 

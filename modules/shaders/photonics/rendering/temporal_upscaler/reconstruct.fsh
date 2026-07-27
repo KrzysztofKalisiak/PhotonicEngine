@@ -598,6 +598,53 @@ float ph_luminance(vec3 color) {
     return dot(color, vec3(0.2126f, 0.7152f, 0.0722f));
 }
 
+vec3 ph_limit_positive_radiance_step(
+    vec3 candidate_radiance,
+    vec3 reference_radiance,
+    float current_confidence
+) {
+    float candidate_luma = ph_luminance(candidate_radiance);
+    float reference_luma = max(ph_luminance(reference_radiance), 0.0f);
+    if (candidate_luma <= reference_luma || candidate_luma <= 1e-6f)
+        return candidate_radiance;
+
+    float relative_increase = (candidate_luma - reference_luma)
+        / max(candidate_luma, 0.1f);
+    float uncertain_spike = smoothstep(
+        0.08f,
+        0.50f,
+        relative_increase
+    ) * (1.0f - current_confidence);
+    float hard_hdr_spike = smoothstep(
+        0.35f,
+        0.65f,
+        relative_increase
+    );
+    float limit_strength = max(uncertain_spike, hard_hdr_spike);
+    if (limit_strength <= 0.0f)
+        return candidate_radiance;
+
+    // A confidence estimate can itself be stale or underestimate an HDR
+    // reservoir outlier. Bound large positive output steps independently of
+    // confidence. A persistent real light grows by this amount every rendered
+    // frame and therefore converges quickly without allowing a one-frame
+    // sample to become a post-exposure white point.
+    float permitted_increase = max(
+        0.025f * (1.0f + reference_luma),
+        0.25f * reference_luma
+    );
+    float limited_luma = min(
+        candidate_luma,
+        reference_luma + permitted_increase
+    );
+    float limited_scale = limited_luma / candidate_luma;
+    return candidate_radiance * mix(
+        1.0f,
+        limited_scale,
+        limit_strength
+    );
+}
+
 vec3 ph_limit_unreprojected_positive(
     vec3 current_radiance,
     float current_confidence,
@@ -623,33 +670,16 @@ vec3 ph_limit_unreprojected_positive(
             || !ph_temporal_finite_vec3(screen_history.rgb))
         return current_radiance;
 
-    float current_luma = ph_luminance(current_radiance);
-    float previous_luma = max(ph_luminance(screen_history.rgb), 0.0f);
-    if (current_luma <= previous_luma || current_luma <= 1e-6f)
-        return current_radiance;
-
-    float relative_increase = (current_luma - previous_luma)
-        / max(current_luma, 0.1f);
-    float rejection = smoothstep(0.08f, 0.50f, relative_increase)
-        * (1.0f - current_confidence);
-    if (rejection <= 0.0f)
-        return current_radiance;
-
     // Geometry history can be unavailable on animated cutouts and newly
     // exposed surfaces. The previous screen pixel is not safe to reuse as
     // lighting, but it is safe as a one-sided upper envelope: this operation
     // can only remove an unstable positive excursion and cannot leak old light
     // onto a newly dark surface.
-    float permitted_increase = max(
-        0.025f * (1.0f + previous_luma),
-        0.50f * previous_luma
+    return ph_limit_positive_radiance_step(
+        current_radiance,
+        screen_history.rgb,
+        current_confidence
     );
-    float limited_luma = min(
-        current_luma,
-        previous_luma + permitted_increase
-    );
-    float limited_scale = limited_luma / current_luma;
-    return current_radiance * mix(1.0f, limited_scale, rejection);
 }
 
 void main() {
@@ -943,6 +973,11 @@ void main() {
         resolved = current_radiance;
         resolved_age = 1.0f;
     }
+    resolved = ph_limit_positive_radiance_step(
+        resolved,
+        history_radiance,
+        current_confidence
+    );
     temporal_lighting_out = vec4(
         clamp(resolved, vec3(0.0f), vec3(65504.0f)),
         ph_temporal_encode_history_age(
