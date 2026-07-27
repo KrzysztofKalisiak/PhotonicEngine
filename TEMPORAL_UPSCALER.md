@@ -155,13 +155,12 @@ error. The current estimate is never discarded: persistent changes still
 converge, while coherent low-variance multi-tap changes retain the fast path at
 every history age.
 
-When geometric history is unavailable, the previous same-screen pixel is used
-only as a one-sided upper envelope for a positive estimate. It is never copied
-into the result and cannot add old light to the current surface. This closes the
-raw-current bypass on animated cutouts and disocclusions without introducing
-ordinary temporal light leakage. Once one valid geometric history sample
-exists, confidence gating applies immediately; unstable young history uses the
-configured stable-history denominator instead of the large startup weights.
+When geometric history is unavailable, reconstruction starts from the current
+compatible source estimate. A previous value at the same screen coordinate can
+belong to a different surface or low-resolution sample phase, so it is not used
+as a lighting bound. Once one valid geometric history sample exists, confidence
+gating applies immediately; unstable young history uses the configured
+stable-history denominator instead of the large startup weights.
 
 The final resolved radiance also has a one-sided, history-relative HDR growth
 bound. Reducing a suspicious sample's temporal weight is insufficient when its
@@ -174,6 +173,14 @@ converges rapidly; negative changes are never restricted. The rate is
 frame-rate independent. This matters on fast GPUs, where a stochastic source
 burst may survive several render frames but still occupy only one video or
 display frame.
+
+Because that bound is asymmetric, it is enabled only for mature,
+well-supported history whose reprojected receiver is effectively stationary.
+The motion gate uses output pixels per second, not pixels per frame, so its
+behavior is consistent across frame rates. Camera or receiver motion releases
+the bound before low-resolution source-grid phase changes can be converted into
+dark bands, and unsupported or newly exposed pixels never compare against an
+unrelated same-screen predecessor.
 
 A reactive weight increases current-frame influence for:
 

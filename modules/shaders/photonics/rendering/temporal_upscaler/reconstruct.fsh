@@ -28,6 +28,8 @@ const float PH_UPSCALE_HISTORY_REVISION_STRIDE = 64.0f;
 const float PH_UPSCALE_HDR_GROWTH_RATE = 4.0f;
 const float PH_UPSCALE_MIN_FRAME_TIME = 1.0f / 1000.0f;
 const float PH_UPSCALE_MAX_FRAME_TIME = 1.0f / 15.0f;
+const float PH_UPSCALE_HDR_LIMIT_MOTION_RATE_START = 0.5f;
+const float PH_UPSCALE_HDR_LIMIT_MOTION_RATE_END = 4.0f;
 
 float ph_temporal_encode_history_age(float age) {
     return float(ph_world_revision_slot) * PH_UPSCALE_HISTORY_REVISION_STRIDE
@@ -605,7 +607,8 @@ float ph_luminance(vec3 color) {
 vec3 ph_limit_positive_radiance_step(
     vec3 candidate_radiance,
     vec3 reference_radiance,
-    float current_confidence
+    float current_confidence,
+    float temporal_stability
 ) {
     float candidate_luma = ph_luminance(candidate_radiance);
     float reference_luma = max(ph_luminance(reference_radiance), 0.0f);
@@ -624,7 +627,8 @@ vec3 ph_limit_positive_radiance_step(
         0.65f,
         relative_increase
     );
-    float limit_strength = max(uncertain_spike, hard_hdr_spike);
+    float limit_strength = max(uncertain_spike, hard_hdr_spike)
+        * clamp(temporal_stability, 0.0f, 1.0f);
     if (limit_strength <= 0.0f)
         return candidate_radiance;
 
@@ -653,43 +657,6 @@ vec3 ph_limit_positive_radiance_step(
         1.0f,
         limited_scale,
         limit_strength
-    );
-}
-
-vec3 ph_limit_unreprojected_positive(
-    vec3 current_radiance,
-    float current_confidence,
-    ivec2 output_size
-) {
-    ivec2 output_texel = clamp(
-        ivec2(gl_FragCoord.xy),
-        ivec2(0),
-        output_size - ivec2(1)
-    );
-    vec4 screen_history = texelFetch(
-        prev_photonics_temporal_lighting,
-        output_texel,
-        0
-    );
-    float unused_age;
-    float unused_revision_match;
-    if (!ph_temporal_decode_history_age(
-            screen_history.a,
-            unused_age,
-            unused_revision_match
-        )
-            || !ph_temporal_finite_vec3(screen_history.rgb))
-        return current_radiance;
-
-    // Geometry history can be unavailable on animated cutouts and newly
-    // exposed surfaces. The previous screen pixel is not safe to reuse as
-    // lighting, but it is safe as a one-sided upper envelope: this operation
-    // can only remove an unstable positive excursion and cannot leak old light
-    // onto a newly dark surface.
-    return ph_limit_positive_radiance_step(
-        current_radiance,
-        screen_history.rgb,
-        current_confidence
     );
 }
 
@@ -847,13 +814,8 @@ void main() {
     );
 
     if (!has_history) {
-        vec3 bootstrap_radiance = ph_limit_unreprojected_positive(
-            current_radiance,
-            current_confidence,
-            output_size
-        );
         temporal_lighting_out = vec4(
-            bootstrap_radiance,
+            current_radiance,
             ph_temporal_encode_history_age(1.0f)
         );
         return;
@@ -984,10 +946,42 @@ void main() {
         resolved = current_radiance;
         resolved_age = 1.0f;
     }
+
+    // The one-sided HDR bound deliberately accepts a darker estimate
+    // immediately and slows only positive recovery. Applying it while a
+    // receiver moves through the low-resolution source grid therefore turns
+    // normal phase changes into camera-relative dark bands. Keep it for stable
+    // mature history, where a large positive step is actually a firefly, and
+    // release it using pixels per second so behavior does not depend on FPS.
+    float motion_delta_seconds = clamp(
+        frameTime,
+        PH_UPSCALE_MIN_FRAME_TIME,
+        PH_UPSCALE_MAX_FRAME_TIME
+    );
+    float motion_rate = motion_pixels / motion_delta_seconds;
+    float stationary_confidence = 1.0f - smoothstep(
+        PH_UPSCALE_HDR_LIMIT_MOTION_RATE_START,
+        PH_UPSCALE_HDR_LIMIT_MOTION_RATE_END,
+        motion_rate
+    );
+    float mature_history_confidence = smoothstep(
+        1.0f,
+        4.0f,
+        history_age
+    );
+    float supported_history_confidence = smoothstep(
+        0.50f,
+        0.90f,
+        history_support
+    );
+    float hdr_limit_stability = stationary_confidence
+        * mature_history_confidence
+        * supported_history_confidence;
     resolved = ph_limit_positive_radiance_step(
         resolved,
         history_radiance,
-        current_confidence
+        current_confidence,
+        hdr_limit_stability
     );
     temporal_lighting_out = vec4(
         clamp(resolved, vec3(0.0f), vec3(65504.0f)),
