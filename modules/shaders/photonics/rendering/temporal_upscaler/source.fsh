@@ -2,7 +2,9 @@
 
 #define PH_TEMPORAL_UPSCALER_SOURCE_PASS
 
+#if !defined PH_RESTIR_SPLIT_GI
 //ph_required: uniform sampler2D ph_frag_data0;
+#endif
 
 #include "/photonics/rendering/restir/samplers.glsl"
 
