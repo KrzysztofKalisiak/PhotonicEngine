@@ -20,6 +20,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v91-upscaler-firefly-stability-mc1.21.1.jar` | `fix/v91-temporal-upscaler-fireflies` / `248c68cd` | Rejects incoherent sparse bright samples without slowing coherent lighting changes | `39AD4C23884AE83F3AB11158F88F199BF8B7DD755C1B66E01C56386B583E565C` |
 | `photonics-v92-upscaler-variance-gate-mc1.21.1.jar` | `fix/v92-temporal-upscaler-variance-gate` / `96db8fec` | Makes temporal variance authoritative when denoising spreads a stochastic event across agreeing source taps | `79B68C269937FC44DA526380727F3DDB8C1790C5F3737DA72066D3AE14229A6F` |
 | `photonics-v93-upscaler-bootstrap-fireflies-mc1.21.1.jar` | `fix/v93-temporal-upscaler-bootstrap-fireflies` / `167bfa5d` | Bounds low-confidence positive spikes when geometric reprojection history is unavailable and stabilizes young history | `29B22E7FD1A9A951ACC4F0A09C2227FEC98AAE31D3CFD98969A27D13C9F9B739` |
+| `photonics-v94-upscaler-radiance-step-limit-mc1.21.1.jar` | `fix/v94-temporal-upscaler-radiance-step-limit` / `c9b81fe7` | Bounds the final positive HDR radiance step so extreme samples cannot bypass temporal weighting or misleading confidence | `53801555AD980620FB6E6FCBA908250DA93F933230532BE3F6AF44996FF265F9` |
 
 ## Capture Rules
 
@@ -89,16 +90,16 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
-Use `photonics-v93-upscaler-bootstrap-fireflies-mc1.21.1.jar`. V91 rejected a
-lone unsupported source tap, but its additive confidence allowed four agreeing
-taps to override high temporal variance. V92 made variance authoritative for
-valid mature history. Frame-by-frame inspection of the v91 capture also found
-compact one-frame fireflies near foliage and dark surfaces at approximately
-2.30, 2.90, 4.56, 4.91, 8.19, and 13.95 seconds. Those pixels frequently lacked
-valid geometric reprojection history and therefore bypassed both filters. V93
-uses valid prior screen-space lighting only as a one-sided upper bound for a
-low-confidence positive bootstrap sample; it does not copy invalid history or
-preserve obsolete light.
+Use `photonics-v94-upscaler-radiance-step-limit-mc1.21.1.jar`. V91-v92 reduced
+the temporal weight and history rectification of suspicious current samples.
+V93 also closed the raw-current path when geometric reprojection history was
+unavailable. Optical-flow-aligned frame inspection nevertheless found compact
+one-frame fireflies in v93 at approximately 3.00, 3.17, 3.50, 3.84, 4.86, and
+5.87 seconds. A sufficiently large HDR source outlier still remained visible
+after a small temporal weight, and a misleading high-confidence estimate could
+take the reactive fast path. V94 bounds the final positive history-relative
+radiance step independently of confidence. It never restricts negative changes;
+a persistent real positive change advances every rendered frame.
 
 Then use:
 
@@ -116,9 +117,9 @@ Then use:
    Inspect normal playback and individual frames. Distant surfaces must not
    breathe, and isolated one-frame bright one- or two-pixel points must not
    appear.
-3. Compare individual frames around 2.30, 2.90, 4.56, 4.91, 8.19, and 13.95
-   seconds with the v91 recording. Check foliage, dark ground, and distant
-   surfaces rather than only the bright emitters.
+3. Compare individual frames around 3.00, 3.17, 3.50, 3.84, 4.86, and 5.87
+   seconds with the v93 recording. Check foliage, dark ground, wall faces, and
+   distant surfaces rather than only the bright emitters.
 4. Wave or orbit leaves, grass, flowers, fences, and roof edges near a direct
    light. Then reveal a brightly lit surface slowly from behind an edge and
    repeat with a rapid camera turn. A genuinely new bright surface may be
@@ -126,9 +127,9 @@ Then use:
    without a compact white or yellow flash.
 5. Occlude the same surface and remove its light. The prior screen-space value
    must not leak onto the newly dark surface or leave a lighting trail.
-6. Compare the fixed-camera recording directly with v91. Pay particular
+6. Compare the fixed-camera recording directly with v91 and v93. Pay particular
    attention around 1.2, 8.5, and 12.6 seconds, where the v91 capture changed
-   brightness in coherent steps. V93 should retain v92's smoothing of those
+   brightness in coherent steps. V94 should retain v92's smoothing of those
    source-estimator excursions rather than treating tap agreement as proof of
    stability.
 7. Approach the same lights slowly. The rejection must remain stable as a light
@@ -136,7 +137,8 @@ Then use:
 8. Place and remove both a nearby light and a tiny distant light while the
    camera is still. A coherent nearby change should react immediately. A
    distant sparse light may ramp briefly, but it must converge within roughly
-   one second and must not remain incorrectly dim.
+   one second and must not remain incorrectly dim. Removing or occluding either
+   light must remain immediate because the v94 bound is positive-only.
 9. Cross the same section boundary slowly and quickly. New compiler revisions
    must not produce a whole-view brightness pulse.
 10. Place and remove a full block next to a light while the camera is still.
