@@ -598,6 +598,60 @@ float ph_luminance(vec3 color) {
     return dot(color, vec3(0.2126f, 0.7152f, 0.0722f));
 }
 
+vec3 ph_limit_unreprojected_positive(
+    vec3 current_radiance,
+    float current_confidence,
+    ivec2 output_size
+) {
+    ivec2 output_texel = clamp(
+        ivec2(gl_FragCoord.xy),
+        ivec2(0),
+        output_size - ivec2(1)
+    );
+    vec4 screen_history = texelFetch(
+        prev_photonics_temporal_lighting,
+        output_texel,
+        0
+    );
+    float unused_age;
+    float unused_revision_match;
+    if (!ph_temporal_decode_history_age(
+            screen_history.a,
+            unused_age,
+            unused_revision_match
+        )
+            || !ph_temporal_finite_vec3(screen_history.rgb))
+        return current_radiance;
+
+    float current_luma = ph_luminance(current_radiance);
+    float previous_luma = max(ph_luminance(screen_history.rgb), 0.0f);
+    if (current_luma <= previous_luma || current_luma <= 1e-6f)
+        return current_radiance;
+
+    float relative_increase = (current_luma - previous_luma)
+        / max(current_luma, 0.1f);
+    float rejection = smoothstep(0.08f, 0.50f, relative_increase)
+        * (1.0f - current_confidence);
+    if (rejection <= 0.0f)
+        return current_radiance;
+
+    // Geometry history can be unavailable on animated cutouts and newly
+    // exposed surfaces. The previous screen pixel is not safe to reuse as
+    // lighting, but it is safe as a one-sided upper envelope: this operation
+    // can only remove an unstable positive excursion and cannot leak old light
+    // onto a newly dark surface.
+    float permitted_increase = max(
+        0.025f * (1.0f + previous_luma),
+        0.50f * previous_luma
+    );
+    float limited_luma = min(
+        current_luma,
+        previous_luma + permitted_increase
+    );
+    float limited_scale = limited_luma / current_luma;
+    return current_radiance * mix(1.0f, limited_scale, rejection);
+}
+
 void main() {
     temporal_lighting_out = vec4(0.0f);
     temporal_surface_out = vec4(0.0f);
@@ -674,6 +728,39 @@ void main() {
             source_bright_tap_coherence
     )) return;
 
+    float current_luma = ph_luminance(current_radiance);
+    float relative_sigma = sqrt(max(current_variance, 0.0f))
+        / max(current_luma, 0.1f);
+    float variance_confidence = 1.0f - smoothstep(
+        0.15f,
+        1.50f,
+        relative_sigma
+    );
+    float tap_confidence = smoothstep(
+        1.0f,
+        3.0f,
+        source_tap_count
+    );
+    float support_confidence = smoothstep(
+        0.10f,
+        0.75f,
+        source_support
+    );
+    float coherence_confidence = smoothstep(
+        0.20f,
+        0.80f,
+        source_bright_tap_coherence
+    );
+    float spatial_confidence = tap_confidence
+        * support_confidence
+        * coherence_confidence;
+    // Spatial agreement does not make a high-variance radiance estimate
+    // trustworthy. SVGF can spread one stochastic source event over several
+    // neighboring source texels, making every reconstruction tap agree while
+    // the temporal variance still identifies an unstable estimate.
+    float current_confidence = variance_confidence
+        * mix(0.25f, 1.0f, spatial_confidence);
+
     float identity = ph_temporal_identity(
         receiver_slot,
         receiver_token,
@@ -719,17 +806,19 @@ void main() {
     );
 
     if (!has_history) {
-        temporal_lighting_out = vec4(
+        vec3 bootstrap_radiance = ph_limit_unreprojected_positive(
             current_radiance,
+            current_confidence,
+            output_size
+        );
+        temporal_lighting_out = vec4(
+            bootstrap_radiance,
             ph_temporal_encode_history_age(1.0f)
         );
         return;
     }
 
-    float current_luma = ph_luminance(current_radiance);
     float history_luma = ph_luminance(history_radiance);
-    float relative_sigma = sqrt(max(current_variance, 0.0f))
-        / max(current_luma, 0.1f);
     float neighborhood_expansion = 0.01f * (1.0f + current_luma)
         + min(sqrt(max(current_variance, 0.0f)), 2.0f);
     vec3 raw_history_clamped = clamp(
@@ -760,45 +849,9 @@ void main() {
     );
     float change_strength = max(luma_reactive, raw_clamp_reactive);
 
-    float variance_confidence = 1.0f - smoothstep(
-        0.15f,
-        1.50f,
-        relative_sigma
-    );
-    float tap_confidence = smoothstep(
-        1.0f,
-        3.0f,
-        source_tap_count
-    );
-    float support_confidence = smoothstep(
-        0.10f,
-        0.75f,
-        source_support
-    );
-    float coherence_confidence = smoothstep(
-        0.20f,
-        0.80f,
-        source_bright_tap_coherence
-    );
-    float spatial_confidence = tap_confidence
-        * support_confidence
-        * coherence_confidence;
-    // Spatial agreement does not make a high-variance radiance estimate
-    // trustworthy. SVGF can spread one stochastic source event over several
-    // neighboring source texels, making every reconstruction tap agree while
-    // the temporal variance still identifies an unstable estimate.
-    float current_confidence = variance_confidence
-        * mix(0.25f, 1.0f, spatial_confidence);
-
     float max_history = float(PH_TEMPORAL_UPSCALER_HISTORY_FRAMES);
-    float history_maturity = smoothstep(
-        1.0f,
-        max(2.0f, min(max_history, 6.0f)),
-        history_age
-    );
     float unstable_change = change_strength
-        * (1.0f - current_confidence)
-        * history_maturity;
+        * (1.0f - current_confidence);
     float positive_change = current_luma > history_luma ? 1.0f : 0.0f;
     float outlier_evidence = max(
         1.0f - spatial_confidence,
@@ -806,13 +859,12 @@ void main() {
     );
     float positive_outlier = change_strength
         * positive_change
-        * outlier_evidence
-        * history_maturity;
+        * outlier_evidence;
 
-    // Rectifying mature history to one sparse or noisy current estimate turns
-    // a low-resolution radiance outlier into an output-resolution flash.
-    // Reduce rectification while the current neighborhood is unstable. A
-    // coherent multi-tap lighting change still uses the original bounds.
+    // Rectifying valid history to one sparse or noisy current estimate turns a
+    // low-resolution radiance outlier into an output-resolution flash. Reduce
+    // rectification while the current neighborhood is unstable. A coherent,
+    // low-variance multi-tap lighting change still uses the original bounds.
     float rectification_confidence = (1.0f - unstable_change)
         * (1.0f - unstable_change)
         * (1.0f - positive_outlier);
@@ -863,10 +915,21 @@ void main() {
         0.35f,
         positive_outlier
     );
-    float base_current_weight = 1.0f
+    float startup_current_weight = 1.0f
         / min(history_age + 1.0f, max_history);
+    float stable_current_weight = 1.0f / max_history;
+    float confidence_history_lock = max(
+        unstable_change,
+        positive_outlier
+    );
+    float base_current_weight = mix(
+        startup_current_weight,
+        stable_current_weight,
+        confidence_history_lock
+    );
+    base_current_weight *= stable_current_scale;
     float current_weight = max(
-        base_current_weight * stable_current_scale,
+        base_current_weight,
         reactive
     );
     vec3 resolved = mix(history_clamped, current_radiance, current_weight);

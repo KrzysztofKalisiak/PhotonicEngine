@@ -147,12 +147,22 @@ source variance rather than added to it: several agreeing taps cannot make a
 high-variance estimate authoritative after the source denoiser has spread one
 stochastic event across neighboring texels.
 
-For mature history, sparse or high-variance incoherent changes reduce both
-history rectification and current-frame influence. Positive outliers receive an
-additional asymmetric reduction because a one-frame bright sample is much more
-visible than the same-sized negative error. The current estimate is never
-discarded: persistent changes still converge, while young history and coherent
-multi-tap changes retain the fast path.
+Sparse or high-variance incoherent changes reduce both history rectification
+and current-frame influence as soon as one valid history sample exists.
+Positive outliers receive an additional asymmetric reduction because a
+one-frame bright sample is much more visible than the same-sized negative
+error. The current estimate is never discarded: persistent changes still
+converge, while coherent low-variance multi-tap changes retain the fast path at
+every history age.
+
+When geometric history is unavailable, the previous same-screen pixel is used
+only as a one-sided upper envelope for a low-confidence positive estimate. It is
+never copied into the result and cannot add old light to the current surface.
+This closes the raw-current bypass on animated cutouts and disocclusions without
+introducing ordinary temporal light leakage. Once one valid geometric history
+sample exists, confidence gating applies immediately; unstable young history
+uses the configured stable-history denominator instead of the large startup
+weights.
 
 A reactive weight increases current-frame influence for:
 
