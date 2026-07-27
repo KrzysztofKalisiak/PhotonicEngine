@@ -86,8 +86,12 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
-Use `photonics-v89-upscaler-revision-history-mc1.21.1.jar`. The v87 jar has a
-known split-GI sampler redeclaration and cannot load those configurations.
+Use `photonics-v90-upscaler-local-history-mc1.21.1.jar`. The v89 recording
+showed that a global world-revision reset discarded all upscaler history during
+ordinary section streaming. V90 keeps geometrically valid history and uses a
+revision mismatch only to tighten per-pixel radiance-change validation. It
+also stops treating sparse compatible taps as an independent disocclusion
+signal.
 
 Then use:
 
@@ -98,22 +102,28 @@ Then use:
 -Dphotonics.temporalUpscalerHistoryFramesOverride=8
 ```
 
-1. Compare FPS and visual stability at source scales `0.50`, `0.67`, and
-   `0.75`; restart between values. Verify the effective value in the
-   `Photonics pipeline for` log line rather than relying on the folder name.
-2. On first entry, record the build-up period, then wait for
-   `Photonics world tracing` to report `settled=true` and repeat the same
-   camera route. The upscaler log must say
-   `historyWorldRevisionTagged=true`.
-3. Resize the window repeatedly, reload the shaderpack, change dimensions, and
+1. Start at source scale `0.67` and compare the identical route in v89 and
+   v90. Verify the effective value in the `Photonics pipeline for` log line
+   rather than relying on the folder name.
+2. Wait for `Photonics world tracing` to report `settled=true`, keep F3 open,
+   and hold a lit view still for 10 seconds. Then cross the same section
+   boundary slowly and quickly. New compiler revisions must not produce a
+   whole-view brightness pulse.
+3. Orbit fences, leaves, roof edges, and other thin surfaces near a light.
+   Sparse source taps must no longer shimmer, but silhouettes must not leave
+   a lighting trail.
+4. Place and remove a full block next to a light while the camera is still.
+   The affected pixels must react locally without preserving the obsolete
+   shadow or resetting unrelated parts of the view.
+5. If `0.67` is stable, repeat at source scales `0.50` and `0.75`; restart
+   between values.
+6. Resize the window repeatedly, reload the shaderpack, change dimensions, and
    rejoin the world. Cleared history must prevent a horizon line or stale frame.
-4. Test positive and negative world coordinates near 32, 64, 128, 256, and 512
+7. Test positive and negative world coordinates near 32, 64, 128, 256, and 512
    blocks from the camera.
-5. Inspect thin parallel surfaces, fences, leaves, diagonal normals, silhouettes,
-   and newly revealed regions for wrong-surface light or ghosting.
-6. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
+8. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
    because full-resolution Sable receiver classification is part of this pass.
-7. Move a lit contraption quickly and vertically. Its receiver identity must not
+9. Move a lit contraption quickly and vertically. Its receiver identity must not
    leak history into the static world or another sublevel.
 
 The branch reconstructs Photonics lighting only. It is not FSR, does not upscale
