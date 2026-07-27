@@ -5,6 +5,7 @@
 //ph_required: uniform sampler2D photonics_temporal_source;
 //ph_required: uniform sampler2D prev_photonics_temporal_lighting;
 //ph_required: uniform sampler2D prev_photonics_temporal_surface;
+//ph_required: uniform float frameTime;
 
 #include "/photonics/rendering/frag/world_interface.glsl"
 #include "/photonics/utility/normal_encoding.glsl"
@@ -24,6 +25,9 @@ const float PH_UPSCALE_MAX_PRECISION_PLANE_DISTANCE = 1.0f / 4.0f;
 const float PH_UPSCALE_MAX_POSITION_DISTANCE_SQ = 9.0f;
 const float PH_HALF_MIN_NORMAL = 1.0f / 16384.0f;
 const float PH_UPSCALE_HISTORY_REVISION_STRIDE = 64.0f;
+const float PH_UPSCALE_HDR_GROWTH_RATE = 4.0f;
+const float PH_UPSCALE_MIN_FRAME_TIME = 1.0f / 1000.0f;
+const float PH_UPSCALE_MAX_FRAME_TIME = 1.0f / 15.0f;
 
 float ph_temporal_encode_history_age(float age) {
     return float(ph_world_revision_slot) * PH_UPSCALE_HISTORY_REVISION_STRIDE
@@ -626,13 +630,20 @@ vec3 ph_limit_positive_radiance_step(
 
     // A confidence estimate can itself be stale or underestimate an HDR
     // reservoir outlier. Bound large positive output steps independently of
-    // confidence. A persistent real light grows by this amount every rendered
-    // frame and therefore converges quickly without allowing a one-frame
-    // sample to become a post-exposure white point.
-    float permitted_increase = max(
-        0.025f * (1.0f + reference_luma),
-        0.25f * reference_luma
+    // confidence. The limit is exponential in real elapsed time rather than
+    // frame count, so a short source burst cannot grow much faster on a
+    // high-refresh GPU. Persistent real lights still converge at the same rate
+    // regardless of FPS.
+    float delta_seconds = clamp(
+        frameTime,
+        PH_UPSCALE_MIN_FRAME_TIME,
+        PH_UPSCALE_MAX_FRAME_TIME
     );
+    float log_luma_growth = exp(
+        PH_UPSCALE_HDR_GROWTH_RATE * delta_seconds
+    ) - 1.0f;
+    float permitted_increase = log_luma_growth
+        * (1.0f + reference_luma);
     float limited_luma = min(
         candidate_luma,
         reference_luma + permitted_increase

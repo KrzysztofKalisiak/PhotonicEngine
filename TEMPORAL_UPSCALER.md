@@ -169,8 +169,11 @@ radiance is orders of magnitude above history: even a small contribution can
 become a white point after shaderpack exposure and bloom. Large positive steps
 therefore cannot bypass the bound even when source variance reports high
 confidence. Small coherent changes remain immediate. A persistent large change
-advances by the permitted amount every rendered frame and converges rapidly;
-negative changes are never restricted.
+advances at a fixed log-luminance rate based on Iris's real frame time and
+converges rapidly; negative changes are never restricted. The rate is
+frame-rate independent. This matters on fast GPUs, where a stochastic source
+burst may survive several render frames but still occupy only one video or
+display frame.
 
 A reactive weight increases current-frame influence for:
 
