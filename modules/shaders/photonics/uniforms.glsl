@@ -11,6 +11,7 @@
 //ph_required: uniform vec3 world_tree_min;
 //ph_required: uniform vec3 world_tree_size;
 //ph_required: uniform int ph_world_ready;
+//ph_required: uniform int ph_world_revision_slot;
 //ph_required: uniform int world_block_scale_exp;
 
 

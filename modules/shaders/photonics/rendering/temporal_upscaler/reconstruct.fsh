@@ -23,6 +23,28 @@ const float PH_UPSCALE_MAX_PLANE_DISTANCE = 1.0f / 32.0f;
 const float PH_UPSCALE_MAX_PRECISION_PLANE_DISTANCE = 1.0f / 4.0f;
 const float PH_UPSCALE_MAX_POSITION_DISTANCE_SQ = 9.0f;
 const float PH_HALF_MIN_NORMAL = 1.0f / 16384.0f;
+const float PH_UPSCALE_HISTORY_REVISION_STRIDE = 64.0f;
+
+float ph_temporal_encode_history_age(float age) {
+    return float(ph_world_revision_slot) * PH_UPSCALE_HISTORY_REVISION_STRIDE
+        + clamp(age, 1.0f, 32.0f);
+}
+
+bool ph_temporal_decode_history_age(float encoded, out float age) {
+    age = 0.0f;
+    if (isnan(encoded) || isinf(encoded) || encoded < 0.5f)
+        return false;
+
+    float rounded = floor(encoded + 0.5f);
+    int revision_slot = int(
+        floor(rounded / PH_UPSCALE_HISTORY_REVISION_STRIDE)
+    );
+    age = rounded
+        - float(revision_slot) * PH_UPSCALE_HISTORY_REVISION_STRIDE;
+    return revision_slot == ph_world_revision_slot
+        && age >= 0.5f
+        && age <= 32.5f;
+}
 
 bool ph_temporal_finite_vec3(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
@@ -451,7 +473,8 @@ bool ph_history_tap(
         texel,
         0
     );
-    if (history.a < 0.5f
+    float decoded_age;
+    if (!ph_temporal_decode_history_age(history.a, decoded_age)
             || !ph_temporal_finite_vec3(history.rgb)
             || any(isnan(surface))
             || any(isinf(surface))
@@ -469,7 +492,7 @@ bool ph_history_tap(
         return false;
 
     radiance = history.rgb;
-    age = history.a;
+    age = decoded_age;
     return true;
 }
 
@@ -642,7 +665,10 @@ void main() {
     );
 
     if (!has_history) {
-        temporal_lighting_out = vec4(current_radiance, 1.0f);
+        temporal_lighting_out = vec4(
+            current_radiance,
+            ph_temporal_encode_history_age(1.0f)
+        );
         return;
     }
 
@@ -703,6 +729,8 @@ void main() {
     }
     temporal_lighting_out = vec4(
         clamp(resolved, vec3(0.0f), vec3(65504.0f)),
-        clamp(resolved_age, 1.0f, max_history)
+        ph_temporal_encode_history_age(
+            clamp(resolved_age, 1.0f, max_history)
+        )
     );
 }
