@@ -14,6 +14,9 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v87-performance-mc1.21.1.jar` | `experiment/photonics-performance` / `06c81b9d` | Exact compact SVGF plus an optional adaptive denoiser experiment | `174657A88E2BCF0261D3B620EFAA73C70DE398F28363F1D05AB02EBF5200EAEC` |
 | `photonics-v87-temporal-upscaler-mc1.21.1.jar` | `feature/photonics-temporal-upscaler` / `b284e632` | Optional Photonics-only temporal lighting reconstruction | `8A08AB62500E8EE5FC118712DB5A05E9374CDF8F8121C1A152172A2813EA98ED` |
 | `photonics-v87-sable-occlusion-mc1.21.1.jar` | `feature/sable-occlusion` / `45607cfe` | Same-sublevel Sable direct occlusion using bounded local voxel shapes | `EDA4E54B210D5E21721657F28C16617D6CAE85C39CFD37C48CC759CA7FDFD127` |
+| `photonics-v88-light-list-stability-mc1.21.1.jar` | `multi-version` / `22c9f03e` | Coalesces section-driven light-list changes and makes capped selection deterministic | `232C83C6FEE7DE66BF719C1F7025B229AB30161565D5C835D33654C0F82298C2` |
+| `photonics-v88-temporal-upscaler-mc1.21.1.jar` | `fix/v88-temporal-upscaler` / `0bcefa03` | Fixes split-GI sampler compilation and includes v88 light-list stabilization | `A4CE660F33697B9A70D192C142F6733286273CD7B192F5C0C44C6705EBC25625` |
+| `photonics-v88-sable-occlusion-mc1.21.1.jar` | `fix/v88-sable-occlusion` / `3b081fb8` | Same-sublevel Sable occlusion plus v88 light-list stabilization and ownership documentation | `3E9C605A892A16E854CF1C868554962A6BCCBA238982DB6C35E802068EA25996` |
 
 ## Capture Rules
 
@@ -83,6 +86,9 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
+Use the v88 upscaler jar for source scales `0.67` and `0.75`. The v87 jar has
+a known split-GI sampler redeclaration and cannot load those configurations.
+
 Then use:
 
 ```text
@@ -130,6 +136,23 @@ Required cases:
 
 Cross-sublevel direct occlusion, world-to-Sable occlusion, Sable-to-world
 occlusion, and Sable geometry in bounced GI are outside the first Sable branch.
+
+## Test E: Light-List Stability
+
+Use `photonics-v88-light-list-stability-mc1.21.1.jar` without the temporal
+upscaler or Sable-occlusion branch.
+
+1. Enter the same village route used for the GI recording and wait for the
+   `Photonics world tracing` log to report `settled=true`.
+2. Hold the camera still for 10 seconds, then cross one 16-block section
+   boundary slowly and return across it.
+3. Repeat while moving quickly. Include the F3 coordinates and keep the same
+   time of day, render distance, and light-count settings.
+4. Confirm that the log contains `Photonics light-list publication v88`
+   entries. Report their `coalescedBatches`, `remainingSections`, and
+   `deferredMs` values alongside any visible pulse.
+5. Test once with no Sable contraption, then once with one moving Sable light.
+   This distinguishes static section-list churn from external-light updates.
 
 ## Reporting
 
