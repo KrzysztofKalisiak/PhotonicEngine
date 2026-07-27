@@ -138,18 +138,31 @@ revision mismatch lowers the per-pixel luminance and neighborhood-clamp
 thresholds. Pixels whose current lighting changed react immediately, while
 unaffected surfaces retain their accumulated history.
 
-The accepted history is clamped to the current compatible source neighborhood.
+The accepted history is rectified against the current compatible source
+neighborhood. Reconstruction tracks the number and bilinear support of current
+taps, plus whether at least two taps agree on the bright end of the local
+radiance range. These signals distinguish coherent lighting changes from a
+single low-resolution radiance outlier.
+
+For mature history, sparse or high-variance incoherent changes reduce both
+history rectification and current-frame influence. Positive outliers receive an
+additional asymmetric reduction because a one-frame bright sample is much more
+visible than the same-sized negative error. The current estimate is never
+discarded: persistent changes still converge, while young history and coherent
+multi-tap changes retain the fast path.
+
 A reactive weight increases current-frame influence for:
 
 - large current/history luminance changes;
 - material or visibility disocclusion indicated by history clamping;
-- high source variance;
 - large screen-space motion.
 
 Sparse current or history bilinear support alone is not reactive. It is common
 at silhouettes and thin geometry, and forcing current-frame weight there
 exposes the low-resolution source-grid phase as visible shimmer. Surface,
 receiver, luminance, and clamp validation still reject genuinely stale taps.
+High source variance lowers confidence in an incoherent current estimate rather
+than increasing its temporal weight.
 
 Stable pixels converge to the configured history length. Reactive pixels return
 toward one-frame history instead of carrying stale lighting.

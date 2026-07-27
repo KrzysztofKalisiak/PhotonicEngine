@@ -316,7 +316,9 @@ bool ph_reconstruct_current(
     out float variance,
     out vec3 neighborhood_min,
     out vec3 neighborhood_max,
-    out float support
+    out float support,
+    out float tap_count,
+    out float bright_tap_coherence
 ) {
     ivec2 best_texel;
     if (!ph_find_source_receiver(
@@ -338,7 +340,11 @@ bool ph_reconstruct_current(
     neighborhood_min = vec3(1e30f);
     neighborhood_max = vec3(-1e30f);
     support = 0.0f;
+    tap_count = 0.0f;
+    bright_tap_coherence = 0.0f;
     float weight_sum = 0.0f;
+    float brightest_luma = 0.0f;
+    float second_brightest_luma = 0.0f;
 
     for (int y = 0; y <= 1; y++) {
         for (int x = 0; x <= 1; x++) {
@@ -379,6 +385,21 @@ bool ph_reconstruct_current(
             neighborhood_min = min(neighborhood_min, source.rgb);
             neighborhood_max = max(neighborhood_max, source.rgb);
             weight_sum += weight;
+            tap_count += 1.0f;
+
+            float source_luma = dot(
+                source.rgb,
+                vec3(0.2126f, 0.7152f, 0.0722f)
+            );
+            if (source_luma > brightest_luma) {
+                second_brightest_luma = brightest_luma;
+                brightest_luma = source_luma;
+            } else {
+                second_brightest_luma = max(
+                    second_brightest_luma,
+                    source_luma
+                );
+            }
         }
     }
 
@@ -386,6 +407,13 @@ bool ph_reconstruct_current(
     if (weight_sum > 0.0001f) {
         radiance /= weight_sum;
         variance /= weight_sum;
+        bright_tap_coherence = brightest_luma <= 0.01f
+            ? 1.0f
+            : clamp(
+                second_brightest_luma / brightest_luma,
+                0.0f,
+                1.0f
+            );
         return true;
     }
 
@@ -398,6 +426,8 @@ bool ph_reconstruct_current(
     neighborhood_min = fallback.rgb;
     neighborhood_max = fallback.rgb;
     support = 0.0f;
+    tap_count = 1.0f;
+    bright_tap_coherence = 0.0f;
     return true;
 }
 
@@ -623,6 +653,8 @@ void main() {
     vec3 neighborhood_min;
     vec3 neighborhood_max;
     float source_support;
+    float source_tap_count;
+    float source_bright_tap_coherence;
     if (!ph_reconstruct_current(
             source_position,
             source_size,
@@ -637,7 +669,9 @@ void main() {
             current_variance,
             neighborhood_min,
             neighborhood_max,
-            source_support
+            source_support,
+            source_tap_count,
+            source_bright_tap_coherence
     )) return;
 
     float identity = ph_temporal_identity(
@@ -698,7 +732,7 @@ void main() {
         / max(current_luma, 0.1f);
     float neighborhood_expansion = 0.01f * (1.0f + current_luma)
         + min(sqrt(max(current_variance, 0.0f)), 2.0f);
-    vec3 history_clamped = clamp(
+    vec3 raw_history_clamped = clamp(
         history_radiance,
         neighborhood_min - vec3(neighborhood_expansion),
         neighborhood_max + vec3(neighborhood_expansion)
@@ -706,7 +740,9 @@ void main() {
 
     float relative_luma_delta = abs(current_luma - history_luma)
         / max(max(current_luma, history_luma), 0.1f);
-    float clamp_delta = length(history_clamped - history_radiance)
+    float raw_clamp_delta = length(
+        raw_history_clamped - history_radiance
+    )
         / max(length(current_radiance), 0.1f);
     float motion_pixels = length(
         (previous_uv - tex_coord) * vec2(output_size)
@@ -717,12 +753,74 @@ void main() {
         0.80f,
         relative_luma_delta
     );
-    float clamp_reactive = smoothstep(0.02f, 0.25f, clamp_delta);
-    float reactive = max(luma_reactive, clamp_reactive);
-    reactive = max(
-        reactive,
-        0.25f * smoothstep(0.15f, 1.50f, relative_sigma)
+    float raw_clamp_reactive = smoothstep(
+        0.02f,
+        0.25f,
+        raw_clamp_delta
     );
+    float change_strength = max(luma_reactive, raw_clamp_reactive);
+
+    float variance_confidence = 1.0f - smoothstep(
+        0.15f,
+        1.50f,
+        relative_sigma
+    );
+    float tap_confidence = smoothstep(
+        1.0f,
+        3.0f,
+        source_tap_count
+    );
+    float support_confidence = smoothstep(
+        0.10f,
+        0.75f,
+        source_support
+    );
+    float coherence_confidence = smoothstep(
+        0.20f,
+        0.80f,
+        source_bright_tap_coherence
+    );
+    float spatial_confidence = tap_confidence
+        * support_confidence
+        * coherence_confidence;
+    float current_confidence = clamp(
+        0.35f * variance_confidence
+            + 0.65f * spatial_confidence,
+        0.0f,
+        1.0f
+    );
+
+    float max_history = float(PH_TEMPORAL_UPSCALER_HISTORY_FRAMES);
+    float history_maturity = smoothstep(
+        1.0f,
+        max(2.0f, min(max_history, 6.0f)),
+        history_age
+    );
+    float unstable_change = change_strength
+        * (1.0f - current_confidence)
+        * history_maturity;
+    float positive_change = current_luma > history_luma ? 1.0f : 0.0f;
+    float positive_outlier = luma_reactive
+        * positive_change
+        * (1.0f - spatial_confidence)
+        * history_maturity;
+
+    // Rectifying mature history to one sparse or noisy current estimate turns
+    // a low-resolution radiance outlier into an output-resolution flash.
+    // Reduce rectification while the current neighborhood is unstable. A
+    // coherent multi-tap lighting change still uses the original bounds.
+    float rectification_confidence = (1.0f - unstable_change)
+        * (1.0f - unstable_change)
+        * (1.0f - positive_outlier);
+    vec3 history_clamped = mix(
+        history_radiance,
+        raw_history_clamped,
+        rectification_confidence
+    );
+    float clamp_delta = length(history_clamped - history_radiance)
+        / max(length(current_radiance), 0.1f);
+    float clamp_reactive = smoothstep(0.02f, 0.25f, clamp_delta);
+    float change_reactive = max(luma_reactive, clamp_reactive);
 
     // Section streaming changes the global world revision even when the
     // reprojected pixel is unaffected. Treat a revision mismatch as a local
@@ -736,25 +834,37 @@ void main() {
         smoothstep(0.04f, 0.40f, relative_luma_delta),
         smoothstep(0.01f, 0.15f, clamp_delta)
     );
-    reactive = max(
-        reactive,
+    change_reactive = max(
+        change_reactive,
         revision_mismatch * revision_reactive
     );
 
-    // Sparse compatible taps are normal at silhouettes and thin geometry.
-    // Geometry, identity, luminance, and clamp validation decide whether
-    // history is stale; low bilinear support alone must not expose a noisy
-    // one-frame source estimate.
-    reactive = max(
-        reactive,
-        0.35f * smoothstep(8.0f, 48.0f, motion_pixels)
-    );
+    change_reactive *= rectification_confidence;
+    float motion_reactive = 0.35f
+        * smoothstep(8.0f, 48.0f, motion_pixels)
+        * mix(0.35f, 1.0f, current_confidence)
+        * mix(1.0f, 0.25f, positive_outlier);
+    float reactive = max(change_reactive, motion_reactive);
     reactive = clamp(reactive, 0.0f, 1.0f);
 
-    float max_history = float(PH_TEMPORAL_UPSCALER_HISTORY_FRAMES);
+    // An unstable estimate still converges if it persists, but a single
+    // positive firefly contributes only a small fraction of one mature frame.
+    float stable_current_scale = mix(
+        1.0f,
+        0.55f,
+        unstable_change
+    );
+    stable_current_scale *= mix(
+        1.0f,
+        0.35f,
+        positive_outlier
+    );
     float base_current_weight = 1.0f
         / min(history_age + 1.0f, max_history);
-    float current_weight = max(base_current_weight, reactive);
+    float current_weight = max(
+        base_current_weight * stable_current_scale,
+        reactive
+    );
     vec3 resolved = mix(history_clamped, current_radiance, current_weight);
     float resolved_age = mix(
         min(history_age + 1.0f, max_history),
