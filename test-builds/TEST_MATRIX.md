@@ -17,6 +17,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v88-light-list-stability-mc1.21.1.jar` | `multi-version` / `22c9f03e` | Coalesces section-driven light-list changes and makes capped selection deterministic | `232C83C6FEE7DE66BF719C1F7025B229AB30161565D5C835D33654C0F82298C2` |
 | `photonics-v88-temporal-upscaler-mc1.21.1.jar` | `fix/v88-temporal-upscaler` / `0bcefa03` | Fixes split-GI sampler compilation and includes v88 light-list stabilization | `A4CE660F33697B9A70D192C142F6733286273CD7B192F5C0C44C6705EBC25625` |
 | `photonics-v88-sable-occlusion-mc1.21.1.jar` | `fix/v88-sable-occlusion` / `3b081fb8` | Same-sublevel Sable occlusion plus v88 light-list stabilization and ownership documentation | `3E9C605A892A16E854CF1C868554962A6BCCBA238982DB6C35E802068EA25996` |
+| `photonics-v91-upscaler-firefly-stability-mc1.21.1.jar` | `fix/v91-temporal-upscaler-fireflies` / `248c68cd` | Rejects incoherent sparse bright samples without slowing coherent lighting changes | `39AD4C23884AE83F3AB11158F88F199BF8B7DD755C1B66E01C56386B583E565C` |
 
 ## Capture Rules
 
@@ -86,12 +87,11 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
-Use `photonics-v90-upscaler-local-history-mc1.21.1.jar`. The v89 recording
-showed that a global world-revision reset discarded all upscaler history during
-ordinary section streaming. V90 keeps geometrically valid history and uses a
-revision mismatch only to tighten per-pixel radiance-change validation. It
-also stops treating sparse compatible taps as an independent disocclusion
-signal.
+Use `photonics-v91-upscaler-firefly-stability-mc1.21.1.jar`. V91 retains v90's
+local world-revision handling and sparse-tap stability. It also measures current
+source-tap support and bright-tap agreement. A lone positive radiance outlier
+can no longer clamp mature history to itself or receive the same temporal
+weight as a coherent lighting change.
 
 Then use:
 
@@ -102,29 +102,36 @@ Then use:
 -Dphotonics.temporalUpscalerHistoryFramesOverride=8
 ```
 
-1. Start at source scale `0.67` and compare the identical route in v89 and
-   v90. Verify the effective value in the `Photonics pipeline for` log line
-   rather than relying on the folder name.
-2. Wait for `Photonics world tracing` to report `settled=true`, keep F3 open,
-   and hold a lit view still for 10 seconds. Then cross the same section
-   boundary slowly and quickly. New compiler revisions must not produce a
-   whole-view brightness pulse.
-3. Orbit fences, leaves, roof edges, and other thin surfaces near a light.
-   Sparse source taps must no longer shimmer, but silhouettes must not leave
-   a lighting trail.
-4. Place and remove a full block next to a light while the camera is still.
+1. Start at source scale `0.50`. Verify the effective value in the `Photonics
+   pipeline for` log line rather than relying on the folder name.
+2. Reproduce the v90 distant-light view. After `Photonics world tracing`
+   reports `settled=true`, hold the camera completely still for 15 seconds.
+   Inspect normal playback and individual frames. Distant surfaces must not
+   breathe, and isolated one-frame bright one- or two-pixel points must not
+   appear.
+3. Approach the same lights slowly. The rejection must remain stable as a light
+   transitions from one compatible source tap to several taps.
+4. Place and remove both a nearby light and a tiny distant light while the
+   camera is still. A coherent nearby change should react immediately. A
+   distant sparse light may ramp briefly, but it must converge within roughly
+   one second and must not remain incorrectly dim.
+5. Cross the same section boundary slowly and quickly. New compiler revisions
+   must not produce a whole-view brightness pulse.
+6. Orbit fences, leaves, roof edges, and other thin surfaces near a light.
+   Sparse source taps must not shimmer, but silhouettes must not leave a
+   lighting trail.
+7. Place and remove a full block next to a light while the camera is still.
    The affected pixels must react locally without preserving the obsolete
    shadow or resetting unrelated parts of the view.
-5. If `0.67` is stable, repeat at source scales `0.50` and `0.75`; restart
-   between values.
-6. Resize the window repeatedly, reload the shaderpack, change dimensions, and
+8. Repeat at source scales `0.67` and `0.75`; restart between values.
+9. Resize the window repeatedly, reload the shaderpack, change dimensions, and
    rejoin the world. Cleared history must prevent a horizon line or stale frame.
-7. Test positive and negative world coordinates near 32, 64, 128, 256, and 512
-   blocks from the camera.
-8. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
-   because full-resolution Sable receiver classification is part of this pass.
-9. Move a lit contraption quickly and vertically. Its receiver identity must not
-   leak history into the static world or another sublevel.
+10. Test positive and negative world coordinates near 32, 64, 128, 256, and
+    512 blocks from the camera.
+11. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
+    because full-resolution Sable receiver classification is part of this pass.
+12. Move a lit contraption quickly and vertically. Its receiver identity must
+    not leak history into the static world or another sublevel.
 
 The branch reconstructs Photonics lighting only. It is not FSR, does not upscale
 the shaderpack color/post pipeline, and does not temporally reconstruct
