@@ -43,6 +43,7 @@ import java.util.function.Supplier;
 
 public abstract class AbstractLightList implements Runnable, RenderingComponent {
     private static final int MAX_SECTIONS_PER_RUN = 48;
+    private static final long MAX_COALESCED_PUBLICATION_DELAY_NANOS = 250_000_000L;
     private static final long EXTERNAL_PROXY_SETTLE_NANOS = 125_000_000L;
     private static final long EXTERNAL_PROXY_SETTLE_FRAMES = 2L;
     private static final long EXTERNAL_PROXY_OWNERSHIP_GRACE_NANOS = 250_000_000L;
@@ -126,10 +127,15 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
     @Override
     public void run() {
+        boolean publicationPending = false;
+        long publicationPendingSince = 0L;
+        int coalescedBatches = 0;
+        int peakPendingSections = 0;
+
         while (!closed.get()) {
             try {
                 boolean needsUpload = reloadLights();
-                if (!needsUpload)
+                if (!needsUpload && !publicationPending)
                     sectionQueue.awaitTask();
 
                 var unloadedSections = sectionQueue.drainUnloadQueue();
@@ -143,8 +149,53 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
                     needsUpload = true;
 
                 if (needsUpload) {
+                    if (!publicationPending)
+                        publicationPendingSince = System.nanoTime();
+
+                    publicationPending = true;
+                    coalescedBatches++;
+                }
+
+                if (publicationPending) {
+                    int pendingSections = sectionQueue.pendingCount();
+                    int pendingUnloads = sectionQueue.pendingUnloadCount();
+                    peakPendingSections = Math.max(
+                            peakPendingSections,
+                            pendingSections + pendingUnloads
+                    );
+
+                    long now = System.nanoTime();
+                    boolean hasStableSnapshot = sectionLights != null;
+                    boolean hasPendingSectionWork = pendingSections > 0 || pendingUnloads > 0;
+                    boolean publicationDeadlineReached = now - publicationPendingSince
+                            >= MAX_COALESCED_PUBLICATION_DELAY_NANOS;
+
+                    if (hasStableSnapshot
+                            && hasPendingSectionWork
+                            && !publicationDeadlineReached)
+                        continue;
+
                     var newLights = trimLights();
                     storeSectionLights(newLights);
+
+                    if (coalescedBatches > 1) {
+                        Photonics.LOGGER.info(
+                                "Photonics light-list publication v88: coalescedBatches={}, peakPendingSections={}, remainingSections={}, deferredMs={}",
+                                coalescedBatches,
+                                peakPendingSections,
+                                pendingSections + pendingUnloads,
+                                String.format(
+                                        java.util.Locale.ROOT,
+                                        "%.3f",
+                                        (now - publicationPendingSince) / 1_000_000.0
+                                )
+                        );
+                    }
+
+                    publicationPending = false;
+                    publicationPendingSince = 0L;
+                    coalescedBatches = 0;
+                    peakPendingSections = 0;
                 }
             } catch (InterruptedException e) {
                 if (closed.get()) return;
@@ -271,7 +322,13 @@ public abstract class AbstractLightList implements Runnable, RenderingComponent 
 
         Arrays.sort(
                 loadedLights,
-                Comparator.comparingDouble(light -> -light.getLuminance(cameraPosition, mod))
+                Comparator.<TracedLightPosition>comparingDouble(
+                                light -> -light.getLuminance(cameraPosition, mod)
+                        )
+                        .thenComparingDouble(light -> light.pos().x)
+                        .thenComparingDouble(light -> light.pos().y)
+                        .thenComparingDouble(light -> light.pos().z)
+                        .thenComparingInt(TracedLightPosition::blockId)
         );
 
         int selectedLights = Math.min(loadedLights.length, maxLights);
