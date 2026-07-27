@@ -131,14 +131,25 @@ Four bilinear history taps are considered. Each tap must pass:
 - previous geometric-normal agreement;
 - previous radial-depth agreement.
 
+The history age also carries a compact world-compilation revision tag. A tag
+mismatch does not reject an otherwise valid tap: section streaming updates the
+global revision even when the reprojected pixel is unaffected. Instead, a
+revision mismatch lowers the per-pixel luminance and neighborhood-clamp
+thresholds. Pixels whose current lighting changed react immediately, while
+unaffected surfaces retain their accumulated history.
+
 The accepted history is clamped to the current compatible source neighborhood.
 A reactive weight increases current-frame influence for:
 
 - large current/history luminance changes;
 - material or visibility disocclusion indicated by history clamping;
 - high source variance;
-- weak current geometric support;
 - large screen-space motion.
+
+Sparse current or history bilinear support alone is not reactive. It is common
+at silhouettes and thin geometry, and forcing current-frame weight there
+exposes the low-resolution source-grid phase as visible shimmer. Surface,
+receiver, luminance, and clamp validation still reject genuinely stale taps.
 
 Stable pixels converge to the configured history length. Reactive pixels return
 toward one-frame history instead of carrying stale lighting.
@@ -231,6 +242,7 @@ Pipeline creation logs:
 - history-frame limit;
 - current and history tap counts;
 - history memory cost per output pixel.
+- local-reactive world-revision and history-stable sparse-support policies.
 
 `photonics_temporal_lighting.a` is the per-pixel effective history age. In a
 RenderDoc capture, stable surfaces should approach the configured frame limit;

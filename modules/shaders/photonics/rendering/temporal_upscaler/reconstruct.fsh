@@ -30,8 +30,13 @@ float ph_temporal_encode_history_age(float age) {
         + clamp(age, 1.0f, 32.0f);
 }
 
-bool ph_temporal_decode_history_age(float encoded, out float age) {
+bool ph_temporal_decode_history_age(
+    float encoded,
+    out float age,
+    out float revision_match
+) {
     age = 0.0f;
+    revision_match = 0.0f;
     if (isnan(encoded) || isinf(encoded) || encoded < 0.5f)
         return false;
 
@@ -41,8 +46,8 @@ bool ph_temporal_decode_history_age(float encoded, out float age) {
     );
     age = rounded
         - float(revision_slot) * PH_UPSCALE_HISTORY_REVISION_STRIDE;
-    return revision_slot == ph_world_revision_slot
-        && age >= 0.5f
+    revision_match = revision_slot == ph_world_revision_slot ? 1.0f : 0.0f;
+    return age >= 0.5f
         && age <= 32.5f;
 }
 
@@ -457,7 +462,8 @@ bool ph_history_tap(
     vec3 expected_previous_normal,
     float expected_identity,
     out vec3 radiance,
-    out float age
+    out float age,
+    out float revision_match
 ) {
     if (any(lessThan(texel, ivec2(0)))
             || any(greaterThanEqual(texel, history_size)))
@@ -474,7 +480,12 @@ bool ph_history_tap(
         0
     );
     float decoded_age;
-    if (!ph_temporal_decode_history_age(history.a, decoded_age)
+    float decoded_revision_match;
+    if (!ph_temporal_decode_history_age(
+            history.a,
+            decoded_age,
+            decoded_revision_match
+        )
             || !ph_temporal_finite_vec3(history.rgb)
             || any(isnan(surface))
             || any(isinf(surface))
@@ -493,6 +504,7 @@ bool ph_history_tap(
 
     radiance = history.rgb;
     age = decoded_age;
+    revision_match = decoded_revision_match;
     return true;
 }
 
@@ -503,7 +515,8 @@ bool ph_reconstruct_history(
     float expected_identity,
     out vec3 radiance,
     out float age,
-    out float support
+    out float support,
+    out float revision_support
 ) {
     ivec2 history_size = textureSize(
         prev_photonics_temporal_lighting,
@@ -514,12 +527,14 @@ bool ph_reconstruct_history(
 
     radiance = vec3(0.0f);
     age = 0.0f;
+    revision_support = 0.0f;
     float weight_sum = 0.0f;
     for (int y = 0; y <= 1; y++) {
         for (int x = 0; x <= 1; x++) {
             ivec2 texel = base_texel + ivec2(x, y);
             vec3 tap_radiance;
             float tap_age;
+            float tap_revision_match;
             if (!ph_history_tap(
                     texel,
                     history_size,
@@ -527,12 +542,14 @@ bool ph_reconstruct_history(
                     expected_previous_normal,
                     expected_identity,
                     tap_radiance,
-                    tap_age
+                    tap_age,
+                    tap_revision_match
             )) continue;
 
             float weight = ph_bilinear_weight(history_position, texel);
             radiance += tap_radiance * weight;
             age += tap_age * weight;
+            revision_support += tap_revision_match * weight;
             weight_sum += weight;
         }
     }
@@ -542,6 +559,7 @@ bool ph_reconstruct_history(
 
     radiance /= weight_sum;
     age /= weight_sum;
+    revision_support /= weight_sum;
     support = clamp(weight_sum, 0.0f, 1.0f);
     return true;
 }
@@ -654,6 +672,7 @@ void main() {
     vec3 history_radiance;
     float history_age;
     float history_support;
+    float history_revision_support;
     bool has_history = can_reproject && ph_reconstruct_history(
         previous_uv,
         previous_player_pos,
@@ -661,7 +680,8 @@ void main() {
         expected_identity,
         history_radiance,
         history_age,
-        history_support
+        history_support,
+        history_revision_support
     );
 
     if (!has_history) {
@@ -692,20 +712,39 @@ void main() {
         (previous_uv - tex_coord) * vec2(output_size)
     );
 
-    float reactive = smoothstep(0.12f, 0.80f, relative_luma_delta);
-    reactive = max(reactive, smoothstep(0.02f, 0.25f, clamp_delta));
+    float luma_reactive = smoothstep(
+        0.12f,
+        0.80f,
+        relative_luma_delta
+    );
+    float clamp_reactive = smoothstep(0.02f, 0.25f, clamp_delta);
+    float reactive = max(luma_reactive, clamp_reactive);
     reactive = max(
         reactive,
         0.25f * smoothstep(0.15f, 1.50f, relative_sigma)
     );
-    reactive = max(
-        reactive,
-        0.35f * (1.0f - smoothstep(0.10f, 0.60f, source_support))
+
+    // Section streaming changes the global world revision even when the
+    // reprojected pixel is unaffected. Treat a revision mismatch as a local
+    // change hint instead of discarding the entire screen's history.
+    float revision_mismatch = 1.0f - clamp(
+        history_revision_support,
+        0.0f,
+        1.0f
+    );
+    float revision_reactive = max(
+        smoothstep(0.04f, 0.40f, relative_luma_delta),
+        smoothstep(0.01f, 0.15f, clamp_delta)
     );
     reactive = max(
         reactive,
-        0.50f * (1.0f - smoothstep(0.10f, 0.75f, history_support))
+        revision_mismatch * revision_reactive
     );
+
+    // Sparse compatible taps are normal at silhouettes and thin geometry.
+    // Geometry, identity, luminance, and clamp validation decide whether
+    // history is stale; low bilinear support alone must not expose a noisy
+    // one-frame source estimate.
     reactive = max(
         reactive,
         0.35f * smoothstep(8.0f, 48.0f, motion_pixels)
