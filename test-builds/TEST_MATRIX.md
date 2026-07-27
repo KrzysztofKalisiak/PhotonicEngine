@@ -86,8 +86,8 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
-Use the v88 upscaler jar for source scales `0.67` and `0.75`. The v87 jar has
-a known split-GI sampler redeclaration and cannot load those configurations.
+Use `photonics-v89-upscaler-revision-history-mc1.21.1.jar`. The v87 jar has a
+known split-GI sampler redeclaration and cannot load those configurations.
 
 Then use:
 
@@ -99,16 +99,21 @@ Then use:
 ```
 
 1. Compare FPS and visual stability at source scales `0.50`, `0.67`, and
-   `0.75`; restart between values.
-2. Resize the window repeatedly, reload the shaderpack, change dimensions, and
+   `0.75`; restart between values. Verify the effective value in the
+   `Photonics pipeline for` log line rather than relying on the folder name.
+2. On first entry, record the build-up period, then wait for
+   `Photonics world tracing` to report `settled=true` and repeat the same
+   camera route. The upscaler log must say
+   `historyWorldRevisionTagged=true`.
+3. Resize the window repeatedly, reload the shaderpack, change dimensions, and
    rejoin the world. Cleared history must prevent a horizon line or stale frame.
-3. Test positive and negative world coordinates near 32, 64, 128, 256, and 512
+4. Test positive and negative world coordinates near 32, 64, 128, 256, and 512
    blocks from the camera.
-4. Inspect thin parallel surfaces, fences, leaves, diagonal normals, silhouettes,
+5. Inspect thin parallel surfaces, fences, leaves, diagonal normals, silhouettes,
    and newly revealed regions for wrong-surface light or ghosting.
-5. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
+6. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
    because full-resolution Sable receiver classification is part of this pass.
-6. Move a lit contraption quickly and vertically. Its receiver identity must not
+7. Move a lit contraption quickly and vertically. Its receiver identity must not
    leak history into the static world or another sublevel.
 
 The branch reconstructs Photonics lighting only. It is not FSR, does not upscale
@@ -117,9 +122,9 @@ handheld lighting.
 
 ## Test D: Sable Occlusion
 
-Use `photonics-v87-sable-occlusion-mc1.21.1.jar`. The branch is active when
-the compatible Contraption Lights/Sable bridge is present; no new JVM option
-is required.
+Use `photonics-v89-sable-filtered-occlusion-mc1.21.1.jar`. The branch is active
+when the compatible Contraption Lights/Sable bridge is present; no new JVM
+option is required.
 
 Required cases:
 
@@ -133,9 +138,31 @@ Required cases:
    a fail-open light leak when the per-ray shape budget is reached.
 5. Atlas and shape-table budget exhaustion, overlapping omitted sublevel bounds,
    and world reload/rejoin.
+6. Repeat the fence, red stained-glass, and moving-wall cases with the shader
+   setting `photonics.restirSoftShadows` first `false`, then `true`. The first
+   run still uses exact center-light visibility but now shares ReSTIR
+   accumulation/SVGF. The second also samples the emitter area in Sable-local
+   space.
 
 Cross-sublevel direct occlusion, world-to-Sable occlusion, Sable-to-world
 occlusion, and Sable geometry in bounced GI are outside the first Sable branch.
+
+## Repeatable Performance Route
+
+Do not compare FPS from world-entry build-up or from different camera paths.
+For every jar and parameter set:
+
+1. Use the same save, dimension, time, weather, render distance, resolution,
+   shader options, and mod set.
+2. Wait for `settled=true`, then hold the camera still for another five
+   seconds.
+3. Record three separate 30-second phases: stationary, rotation without
+   crossing a section boundary, and traversal across the same section
+   boundaries.
+4. Run each phase three times after one warm-up pass. Report median frame time
+   and 1% low, not only the F3 instantaneous FPS.
+5. Keep screen recording either enabled for every comparison or disabled for
+   every comparison. Record its resolution and codec.
 
 ## Test E: Light-List Stability
 
