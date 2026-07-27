@@ -21,6 +21,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v92-upscaler-variance-gate-mc1.21.1.jar` | `fix/v92-temporal-upscaler-variance-gate` / `96db8fec` | Makes temporal variance authoritative when denoising spreads a stochastic event across agreeing source taps | `79B68C269937FC44DA526380727F3DDB8C1790C5F3737DA72066D3AE14229A6F` |
 | `photonics-v93-upscaler-bootstrap-fireflies-mc1.21.1.jar` | `fix/v93-temporal-upscaler-bootstrap-fireflies` / `167bfa5d` | Bounds low-confidence positive spikes when geometric reprojection history is unavailable and stabilizes young history | `29B22E7FD1A9A951ACC4F0A09C2227FEC98AAE31D3CFD98969A27D13C9F9B739` |
 | `photonics-v94-upscaler-radiance-step-limit-mc1.21.1.jar` | `fix/v94-temporal-upscaler-radiance-step-limit` / `c9b81fe7` | Bounds the final positive HDR radiance step so extreme samples cannot bypass temporal weighting or misleading confidence | `53801555AD980620FB6E6FCBA908250DA93F933230532BE3F6AF44996FF265F9` |
+| `photonics-v95-upscaler-time-normalized-fireflies-mc1.21.1.jar` | `fix/v95-temporal-upscaler-time-normalized-fireflies` / `c592487e` | Makes the positive HDR growth bound depend on real elapsed time instead of render-frame count | `29E02228F318650D40AAE9E1BFC94E50F2EAFD707349ED286E76FD5B668B9041` |
 
 ## Capture Rules
 
@@ -90,16 +91,15 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
-Use `photonics-v94-upscaler-radiance-step-limit-mc1.21.1.jar`. V91-v92 reduced
-the temporal weight and history rectification of suspicious current samples.
-V93 also closed the raw-current path when geometric reprojection history was
-unavailable. Optical-flow-aligned frame inspection nevertheless found compact
-one-frame fireflies in v93 at approximately 3.00, 3.17, 3.50, 3.84, 4.86, and
-5.87 seconds. A sufficiently large HDR source outlier still remained visible
-after a small temporal weight, and a misleading high-confidence estimate could
-take the reactive fast path. V94 bounds the final positive history-relative
-radiance step independently of confidence. It never restricts negative changes;
-a persistent real positive change advances every rendered frame.
+Use `photonics-v95-upscaler-time-normalized-fireflies-mc1.21.1.jar`. V91-v93
+reduced suspicious sample weight, gated confidence, and closed invalid-history
+bypasses. V94 bounded the final positive history-relative radiance step, but did
+so per render frame. The focused v94 capture ran at roughly 160-250 FPS while
+recording at 23.6 FPS. A source burst therefore survived 7-10 render frames
+inside one recorded frame, compounding the v94 allowance by roughly 4.8x-9.3x.
+V95 uses Iris's real `frameTime` and a fixed log-luminance growth rate. A
+persistent real `0 -> 10` change reaches full value in approximately 0.60
+seconds at 30, 60, 180, or 250 FPS; negative changes remain immediate.
 
 Then use:
 
@@ -120,38 +120,46 @@ Then use:
 3. Compare individual frames around 3.00, 3.17, 3.50, 3.84, 4.86, and 5.87
    seconds with the v93 recording. Check foliage, dark ground, wall faces, and
    distant surfaces rather than only the bright emitters.
-4. Wave or orbit leaves, grass, flowers, fences, and roof edges near a direct
+4. Reproduce the stationary `128x128` distant crop from v94 for at least 15
+   seconds. In v94, strong bursts occur around 0.89, 3.23, 4.80, 5.31, 5.77,
+   7.13, 8.75, 9.30, 11.80, and 13.03 seconds. Equivalent wall and ground points
+   must no longer jump from roughly `35` to `140-160` for one recorded frame.
+5. Repeat the crop once with FPS capped near 60 and once uncapped above 160.
+   Flash amplitude and real-light convergence time must not increase with FPS.
+   Unchanged flashes in both runs would place the remaining effect downstream
+   of `photonics_temporal_lighting`.
+6. Wave or orbit leaves, grass, flowers, fences, and roof edges near a direct
    light. Then reveal a brightly lit surface slowly from behind an edge and
    repeat with a rapid camera turn. A genuinely new bright surface may be
    conservative for one rendered frame, but it must recover immediately
    without a compact white or yellow flash.
-5. Occlude the same surface and remove its light. The prior screen-space value
+7. Occlude the same surface and remove its light. The prior screen-space value
    must not leak onto the newly dark surface or leave a lighting trail.
-6. Compare the fixed-camera recording directly with v91 and v93. Pay particular
+8. Compare the fixed-camera recording directly with v91 and v93. Pay particular
    attention around 1.2, 8.5, and 12.6 seconds, where the v91 capture changed
-   brightness in coherent steps. V94 should retain v92's smoothing of those
+   brightness in coherent steps. V95 should retain v92's smoothing of those
    source-estimator excursions rather than treating tap agreement as proof of
    stability.
-7. Approach the same lights slowly. The rejection must remain stable as a light
+9. Approach the same lights slowly. The rejection must remain stable as a light
    transitions from one compatible source tap to several taps.
-8. Place and remove both a nearby light and a tiny distant light while the
-   camera is still. A coherent nearby change should react immediately. A
-   distant sparse light may ramp briefly, but it must converge within roughly
-   one second and must not remain incorrectly dim. Removing or occluding either
-   light must remain immediate because the v94 bound is positive-only.
-9. Cross the same section boundary slowly and quickly. New compiler revisions
+10. Place and remove both a nearby light and a tiny distant light while the
+    camera is still. A coherent nearby change should react immediately. A
+    distant sparse light may ramp briefly, but it must converge within roughly
+    one second and must not remain incorrectly dim. Removing or occluding either
+    light must remain immediate because the v95 bound is positive-only.
+11. Cross the same section boundary slowly and quickly. New compiler revisions
    must not produce a whole-view brightness pulse.
-10. Place and remove a full block next to a light while the camera is still.
+12. Place and remove a full block next to a light while the camera is still.
    The affected pixels must react locally without preserving the obsolete
    shadow or resetting unrelated parts of the view.
-11. Repeat at source scales `0.67` and `0.75`; restart between values.
-12. Resize the window repeatedly, reload the shaderpack, change dimensions, and
+13. Repeat at source scales `0.67` and `0.75`; restart between values.
+14. Resize the window repeatedly, reload the shaderpack, change dimensions, and
    rejoin the world. Cleared history must prevent a horizon line or stale frame.
-13. Test positive and negative world coordinates near 32, 64, 128, 256, and
+15. Test positive and negative world coordinates near 32, 64, 128, 256, and
     512 blocks from the camera.
-14. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
+16. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
     because full-resolution Sable receiver classification is part of this pass.
-15. Move a lit contraption quickly and vertically. Its receiver identity must
+17. Move a lit contraption quickly and vertically. Its receiver identity must
     not leak history into the static world or another sublevel.
 
 The branch reconstructs Photonics lighting only. It is not FSR, does not upscale
