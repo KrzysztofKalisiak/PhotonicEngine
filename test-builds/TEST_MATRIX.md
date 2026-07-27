@@ -18,6 +18,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v88-temporal-upscaler-mc1.21.1.jar` | `fix/v88-temporal-upscaler` / `0bcefa03` | Fixes split-GI sampler compilation and includes v88 light-list stabilization | `A4CE660F33697B9A70D192C142F6733286273CD7B192F5C0C44C6705EBC25625` |
 | `photonics-v88-sable-occlusion-mc1.21.1.jar` | `fix/v88-sable-occlusion` / `3b081fb8` | Same-sublevel Sable occlusion plus v88 light-list stabilization and ownership documentation | `3E9C605A892A16E854CF1C868554962A6BCCBA238982DB6C35E802068EA25996` |
 | `photonics-v91-upscaler-firefly-stability-mc1.21.1.jar` | `fix/v91-temporal-upscaler-fireflies` / `248c68cd` | Rejects incoherent sparse bright samples without slowing coherent lighting changes | `39AD4C23884AE83F3AB11158F88F199BF8B7DD755C1B66E01C56386B583E565C` |
+| `photonics-v92-upscaler-variance-gate-mc1.21.1.jar` | `fix/v92-temporal-upscaler-variance-gate` / `96db8fec` | Makes temporal variance authoritative when denoising spreads a stochastic event across agreeing source taps | `79B68C269937FC44DA526380727F3DDB8C1790C5F3737DA72066D3AE14229A6F` |
 
 ## Capture Rules
 
@@ -87,11 +88,12 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
-Use `photonics-v91-upscaler-firefly-stability-mc1.21.1.jar`. V91 retains v90's
-local world-revision handling and sparse-tap stability. It also measures current
-source-tap support and bright-tap agreement. A lone positive radiance outlier
-can no longer clamp mature history to itself or receive the same temporal
-weight as a coherent lighting change.
+Use `photonics-v92-upscaler-variance-gate-mc1.21.1.jar`. V91 rejected a lone
+unsupported source tap, but its additive confidence allowed four agreeing taps
+to override high temporal variance. The v91 recording showed that SVGF can
+spread one stochastic lighting event across several source texels before
+reconstruction. V92 gates spatial confidence by variance, so agreement cannot
+force mature history toward a high-variance positive or negative excursion.
 
 Then use:
 
@@ -104,33 +106,37 @@ Then use:
 
 1. Start at source scale `0.50`. Verify the effective value in the `Photonics
    pipeline for` log line rather than relying on the folder name.
-2. Reproduce the v90 distant-light view. After `Photonics world tracing`
+2. Reproduce the v91 distant-light view. After `Photonics world tracing`
    reports `settled=true`, hold the camera completely still for 15 seconds.
    Inspect normal playback and individual frames. Distant surfaces must not
    breathe, and isolated one-frame bright one- or two-pixel points must not
    appear.
-3. Approach the same lights slowly. The rejection must remain stable as a light
+3. Compare the fixed-camera recording directly with v91. Pay particular
+   attention around 1.2, 8.5, and 12.6 seconds, where the v91 capture changed
+   brightness in coherent steps. V92 should smooth those source-estimator
+   excursions rather than treating tap agreement as proof of stability.
+4. Approach the same lights slowly. The rejection must remain stable as a light
    transitions from one compatible source tap to several taps.
-4. Place and remove both a nearby light and a tiny distant light while the
+5. Place and remove both a nearby light and a tiny distant light while the
    camera is still. A coherent nearby change should react immediately. A
    distant sparse light may ramp briefly, but it must converge within roughly
    one second and must not remain incorrectly dim.
-5. Cross the same section boundary slowly and quickly. New compiler revisions
+6. Cross the same section boundary slowly and quickly. New compiler revisions
    must not produce a whole-view brightness pulse.
-6. Orbit fences, leaves, roof edges, and other thin surfaces near a light.
+7. Orbit fences, leaves, roof edges, and other thin surfaces near a light.
    Sparse source taps must not shimmer, but silhouettes must not leave a
    lighting trail.
-7. Place and remove a full block next to a light while the camera is still.
+8. Place and remove a full block next to a light while the camera is still.
    The affected pixels must react locally without preserving the obsolete
    shadow or resetting unrelated parts of the view.
-8. Repeat at source scales `0.67` and `0.75`; restart between values.
-9. Resize the window repeatedly, reload the shaderpack, change dimensions, and
+9. Repeat at source scales `0.67` and `0.75`; restart between values.
+10. Resize the window repeatedly, reload the shaderpack, change dimensions, and
    rejoin the world. Cleared history must prevent a horizon line or stale frame.
-10. Test positive and negative world coordinates near 32, 64, 128, 256, and
+11. Test positive and negative world coordinates near 32, 64, 128, 256, and
     512 blocks from the camera.
-11. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
+12. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
     because full-resolution Sable receiver classification is part of this pass.
-12. Move a lit contraption quickly and vertically. Its receiver identity must
+13. Move a lit contraption quickly and vertically. Its receiver identity must
     not leak history into the static world or another sublevel.
 
 The branch reconstructs Photonics lighting only. It is not FSR, does not upscale
