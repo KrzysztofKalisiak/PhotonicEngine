@@ -783,12 +783,12 @@ void main() {
     float spatial_confidence = tap_confidence
         * support_confidence
         * coherence_confidence;
-    float current_confidence = clamp(
-        0.35f * variance_confidence
-            + 0.65f * spatial_confidence,
-        0.0f,
-        1.0f
-    );
+    // Spatial agreement does not make a high-variance radiance estimate
+    // trustworthy. SVGF can spread one stochastic source event over several
+    // neighboring source texels, making every reconstruction tap agree while
+    // the temporal variance still identifies an unstable estimate.
+    float current_confidence = variance_confidence
+        * mix(0.25f, 1.0f, spatial_confidence);
 
     float max_history = float(PH_TEMPORAL_UPSCALER_HISTORY_FRAMES);
     float history_maturity = smoothstep(
@@ -800,9 +800,13 @@ void main() {
         * (1.0f - current_confidence)
         * history_maturity;
     float positive_change = current_luma > history_luma ? 1.0f : 0.0f;
-    float positive_outlier = luma_reactive
+    float outlier_evidence = max(
+        1.0f - spatial_confidence,
+        1.0f - variance_confidence
+    );
+    float positive_outlier = change_strength
         * positive_change
-        * (1.0f - spatial_confidence)
+        * outlier_evidence
         * history_maturity;
 
     // Rectifying mature history to one sparse or noisy current estimate turns

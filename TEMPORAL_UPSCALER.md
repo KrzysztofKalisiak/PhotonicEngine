@@ -142,7 +142,10 @@ The accepted history is rectified against the current compatible source
 neighborhood. Reconstruction tracks the number and bilinear support of current
 taps, plus whether at least two taps agree on the bright end of the local
 radiance range. These signals distinguish coherent lighting changes from a
-single low-resolution radiance outlier.
+single low-resolution radiance outlier. Spatial agreement is gated by temporal
+source variance rather than added to it: several agreeing taps cannot make a
+high-variance estimate authoritative after the source denoiser has spread one
+stochastic event across neighboring texels.
 
 For mature history, sparse or high-variance incoherent changes reduce both
 history rectification and current-frame influence. Positive outliers receive an
@@ -161,8 +164,11 @@ Sparse current or history bilinear support alone is not reactive. It is common
 at silhouettes and thin geometry, and forcing current-frame weight there
 exposes the low-resolution source-grid phase as visible shimmer. Surface,
 receiver, luminance, and clamp validation still reject genuinely stale taps.
-High source variance lowers confidence in an incoherent current estimate rather
-than increasing its temporal weight.
+High source variance lowers current confidence even when the source taps agree,
+rather than increasing its temporal weight. This reduces history rectification
+for both positive and negative stochastic changes. Positive changes retain the
+additional asymmetric reduction because short bright excursions are especially
+visible after shaderpack exposure and bloom.
 
 Stable pixels converge to the configured history length. Reactive pixels return
 toward one-frame history instead of carrying stale lighting.
