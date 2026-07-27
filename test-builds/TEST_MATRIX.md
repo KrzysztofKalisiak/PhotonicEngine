@@ -22,6 +22,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v93-upscaler-bootstrap-fireflies-mc1.21.1.jar` | `fix/v93-temporal-upscaler-bootstrap-fireflies` / `167bfa5d` | Bounds low-confidence positive spikes when geometric reprojection history is unavailable and stabilizes young history | `29B22E7FD1A9A951ACC4F0A09C2227FEC98AAE31D3CFD98969A27D13C9F9B739` |
 | `photonics-v94-upscaler-radiance-step-limit-mc1.21.1.jar` | `fix/v94-temporal-upscaler-radiance-step-limit` / `c9b81fe7` | Bounds the final positive HDR radiance step so extreme samples cannot bypass temporal weighting or misleading confidence | `53801555AD980620FB6E6FCBA908250DA93F933230532BE3F6AF44996FF265F9` |
 | `photonics-v95-upscaler-time-normalized-fireflies-mc1.21.1.jar` | `fix/v95-temporal-upscaler-time-normalized-fireflies` / `c592487e` | Makes the positive HDR growth bound depend on real elapsed time instead of render-frame count | `29E02228F318650D40AAE9E1BFC94E50F2EAFD707349ED286E76FD5B668B9041` |
+| `photonics-v96-upscaler-motion-aware-fireflies-mc1.21.1.jar` | `fix/v96-temporal-upscaler-motion-aware-fireflies` / `bdf876f2` | Restricts HDR firefly limiting to stable reprojected receivers so camera motion cannot create half-resolution dark bands | `1438DE6BF0388614DBB7993B024C8313CA276DC8E94C136FE29D10EA13EDD587` |
 
 ## Capture Rules
 
@@ -91,7 +92,7 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
-Use `photonics-v95-upscaler-time-normalized-fireflies-mc1.21.1.jar`. V91-v93
+Use `photonics-v96-upscaler-motion-aware-fireflies-mc1.21.1.jar`. V91-v93
 reduced suspicious sample weight, gated confidence, and closed invalid-history
 bypasses. V94 bounded the final positive history-relative radiance step, but did
 so per render frame. The focused v94 capture ran at roughly 160-250 FPS while
@@ -100,6 +101,15 @@ inside one recorded frame, compounding the v94 allowance by roughly 4.8x-9.3x.
 V95 uses Iris's real `frameTime` and a fixed log-luminance growth rate. A
 persistent real `0 -> 10` change reaches full value in approximately 0.60
 seconds at 30, 60, 180, or 250 FPS; negative changes remain immediate.
+
+V95 also exposed an asymmetric-motion regression. A darker source-grid phase
+was accepted immediately while the next brighter phase was rate-limited. During
+camera movement this produced broad camera-relative strips and half-block dark
+regions, especially at source scale `0.50`. Pixels without geometric history
+also compared against an unrelated previous value at the same screen position.
+V96 starts those pixels from current lighting and applies the positive HDR
+bound only to mature, well-supported history moving below the configured
+output-pixel-per-second threshold.
 
 Then use:
 
@@ -128,38 +138,43 @@ Then use:
    Flash amplitude and real-light convergence time must not increase with FPS.
    Unchanged flashes in both runs would place the remaining effect downstream
    of `photonics_temporal_lighting`.
-6. Wave or orbit leaves, grass, flowers, fences, and roof edges near a direct
+6. Reproduce the v95 flat-world source-scale `0.50` scene and orbit its two
+   lights continuously at both capped and uncapped FPS. Ground and wall
+   brightness must remain attached to world geometry. Broad rectangular,
+   horizontal, or half-block dark bands must not appear, and stopping the
+   camera must not reveal a delayed bright recovery across the view.
+7. Wave or orbit leaves, grass, flowers, fences, and roof edges near a direct
    light. Then reveal a brightly lit surface slowly from behind an edge and
    repeat with a rapid camera turn. A genuinely new bright surface may be
    conservative for one rendered frame, but it must recover immediately
    without a compact white or yellow flash.
-7. Occlude the same surface and remove its light. The prior screen-space value
+8. Occlude the same surface and remove its light. The prior screen-space value
    must not leak onto the newly dark surface or leave a lighting trail.
-8. Compare the fixed-camera recording directly with v91 and v93. Pay particular
+9. Compare the fixed-camera recording directly with v91 and v93. Pay particular
    attention around 1.2, 8.5, and 12.6 seconds, where the v91 capture changed
-   brightness in coherent steps. V95 should retain v92's smoothing of those
+   brightness in coherent steps. V96 should retain v92's smoothing of those
    source-estimator excursions rather than treating tap agreement as proof of
    stability.
-9. Approach the same lights slowly. The rejection must remain stable as a light
+10. Approach the same lights slowly. The rejection must remain stable as a light
    transitions from one compatible source tap to several taps.
-10. Place and remove both a nearby light and a tiny distant light while the
+11. Place and remove both a nearby light and a tiny distant light while the
     camera is still. A coherent nearby change should react immediately. A
     distant sparse light may ramp briefly, but it must converge within roughly
     one second and must not remain incorrectly dim. Removing or occluding either
-    light must remain immediate because the v95 bound is positive-only.
-11. Cross the same section boundary slowly and quickly. New compiler revisions
-   must not produce a whole-view brightness pulse.
-12. Place and remove a full block next to a light while the camera is still.
-   The affected pixels must react locally without preserving the obsolete
-   shadow or resetting unrelated parts of the view.
-13. Repeat at source scales `0.67` and `0.75`; restart between values.
-14. Resize the window repeatedly, reload the shaderpack, change dimensions, and
-   rejoin the world. Cleared history must prevent a horizon line or stale frame.
-15. Test positive and negative world coordinates near 32, 64, 128, 256, and
+    light must remain immediate because the v96 bound is positive-only.
+12. Cross the same section boundary slowly and quickly. New compiler revisions
+    must not produce a whole-view brightness pulse.
+13. Place and remove a full block next to a light while the camera is still.
+    The affected pixels must react locally without preserving the obsolete
+    shadow or resetting unrelated parts of the view.
+14. Repeat at source scales `0.67` and `0.75`; restart between values.
+15. Resize the window repeatedly, reload the shaderpack, change dimensions, and
+    rejoin the world. Cleared history must prevent a horizon line or stale frame.
+16. Test positive and negative world coordinates near 32, 64, 128, 256, and
     512 blocks from the camera.
-16. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
+17. Repeat with 0, 1, 4, and, if practical, 16 Sable sublevels. Record GPU time
     because full-resolution Sable receiver classification is part of this pass.
-17. Move a lit contraption quickly and vertically. Its receiver identity must
+18. Move a lit contraption quickly and vertically. Its receiver identity must
     not leak history into the static world or another sublevel.
 
 The branch reconstructs Photonics lighting only. It is not FSR, does not upscale
