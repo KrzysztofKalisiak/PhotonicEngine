@@ -25,6 +25,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v96-upscaler-motion-aware-fireflies-mc1.21.1.jar` | `fix/v96-temporal-upscaler-motion-aware-fireflies` / `bdf876f2` | Restricts HDR firefly limiting to stable reprojected receivers so camera motion cannot create half-resolution dark bands | `1438DE6BF0388614DBB7993B024C8313CA276DC8E94C136FE29D10EA13EDD587` |
 | `photonics-v97-upscaler-reprojected-fireflies-mc1.21.1.jar` | `fix/v97-temporal-upscaler-reprojected-fireflies` / `128363ab` | Restores confidence-driven firefly rejection during motion and recovers validated history for distant and thin geometry | `7FA999939852DEA70B9E3F8DDC96BD56E330BB91CBF6B023A43BE8F173F4B3CE` |
 | `photonics-v98-upscaler-split-screen-diagnostic-mc1.21.1.jar` | `fix/v98-temporal-upscaler-split-screen` / `b172c235` | Debug-only four-quadrant capture of temporal source, pre-limiter resolve, state, and production output | `9EB27AB3D7F2B7868925B10E4DA08555408958153E3C5AC20C9DE82D646046F8` |
+| `photonics-v99-restir-source-fireflies-mc1.21.1.jar` | `fix/v99-restir-source-fireflies` / `86148e5a` | Removes GI normal-ratio amplification, clears empty GI reservoirs, and restores distinct direct-prefix proposals | `184CF46E822ECA4A408795641B238D9DD8532F0B8BF0EE0BE25F7309A6F82CC6` |
 
 ## Capture Rules
 
@@ -290,6 +291,36 @@ upscaler or Sable-occlusion branch.
    `deferredMs` values alongside any visible pulse.
 5. Test once with no Sable contraption, then once with one moving Sable light.
    This distinguishes static section-list churn from external-light updates.
+
+## Test F: v99 ReSTIR Source Fireflies
+
+Use `photonics-v99-restir-source-fireflies-mc1.21.1.jar`. Keep the same Photon
+settings, `MAX_LIGHTS=4000`, LabPBR resource pack, resolution, world, and route
+used for v98.
+
+1. Start without `-Dphotonics.temporalUpscalerSplitScreen=true`. Confirm the
+   log contains both `Photonics GI foundation v99` and `Photonics direct
+   startup v99`.
+2. Repeat the fixed moonlit-mountain view for at least 15 seconds, followed by
+   a slow pan. Look for cool or neutral one-frame points on distant terrain.
+3. Repeat the village route and zoomed distant-light view. Look for warm
+   one-frame points around roofs, foliage, walls, and dark ground.
+4. Place and remove nearby lights while stationary and while turning. Nearby
+   direct lighting must still react promptly despite the redistributed direct
+   candidate budget.
+5. Rejoin the world, cross a sky/terrain silhouette, resize once, and return to
+   the same view. Empty GI pixels must not retain stale bright reservoirs.
+6. If any pulse remains, repeat only that view with
+   `-Dphotonics.temporalUpscalerSplitScreen=true`. Report its timestamp and
+   whether it begins in top-left/raw source or appears later. Also note whether
+   it is warm/direct-looking or cool-neutral/GI-looking.
+7. For a remaining warm pulse, repeat once with `MAX_LIGHTS=1000`. A strong
+   reduction would isolate residual variance in the large direct-light tail;
+   it would not implicate temporal upscaling.
+
+GI on strongly normal-mapped surfaces may differ slightly from v98 because
+v99 follows the geometric normal used to sample the indirect ray. Direct light
+and shaderpack lighting should not otherwise lose brightness.
 
 ## Reporting
 
