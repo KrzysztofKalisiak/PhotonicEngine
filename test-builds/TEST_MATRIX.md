@@ -23,6 +23,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v94-upscaler-radiance-step-limit-mc1.21.1.jar` | `fix/v94-temporal-upscaler-radiance-step-limit` / `c9b81fe7` | Bounds the final positive HDR radiance step so extreme samples cannot bypass temporal weighting or misleading confidence | `53801555AD980620FB6E6FCBA908250DA93F933230532BE3F6AF44996FF265F9` |
 | `photonics-v95-upscaler-time-normalized-fireflies-mc1.21.1.jar` | `fix/v95-temporal-upscaler-time-normalized-fireflies` / `c592487e` | Makes the positive HDR growth bound depend on real elapsed time instead of render-frame count | `29E02228F318650D40AAE9E1BFC94E50F2EAFD707349ED286E76FD5B668B9041` |
 | `photonics-v96-upscaler-motion-aware-fireflies-mc1.21.1.jar` | `fix/v96-temporal-upscaler-motion-aware-fireflies` / `bdf876f2` | Restricts HDR firefly limiting to stable reprojected receivers so camera motion cannot create half-resolution dark bands | `1438DE6BF0388614DBB7993B024C8313CA276DC8E94C136FE29D10EA13EDD587` |
+| `photonics-v97-upscaler-reprojected-fireflies-mc1.21.1.jar` | `fix/v97-temporal-upscaler-reprojected-fireflies` / `128363ab` | Restores confidence-driven firefly rejection during motion and recovers validated history for distant and thin geometry | `7FA999939852DEA70B9E3F8DDC96BD56E330BB91CBF6B023A43BE8F173F4B3CE` |
 
 ## Capture Rules
 
@@ -92,7 +93,7 @@ pumping, unresolved noise, or slower disocclusion as an adaptive-filter defect.
 First run the upscaler jar without flags. It is disabled by default and should
 match the v87 GI baseline.
 
-Use `photonics-v96-upscaler-motion-aware-fireflies-mc1.21.1.jar`. V91-v93
+Use `photonics-v97-upscaler-reprojected-fireflies-mc1.21.1.jar`. V91-v93
 reduced suspicious sample weight, gated confidence, and closed invalid-history
 bypasses. V94 bounded the final positive history-relative radiance step, but did
 so per render frame. The focused v94 capture ran at roughly 160-250 FPS while
@@ -110,6 +111,31 @@ also compared against an unrelated previous value at the same screen position.
 V96 starts those pixels from current lighting and applies the positive HDR
 bound only to mature, well-supported history moving below the configured
 output-pixel-per-second threshold.
+
+The v96 feedback confirmed that the broad moving-camera regions were removed,
+but exposed two remaining bypasses. Gating the complete HDR limiter also
+disabled its confidence-driven component during motion, allowing uncertain
+positive samples through. Distant terrain, vegetation, and silhouettes could
+also miss all four bilinear history taps and restart from raw source radiance.
+V97 keeps only the confidence-independent hard bound behind the motion gate,
+adds a geometry-validated nearest-compatible 3-by-3 history recovery, and uses
+the reprojected history neighborhood only as a one-sided bootstrap envelope
+when no compatible geometry exists.
+
+For focused v97 acceptance, first repeat both v96 captures without changing
+the world, shader settings, resolution, or route:
+
+1. Hold the distant moonlit mountain view still for at least 15 seconds, then
+   pan slowly across it. Snow and terrain must not show isolated bright pulses
+   or persistent brightness plateaus.
+2. Repeat the village route around direct light sources, including foliage,
+   roof edges, walls, and dark ground. Inspect the recording frame by frame for
+   one- or two-pixel white/yellow bursts.
+3. Orbit and turn rapidly in both scenes. V95-style broad horizontal,
+   rectangular, or half-screen dark regions must not return.
+4. Reveal a genuinely bright surface from behind an edge and place a light
+   while moving. It may ramp for a small fraction of a second when evidence is
+   sparse, but it must not remain dark, trail in screen space, or flash white.
 
 Then use:
 
@@ -152,7 +178,7 @@ Then use:
    must not leak onto the newly dark surface or leave a lighting trail.
 9. Compare the fixed-camera recording directly with v91 and v93. Pay particular
    attention around 1.2, 8.5, and 12.6 seconds, where the v91 capture changed
-   brightness in coherent steps. V96 should retain v92's smoothing of those
+   brightness in coherent steps. V97 should retain v92's smoothing of those
    source-estimator excursions rather than treating tap agreement as proof of
    stability.
 10. Approach the same lights slowly. The rejection must remain stable as a light
@@ -161,7 +187,7 @@ Then use:
     camera is still. A coherent nearby change should react immediately. A
     distant sparse light may ramp briefly, but it must converge within roughly
     one second and must not remain incorrectly dim. Removing or occluding either
-    light must remain immediate because the v96 bound is positive-only.
+    light must remain immediate because the v97 bound is positive-only.
 12. Cross the same section boundary slowly and quickly. New compiler revisions
     must not produce a whole-view brightness pulse.
 13. Place and remove a full block next to a light while the camera is still.
