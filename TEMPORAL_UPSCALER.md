@@ -131,6 +131,12 @@ Four bilinear history taps are considered. Each tap must pass:
 - previous geometric-normal agreement;
 - previous radial-depth agreement.
 
+If none of those four taps passes, reconstruction searches the nearest
+compatible surface in a bounded 3-by-3 footprint around the reprojected
+location. The fallback still requires matching identity, normal, and depth and
+is marked as lower-support history. This prevents silhouettes and distant thin
+geometry from repeatedly restarting at one-frame history.
+
 The history age also carries a compact world-compilation revision tag. A tag
 mismatch does not reject an otherwise valid tap: section streaming updates the
 global revision even when the reprojected pixel is unaffected. Instead, a
@@ -155,12 +161,15 @@ error. The current estimate is never discarded: persistent changes still
 converge, while coherent low-variance multi-tap changes retain the fast path at
 every history age.
 
-When geometric history is unavailable, reconstruction starts from the current
-compatible source estimate. A previous value at the same screen coordinate can
-belong to a different surface or low-resolution sample phase, so it is not used
-as a lighting bound. Once one valid geometric history sample exists, confidence
-gating applies immediately; unstable young history uses the configured
-stable-history denominator instead of the large startup weights.
+When geometric history is unavailable, reconstruction starts a new one-frame
+history from the current compatible source estimate. A bounded neighborhood at
+the reprojected location may act only as a permissive one-sided envelope for a
+low-confidence positive burst; it is never accumulated as the current
+surface's history. The brightest valid value is selected so this fallback
+cannot unnecessarily darken a disocclusion, and coherent current lighting plus
+all negative changes remain immediate. Once one valid geometric history sample
+exists, confidence gating applies immediately; unstable young history uses the
+configured stable-history denominator instead of the large startup weights.
 
 The final resolved radiance also has a one-sided, history-relative HDR growth
 bound. Reducing a suspicious sample's temporal weight is insufficient when its
@@ -174,13 +183,15 @@ frame-rate independent. This matters on fast GPUs, where a stochastic source
 burst may survive several render frames but still occupy only one video or
 display frame.
 
-Because that bound is asymmetric, it is enabled only for mature,
-well-supported history whose reprojected receiver is effectively stationary.
-The motion gate uses output pixels per second, not pixels per frame, so its
-behavior is consistent across frame rates. Camera or receiver motion releases
-the bound before low-resolution source-grid phase changes can be converted into
-dark bands, and unsupported or newly exposed pixels never compare against an
-unrelated same-screen predecessor.
+The confidence-independent part of that bound is asymmetric, so it is enabled
+only for mature, supported history whose reprojected receiver is effectively
+stationary. The motion gate uses output pixels per second, not pixels per frame,
+so its behavior is consistent across frame rates. Camera or receiver motion
+releases the hard bound before low-resolution source-grid phase changes can be
+converted into dark bands. The confidence-driven outlier bound remains active
+during motion because it already requires an incoherent, uncertain positive
+sample; this closes the moving-camera firefly path without restoring the broad
+v95 dark regions.
 
 A reactive weight increases current-frame influence for:
 

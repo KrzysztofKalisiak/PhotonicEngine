@@ -563,6 +563,7 @@ bool ph_reconstruct_history(
 
     radiance = vec3(0.0f);
     age = 0.0f;
+    support = 0.0f;
     revision_support = 0.0f;
     float weight_sum = 0.0f;
     for (int y = 0; y <= 1; y++) {
@@ -590,13 +591,58 @@ bool ph_reconstruct_history(
         }
     }
 
-    if (weight_sum <= 0.0001f)
+    if (weight_sum > 0.0001f) {
+        radiance /= weight_sum;
+        age /= weight_sum;
+        revision_support /= weight_sum;
+        support = clamp(weight_sum, 0.0f, 1.0f);
+        return true;
+    }
+
+    // A sub-pixel reprojection can leave every compatible surface just
+    // outside the bilinear footprint at silhouettes and on distant, thin
+    // geometry. Recover the closest geometrically valid tap instead of
+    // bootstrapping from an unfiltered current sample.
+    ivec2 nearest_texel = ivec2(floor(history_position + vec2(0.5f)));
+    float nearest_distance_sq = 1e20f;
+    bool found_nearest = false;
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            ivec2 texel = nearest_texel + ivec2(x, y);
+            vec3 tap_radiance;
+            float tap_age;
+            float tap_revision_match;
+            if (!ph_history_tap(
+                    texel,
+                    history_size,
+                    expected_previous_pos,
+                    expected_previous_normal,
+                    expected_identity,
+                    tap_radiance,
+                    tap_age,
+                    tap_revision_match
+            )) continue;
+
+            vec2 tap_offset = vec2(texel) - history_position;
+            float distance_sq = dot(tap_offset, tap_offset);
+            if (found_nearest && distance_sq >= nearest_distance_sq)
+                continue;
+
+            radiance = tap_radiance;
+            age = tap_age;
+            revision_support = tap_revision_match;
+            nearest_distance_sq = distance_sq;
+            found_nearest = true;
+        }
+    }
+
+    if (!found_nearest)
         return false;
 
-    radiance /= weight_sum;
-    age /= weight_sum;
-    revision_support /= weight_sum;
-    support = clamp(weight_sum, 0.0f, 1.0f);
+    // Keep nearest-tap history distinguishable from a fully supported
+    // bilinear reconstruction. It is valid enough for temporal filtering, but
+    // receives less of the confidence-independent stationary HDR bound.
+    support = 0.25f;
     return true;
 }
 
@@ -604,11 +650,58 @@ float ph_luminance(vec3 color) {
     return dot(color, vec3(0.2126f, 0.7152f, 0.0722f));
 }
 
+bool ph_reconstruct_projected_history_envelope(
+    vec2 previous_uv,
+    out vec3 radiance
+) {
+    ivec2 history_size = textureSize(
+        prev_photonics_temporal_lighting,
+        0
+    );
+    vec2 history_position = previous_uv * vec2(history_size) - 0.5f;
+    ivec2 nearest_texel = ivec2(floor(history_position + vec2(0.5f)));
+
+    radiance = vec3(0.0f);
+    float brightest_luma = -1.0f;
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            ivec2 texel = nearest_texel + ivec2(x, y);
+            if (any(lessThan(texel, ivec2(0)))
+                    || any(greaterThanEqual(texel, history_size)))
+                continue;
+
+            vec4 history = texelFetch(
+                prev_photonics_temporal_lighting,
+                texel,
+                0
+            );
+            float tap_age;
+            float tap_revision_match;
+            if (!ph_temporal_decode_history_age(
+                    history.a,
+                    tap_age,
+                    tap_revision_match
+                )
+                    || !ph_temporal_finite_vec3(history.rgb))
+                continue;
+
+            float tap_luma = ph_luminance(history.rgb);
+            if (tap_luma <= brightest_luma)
+                continue;
+
+            radiance = history.rgb;
+            brightest_luma = tap_luma;
+        }
+    }
+
+    return brightest_luma >= 0.0f;
+}
+
 vec3 ph_limit_positive_radiance_step(
     vec3 candidate_radiance,
     vec3 reference_radiance,
     float current_confidence,
-    float temporal_stability
+    float hard_limit_stability
 ) {
     float candidate_luma = ph_luminance(candidate_radiance);
     float reference_luma = max(ph_luminance(reference_radiance), 0.0f);
@@ -627,8 +720,10 @@ vec3 ph_limit_positive_radiance_step(
         0.65f,
         relative_increase
     );
-    float limit_strength = max(uncertain_spike, hard_hdr_spike)
-        * clamp(temporal_stability, 0.0f, 1.0f);
+    float limit_strength = max(
+        uncertain_spike,
+        hard_hdr_spike * clamp(hard_limit_stability, 0.0f, 1.0f)
+    );
     if (limit_strength <= 0.0f)
         return candidate_radiance;
 
@@ -814,8 +909,24 @@ void main() {
     );
 
     if (!has_history) {
+        vec3 bootstrap_radiance = current_radiance;
+        vec3 projected_history_envelope;
+        if (can_reproject && ph_reconstruct_projected_history_envelope(
+                previous_uv,
+                projected_history_envelope
+            )) {
+            // The envelope is not geometrically valid history and is never
+            // accumulated. It only bounds a low-confidence positive burst;
+            // coherent disocclusions and all negative changes remain immediate.
+            bootstrap_radiance = ph_limit_positive_radiance_step(
+                current_radiance,
+                projected_history_envelope,
+                current_confidence,
+                0.0f
+            );
+        }
         temporal_lighting_out = vec4(
-            current_radiance,
+            bootstrap_radiance,
             ph_temporal_encode_history_age(1.0f)
         );
         return;
@@ -970,8 +1081,8 @@ void main() {
         history_age
     );
     float supported_history_confidence = smoothstep(
-        0.50f,
-        0.90f,
+        0.05f,
+        0.35f,
         history_support
     );
     float hdr_limit_stability = stationary_confidence
