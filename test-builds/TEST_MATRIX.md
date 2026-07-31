@@ -24,6 +24,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v95-upscaler-time-normalized-fireflies-mc1.21.1.jar` | `fix/v95-temporal-upscaler-time-normalized-fireflies` / `c592487e` | Makes the positive HDR growth bound depend on real elapsed time instead of render-frame count | `29E02228F318650D40AAE9E1BFC94E50F2EAFD707349ED286E76FD5B668B9041` |
 | `photonics-v96-upscaler-motion-aware-fireflies-mc1.21.1.jar` | `fix/v96-temporal-upscaler-motion-aware-fireflies` / `bdf876f2` | Restricts HDR firefly limiting to stable reprojected receivers so camera motion cannot create half-resolution dark bands | `1438DE6BF0388614DBB7993B024C8313CA276DC8E94C136FE29D10EA13EDD587` |
 | `photonics-v97-upscaler-reprojected-fireflies-mc1.21.1.jar` | `fix/v97-temporal-upscaler-reprojected-fireflies` / `128363ab` | Restores confidence-driven firefly rejection during motion and recovers validated history for distant and thin geometry | `7FA999939852DEA70B9E3F8DDC96BD56E330BB91CBF6B023A43BE8F173F4B3CE` |
+| `photonics-v98-upscaler-split-screen-diagnostic-mc1.21.1.jar` | `fix/v98-temporal-upscaler-split-screen` / `b172c235` | Debug-only four-quadrant capture of temporal source, pre-limiter resolve, state, and production output | `9EB27AB3D7F2B7868925B10E4DA08555408958153E3C5AC20C9DE82D646046F8` |
 
 ## Capture Rules
 
@@ -121,6 +122,28 @@ V97 keeps only the confidence-independent hard bound behind the motion gate,
 adds a geometry-validated nearest-compatible 3-by-3 history recovery, and uses
 the reprojected history neighborhood only as a one-sided bootstrap envelope
 when no compatible geometry exists.
+
+V98 does not change the temporal algorithm. Start it with:
+
+```text
+-Dphotonics.temporalUpscalerSplitScreen=true
+```
+
+The quadrants preserve the original screen UV: top-left/cyan is the current
+low-resolution composed source, top-right/blue is the temporal resolve before
+the final limiter, bottom-left/yellow is history/limiter state, and
+bottom-right/white is the exact production temporal output. Record 20 seconds
+stationary and 10 seconds of slow panning for both the moonlit mountain and the
+village. Keep the relevant terrain and lights crossing quadrant boundaries.
+
+In the state quadrant, blue means no receiver reprojection, red means
+reprojection without geometric history or an envelope, orange means envelope
+bootstrap, yellow means 3-by-3 history fallback, and green means bilinear
+history. Brighter color means higher source confidence, magenta means limiter
+activation, and white means the limiter materially changed the output. A flash
+starting in the top-left quadrant is upstream of reconstruction; one starting
+only in the top-right is produced during temporal resolve; one visible only in
+the bottom-right is produced by the final limiter or final temporal sampling.
 
 For focused v97 acceptance, first repeat both v96 captures without changing
 the world, shader settings, resolution, or route:
