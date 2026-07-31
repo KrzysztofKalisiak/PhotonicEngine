@@ -38,7 +38,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics feature increment: v65 upstream traversal guard, hand texture-normal evaluation, immature-history edge variance, and variance-guided full SVGF passes; direct-light-v64 proxy ownership retained"
         );
         Photonics.LOGGER.info(
-                "Photonics GI foundation v82: finite full-position indirect reservoirs, corrected primary-ray origin/origin rebasing/explicit sky hits, normal/Jacobian-weighted world-hit temporal reuse for world and Sable receivers, hand temporal isolation, and selected-reservoir visibility validation"
+                "Photonics GI foundation v99: finite full-position indirect reservoirs, corrected primary-ray origin/origin rebasing/explicit sky hits, Jacobian-weighted world-hit temporal reuse for world and Sable receivers, geometric-normal-consistent indirect energy, explicit empty non-world reservoirs, hand temporal isolation, and selected-reservoir visibility validation"
         );
         Photonics.LOGGER.info(
                 "Photonics ReSTIR GI v79: combinedGi={}, splitGi={}, directScale={}, giScale={}, directDenoiserPasses={}, giDenoiserPasses={}, giPipeline=independent-frag-grid+reservoirs+history+svgf, composition=post-estimator-screen-space",
@@ -56,7 +56,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI stability v82: world-hit temporal reservoir reuse enabled for rigidly reprojected Sable receivers; hand history remains isolated"
         );
         Photonics.LOGGER.info(
-                "Photonics direct startup v84: unbiased candidate-count-stable half-budget camera-contribution stratum with full-list systematic tail coverage"
+                "Photonics direct startup v99: unbiased distinct camera-contribution prefix proposals with expanded full-list systematic tail coverage"
         );
         Photonics.LOGGER.info(
                 "Photonics ReSTIR GI transport v85+: stochastic tinted-glass traversal and endpoint-first transparent-hit validation"

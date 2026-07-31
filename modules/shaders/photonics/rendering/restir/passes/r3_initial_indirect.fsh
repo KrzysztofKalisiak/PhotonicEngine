@@ -14,10 +14,8 @@ layout(location = INDIRECT_RESERVOIR_1) out uvec3 gi_reservoir_1;
 
 void main() {
     setup_frag_data(0);
-    if (!frag_is_in_world) discard;
-
     IndirectReservoir reservoir = indirect_reservoir_empty();
-    if (ph_world_ready == 0) {
+    if (!frag_is_in_world || ph_world_ready == 0) {
         indirect_reservoir_encode(
             reservoir,
             gi_reservoir_0,
@@ -58,13 +56,6 @@ void main() {
         path_hash
     );
 
-    // Use the serialized finite hit point for both world and sky samples so
-    // normal-map compensation matches the point reused in later frames.
-    vec3 stored_hit_position = indirect_sample_get_hit_point(reservoir.smple);
-    indirect_result *= indirect_normal_factor(
-        _frag_data,
-        stored_hit_position
-    );
     indirect_sample_set_color(reservoir.smple, indirect_result);
 
     reservoir.weight = max(ph_luminance(reservoir.smple.color), 0.0f);

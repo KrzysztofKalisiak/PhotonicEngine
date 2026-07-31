@@ -68,14 +68,10 @@ int direct_camera_sample_count() {
     if (tail_count <= 0)
         return remaining_samples;
 
-    // Keep the camera-relevant mixture approximately independent of the
-    // configured candidate count. A fixed eight samples made the prefix 50%
-    // of a 16-candidate run but only 25% of a 32-candidate run, allowing the
-    // large visibility-unknown tail to suppress newly placed nearby lights.
-    // Repeated systematic prefix samples are valid RIS proposals and retain
-    // the exact aggregate probability reported below.
-    int camera_budget = max(prefix_count, (remaining_samples + 1) / 2);
-    return min(camera_budget, max(remaining_samples - 1, 0));
+    // Use at most one proposal per camera-relevant prefix light. Repeated
+    // prefix proposals do not improve light coverage and leave too few
+    // proposals for the much larger tail, increasing a rare tail hit's energy.
+    return min(prefix_count, max(remaining_samples - 1, 0));
 }
 
 DirectSample direct_sample_stratified(
