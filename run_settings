@@ -1,1 +1,3 @@
 -Dphotonics.renderScaleOverride=0.75 -Dphotonics.giRenderScaleOverride=0.5 -Dphotonics.restirInitialSamplesOverride=16 -Dphotonics.restirDenoiserPassesOverride=5 -Dphotonics.restirGiDenoiserPassesOverride=3
+
+-Dphotonics.temporalUpscalerSplitScreen=true
