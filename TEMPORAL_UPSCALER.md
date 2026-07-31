@@ -306,6 +306,46 @@ Pipeline creation logs:
 RenderDoc capture, stable surfaces should approach the configured frame limit;
 reactive edges and newly revealed surfaces should stay near one.
 
+### Split-screen firefly diagnostic
+
+Start Minecraft with this JVM argument to compile the debug view:
+
+```text
+-Dphotonics.temporalUpscalerSplitScreen=true
+```
+
+The flag is read at startup. It has no effect unless the temporal upscaler is
+active. When absent or false, no diagnostic define, attachment, sampler, or
+shader branch is present. When enabled, reconstruction allocates a
+double-buffered full-resolution RGBA16F attachment: 16 additional bytes per
+output pixel across both sides, about 70.6 MiB at 3373x1371.
+
+The four quadrants retain the original full-screen UV, rather than stretching
+each quadrant, so lighting stays aligned with the shaderpack scene:
+
+| Quadrant | Marker | Signal |
+| --- | --- | --- |
+| Top left | Cyan | Nearest current low-resolution composed source texel |
+| Top right | Blue | Temporal result immediately before the final positive-radiance limiter |
+| Bottom left | Yellow | Packed history, confidence, and limiter state |
+| Bottom right | White | Exact production `photonics_temporal_lighting` sample |
+
+The state view uses black for invalid/background, blue for a receiver that
+could not reproject, red for reprojection without geometric history or an
+envelope, orange for projected-envelope bootstrap, yellow for the 3x3 nearest
+history fallback, and green for bilinear history. State brightness represents
+current-source confidence. A magenta overlay represents limiter strength;
+white means the limiter materially changed the temporal output.
+
+For a firefly capture, record at least 20 seconds while stationary and 10
+seconds while panning slowly. Repeat once for the moonlit mountain and once for
+the village direct lights, keeping the relevant surfaces visible across the
+quadrant boundaries. A flash beginning in the top-left view is upstream of the
+upscaler. A stable top-left with a flashing top-right isolates reconstruction;
+a stable top-right with a flashing bottom-right implicates the final limiter or
+later sampling. If all three radiance views are stable while the composed game
+image flashes, investigate shaderpack exposure, bloom, or later composition.
+
 ## Expected Performance
 
 The feature pays for:

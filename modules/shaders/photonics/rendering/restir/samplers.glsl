@@ -4,6 +4,10 @@
 #if defined PH_TEMPORAL_UPSCALER && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
 //ph_required: uniform sampler2D photonics_temporal_lighting;
 #endif
+#if defined PH_TEMPORAL_UPSCALER_SPLIT_SCREEN && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
+//ph_required: uniform sampler2D photonics_temporal_source;
+//ph_required: uniform sampler2D photonics_temporal_diagnostic;
+#endif
 #if PH_RESTIR_DENOISER_PASSES != 0
 //ph_required: uniform sampler2D denoise_result;
 #endif
@@ -207,9 +211,121 @@ vec3 ph_sample_split_gi(vec2 tex_coord) {
 }
 #endif
 
+#if defined PH_TEMPORAL_UPSCALER_SPLIT_SCREEN && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
+ivec2 ph_temporal_diagnostic_texel(ivec2 image_size, vec2 tex_coord) {
+    return clamp(
+        ivec2(tex_coord * vec2(image_size)),
+        ivec2(0),
+        image_size - ivec2(1)
+    );
+}
+
+vec3 ph_temporal_diagnostic_state(vec4 diagnostic) {
+    uint code = uint(floor(max(diagnostic.a, 0.0f) + 0.5f));
+    uint mode = code & 7u;
+    uint limiter_bin = (code >> 3u) & 15u;
+    uint confidence_bin = (code >> 7u) & 7u;
+    bool limiter_changed = (code & (1u << 10u)) != 0u;
+
+    if (mode == 0u)
+        return vec3(0.0f);
+    if (limiter_changed)
+        return vec3(1.0f);
+
+    vec3 state_color;
+    if (mode == 1u)
+        state_color = vec3(0.05f, 0.20f, 1.00f);
+    else if (mode == 2u)
+        state_color = vec3(1.00f, 0.05f, 0.02f);
+    else if (mode == 3u)
+        state_color = vec3(1.00f, 0.35f, 0.02f);
+    else if (mode == 4u)
+        state_color = vec3(1.00f, 0.90f, 0.02f);
+    else
+        state_color = vec3(0.05f, 1.00f, 0.15f);
+
+    float confidence = float(confidence_bin) / 7.0f;
+    state_color *= mix(0.20f, 1.0f, confidence);
+
+    float limiter_strength = float(limiter_bin) / 15.0f;
+    return mix(
+        state_color,
+        vec3(1.0f, 0.0f, 1.0f),
+        0.80f * limiter_strength
+    );
+}
+
+bool ph_temporal_diagnostic_is_marker(vec2 tex_coord) {
+    vec2 output_size = vec2(textureSize(photonics_temporal_lighting, 0));
+    vec2 half_size = floor(output_size * 0.5f);
+    bool right = tex_coord.x >= 0.5f;
+    bool top = tex_coord.y >= 0.5f;
+    vec2 pixel = tex_coord * output_size;
+    vec2 quadrant_origin = vec2(
+        right ? half_size.x : 0.0f,
+        top ? half_size.y : 0.0f
+    );
+    vec2 quadrant_size = vec2(
+        right ? output_size.x - half_size.x : half_size.x,
+        top ? output_size.y - half_size.y : half_size.y
+    );
+    vec2 local_pixel = pixel - quadrant_origin;
+
+    return local_pixel.x >= 3.0f
+        && local_pixel.x < 9.0f
+        && local_pixel.y >= quadrant_size.y - 9.0f
+        && local_pixel.y < quadrant_size.y - 3.0f;
+}
+
+vec3 ph_sample_temporal_diagnostic(vec2 tex_coord) {
+    bool right = tex_coord.x >= 0.5f;
+    bool top = tex_coord.y >= 0.5f;
+
+    if (ph_temporal_diagnostic_is_marker(tex_coord)) {
+        if (top && !right)
+            return vec3(0.0f, 1.0f, 1.0f);
+        if (top)
+            return vec3(0.10f, 0.35f, 1.0f);
+        if (!right)
+            return vec3(1.0f, 0.85f, 0.0f);
+        return vec3(1.0f);
+    }
+
+    // Keep the original full-screen UV in every quadrant. Only the selected
+    // signal changes, so it stays aligned with shaderpack geometry and albedo.
+    if (top && !right) {
+        ivec2 source_texel = ph_temporal_diagnostic_texel(
+            textureSize(photonics_temporal_source, 0),
+            tex_coord
+        );
+        return texelFetch(photonics_temporal_source, source_texel, 0).rgb;
+    }
+
+    ivec2 diagnostic_texel = ph_temporal_diagnostic_texel(
+        textureSize(photonics_temporal_diagnostic, 0),
+        tex_coord
+    );
+    vec4 diagnostic = texelFetch(
+        photonics_temporal_diagnostic,
+        diagnostic_texel,
+        0
+    );
+    if (top)
+        return diagnostic.rgb;
+    if (!right)
+        return ph_temporal_diagnostic_state(diagnostic);
+
+    return texture(photonics_temporal_lighting, tex_coord).rgb;
+}
+#endif
+
 vec3 sample_photonics_direct(vec2 tex_coord) {
 #if defined PH_TEMPORAL_UPSCALER && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
+    #if defined PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    return ph_sample_temporal_diagnostic(tex_coord);
+    #else
     return texture(photonics_temporal_lighting, tex_coord).rgb;
+    #endif
 #else
 #if defined PH_RESTIR_SPLIT_GI
     vec3 result = vec3(0.0f);

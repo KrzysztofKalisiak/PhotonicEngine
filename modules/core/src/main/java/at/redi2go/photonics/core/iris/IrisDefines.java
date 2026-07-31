@@ -45,6 +45,10 @@ public class IrisDefines {
         if (phProperties.isTemporalUpscalerActive())
             defines.stringDefine("PH_TEMPORAL_UPSCALER", "");
 
+        if (phProperties.isTemporalUpscalerActive()
+                && TemporalUpscalerDiagnostics.isSplitScreenEnabled())
+            defines.stringDefine("PH_TEMPORAL_UPSCALER_SPLIT_SCREEN", "");
+
         if (phProperties.isLightBinningEnabled() || phProperties.getLightingMode() == LightingMode.BASIC)
             defines.stringDefine("PH_ENABLE_LIGHT_BINNING", "");
 

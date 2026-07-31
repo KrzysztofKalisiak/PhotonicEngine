@@ -5,6 +5,7 @@ import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.iris.AbstractPhotonicsExtension;
 import at.redi2go.photonics.core.iris.Pipelines;
+import at.redi2go.photonics.core.iris.TemporalUpscalerDiagnostics;
 import at.redi2go.photonics.core.iris.pipeline.rendering.IrisFactory;
 import at.redi2go.photonics.core.iris.pipeline.uniform.IDynamicUniformHolder;
 import at.redi2go.photonics.core.rendering.UniformUpdater;
@@ -436,7 +437,20 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         ITextureFormat.rgba16f(),
                         FLIP | CREATE_PREV_SAMPLER
                 )
+                .addAttachment(
+                        "photonics_temporal_diagnostic",
+                        ITextureFormat.rgba16f(),
+                        FLIP | CREATE_SAMPLER,
+                        TemporalUpscalerDiagnostics::isSplitScreenEnabled
+                )
                 .build(this::registerComponent);
+
+        if (TemporalUpscalerDiagnostics.isSplitScreenEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics temporal-upscaler split-screen diagnostic enabled via -D{}=true; allocating one double-buffered full-resolution RGBA16F attachment",
+                    TemporalUpscalerDiagnostics.SPLIT_SCREEN_PROPERTY
+            );
+        }
 
         Photonics.LOGGER.info(
             "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, historyWorldRevisionPolicy=local-reactive, sparseSupportPolicy=history-stable, composition=private-lighting-texture",

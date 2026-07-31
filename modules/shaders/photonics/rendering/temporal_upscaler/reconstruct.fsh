@@ -15,6 +15,15 @@
 
 layout(location = 0) out vec4 temporal_lighting_out;
 layout(location = 1) out vec4 temporal_surface_out;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+layout(location = 2) out vec4 temporal_diagnostic_out;
+
+const uint PH_TEMPORAL_DIAGNOSTIC_CURRENT_ONLY = 1u;
+const uint PH_TEMPORAL_DIAGNOSTIC_NO_HISTORY = 2u;
+const uint PH_TEMPORAL_DIAGNOSTIC_ENVELOPE = 3u;
+const uint PH_TEMPORAL_DIAGNOSTIC_NEAREST_HISTORY = 4u;
+const uint PH_TEMPORAL_DIAGNOSTIC_BILINEAR_HISTORY = 5u;
+#endif
 
 const float PH_UPSCALE_NORMAL_THRESHOLD = 0.85f;
 const float PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD = 0.75f;
@@ -553,6 +562,9 @@ bool ph_reconstruct_history(
     out float age,
     out float support,
     out float revision_support
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    , out bool used_nearest_fallback
+#endif
 ) {
     ivec2 history_size = textureSize(
         prev_photonics_temporal_lighting,
@@ -565,6 +577,9 @@ bool ph_reconstruct_history(
     age = 0.0f;
     support = 0.0f;
     revision_support = 0.0f;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    used_nearest_fallback = false;
+#endif
     float weight_sum = 0.0f;
     for (int y = 0; y <= 1; y++) {
         for (int x = 0; x <= 1; x++) {
@@ -643,6 +658,9 @@ bool ph_reconstruct_history(
     // bilinear reconstruction. It is valid enough for temporal filtering, but
     // receives less of the confidence-independent stationary HDR bound.
     support = 0.25f;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    used_nearest_fallback = true;
+#endif
     return true;
 }
 
@@ -702,7 +720,13 @@ vec3 ph_limit_positive_radiance_step(
     vec3 reference_radiance,
     float current_confidence,
     float hard_limit_stability
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    , out float diagnostic_limit_strength
+#endif
 ) {
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    diagnostic_limit_strength = 0.0f;
+#endif
     float candidate_luma = ph_luminance(candidate_radiance);
     float reference_luma = max(ph_luminance(reference_radiance), 0.0f);
     if (candidate_luma <= reference_luma || candidate_luma <= 1e-6f)
@@ -724,6 +748,9 @@ vec3 ph_limit_positive_radiance_step(
         uncertain_spike,
         hard_hdr_spike * clamp(hard_limit_stability, 0.0f, 1.0f)
     );
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    diagnostic_limit_strength = limit_strength;
+#endif
     if (limit_strength <= 0.0f)
         return candidate_radiance;
 
@@ -755,9 +782,47 @@ vec3 ph_limit_positive_radiance_step(
     );
 }
 
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+bool ph_temporal_limiter_materially_changed(
+    vec3 before_radiance,
+    vec3 after_radiance
+) {
+    float relative_change = length(after_radiance - before_radiance)
+        / max(length(before_radiance), 0.1f);
+    return relative_change > 0.001f;
+}
+
+void ph_write_temporal_diagnostic(
+    vec3 pre_limiter_radiance,
+    uint mode,
+    float current_confidence,
+    float limiter_strength,
+    bool limiter_changed
+) {
+    uint limiter_bin = uint(floor(
+        clamp(limiter_strength, 0.0f, 1.0f) * 15.0f + 0.5f
+    ));
+    uint confidence_bin = uint(floor(
+        clamp(current_confidence, 0.0f, 1.0f) * 7.0f + 0.5f
+    ));
+    uint code = mode
+        | (limiter_bin << 3u)
+        | (confidence_bin << 7u)
+        | (limiter_changed ? (1u << 10u) : 0u);
+
+    temporal_diagnostic_out = vec4(
+        clamp(pre_limiter_radiance, vec3(0.0f), vec3(65504.0f)),
+        float(code)
+    );
+}
+#endif
+
 void main() {
     temporal_lighting_out = vec4(0.0f);
     temporal_surface_out = vec4(0.0f);
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    temporal_diagnostic_out = vec4(0.0f);
+#endif
 
     if (ph_world_ready == 0 || !is_in_world())
         return;
@@ -897,6 +962,9 @@ void main() {
     float history_age;
     float history_support;
     float history_revision_support;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    bool history_used_nearest_fallback;
+#endif
     bool has_history = can_reproject && ph_reconstruct_history(
         previous_uv,
         previous_player_pos,
@@ -906,15 +974,27 @@ void main() {
         history_age,
         history_support,
         history_revision_support
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+        , history_used_nearest_fallback
+#endif
     );
 
     if (!has_history) {
         vec3 bootstrap_radiance = current_radiance;
         vec3 projected_history_envelope;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+        uint diagnostic_mode = can_reproject
+            ? PH_TEMPORAL_DIAGNOSTIC_NO_HISTORY
+            : PH_TEMPORAL_DIAGNOSTIC_CURRENT_ONLY;
+        float diagnostic_limiter_strength = 0.0f;
+#endif
         if (can_reproject && ph_reconstruct_projected_history_envelope(
                 previous_uv,
                 projected_history_envelope
             )) {
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+            diagnostic_mode = PH_TEMPORAL_DIAGNOSTIC_ENVELOPE;
+#endif
             // The envelope is not geometrically valid history and is never
             // accumulated. It only bounds a low-confidence positive burst;
             // coherent disocclusions and all negative changes remain immediate.
@@ -923,12 +1003,27 @@ void main() {
                 projected_history_envelope,
                 current_confidence,
                 0.0f
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+                , diagnostic_limiter_strength
+#endif
             );
         }
         temporal_lighting_out = vec4(
             bootstrap_radiance,
             ph_temporal_encode_history_age(1.0f)
         );
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+        ph_write_temporal_diagnostic(
+            current_radiance,
+            diagnostic_mode,
+            current_confidence,
+            diagnostic_limiter_strength,
+            ph_temporal_limiter_materially_changed(
+                current_radiance,
+                bootstrap_radiance
+            )
+        );
+#endif
         return;
     }
 
@@ -1088,12 +1183,33 @@ void main() {
     float hdr_limit_stability = stationary_confidence
         * mature_history_confidence
         * supported_history_confidence;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    vec3 diagnostic_pre_limiter_radiance = resolved;
+    float diagnostic_limiter_strength;
+#endif
     resolved = ph_limit_positive_radiance_step(
         resolved,
         history_radiance,
         current_confidence,
         hdr_limit_stability
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+        , diagnostic_limiter_strength
+#endif
     );
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    ph_write_temporal_diagnostic(
+        diagnostic_pre_limiter_radiance,
+        history_used_nearest_fallback
+            ? PH_TEMPORAL_DIAGNOSTIC_NEAREST_HISTORY
+            : PH_TEMPORAL_DIAGNOSTIC_BILINEAR_HISTORY,
+        current_confidence,
+        diagnostic_limiter_strength,
+        ph_temporal_limiter_materially_changed(
+            diagnostic_pre_limiter_radiance,
+            resolved
+        )
+    );
+#endif
     temporal_lighting_out = vec4(
         clamp(resolved, vec3(0.0f), vec3(65504.0f)),
         ph_temporal_encode_history_age(
