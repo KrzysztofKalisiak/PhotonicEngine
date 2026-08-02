@@ -10,3 +10,7 @@
 
 v106 
 -Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectEstimatorDiagnostic=true
+
+-Dphotonics.restirSourceHistoryDiagnostic=true
+-Dphotonics.restirDirectEstimatorDiagnostic=true
+-Dphotonics.restirInitialSamplesOverride=32
