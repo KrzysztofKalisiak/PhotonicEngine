@@ -15,7 +15,7 @@
 //ph_required: uniform sampler2D restir_external_lighting;
 #endif
 
-#if defined PH_ENABLE_BLOCKLIGHT
+#if defined PH_ENABLE_BLOCKLIGHT && !defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
 //ph_required: uniform sampler2D restir_local_lighting;
 #endif
 
@@ -23,7 +23,7 @@
 //ph_required: uniform sampler2D restir_source_lighting;
 #endif
 
-#if defined PH_ENABLE_HANDHELD_LIGHT
+#if defined PH_ENABLE_HANDHELD_LIGHT && !defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
 //ph_required: uniform sampler2D other_handheld;
 #endif
 

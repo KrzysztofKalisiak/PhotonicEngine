@@ -62,7 +62,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         if (RestirDiagnostics.isSourceHistoryEnabled()) {
             if (isSplitGiEnabled() && isBlockLightEnabled()) {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v101 enabled via -D{}=true; panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted",
+                        "Photonics ReSTIR source/history diagnostic v102 enabled via -D{}=true; panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, omitted-stream-samplers=not-declared",
                         RestirDiagnostics.SOURCE_HISTORY_PROPERTY
                 );
             } else {
