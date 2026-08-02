@@ -413,6 +413,53 @@ Photon's final composite.
 This jar is diagnostic rather than a visual-quality candidate. Its extra
 RGB16F direct-source attachment exists only when the JVM flag is enabled.
 
+## Test I: v105 Direct Temporal Reservoir Bypass
+
+Use `photonics-v105-restir-direct-temporal-bypass-diagnostic-mc1.21.1.jar` for
+both runs. Keep the v104 rendering settings, set `Spatial Reuse Samples` to
+`Off`, reload the shader pack, and confirm the pipeline log reports
+`restirSpatial=0` before recording.
+
+Run A is the same diagnostic with direct temporal reservoir reuse enabled:
+
+```text
+-Dphotonics.restirSourceHistoryDiagnostic=true
+```
+
+Run B adds the direct-temporal bypass:
+
+```text
+-Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectTemporalBypassDiagnostic=true
+```
+
+Fully restart Minecraft between A and B. The JVM flags are read once during
+class initialization, so changing them followed only by a shader reload is not
+a valid test.
+
+1. Confirm Run A logs `Photonics ReSTIR source/history diagnostic v105 enabled`
+   with `directTemporalReuse=enabled`, and Run B logs the same marker with
+   `directTemporalReuse=bypassed`. Both runs must also report
+   `restirSpatial=0`.
+2. Use the same flat-world camera position, light count, time, and resolution
+   for both runs. Wait for world tracing to report `settled=true`, then hold the
+   camera still for 30 seconds on the distant bushes and fences.
+3. Judge the cyan top-left panel only. It is current direct after initial
+   proposals, the zero-sample r5 clamp, and final r6 visibility. The blue and
+   yellow panels still use r7 lighting history and can pulse even while direct
+   reservoir temporal reuse is bypassed.
+4. If the same cyan impulses remain in Run B, r4 direct temporal reservoir
+   merging is ruled out. Continue inside initial proposal weighting/selection,
+   r5 finalization, or r6 final visibility.
+5. If cyan impulses disappear or reduce materially only in Run B, r4 temporal
+   merging or its previous-light reprojection is responsible.
+6. Record one compact control with at most eight selected lights if practical.
+   This distinguishes a general visibility/weight defect from variance caused
+   by undersampling a larger selected-light list.
+
+This bypass affects only the split-direct r4 pass while both diagnostic flags
+are active. Split GI temporal reuse and every normal run without the bypass
+flag remain unchanged.
+
 ## Reporting
 
 Name each result with the jar and test, for example
