@@ -60,14 +60,14 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         if (RestirDiagnostics.isSourceHistoryEnabled()) {
-            if (isSplitGiEnabled() && isBlockLightEnabled()) {
+            if (isSourceHistoryDiagnosticEnabled()) {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v102 enabled via -D{}=true; panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, omitted-stream-samplers=not-declared",
+                        "Photonics ReSTIR source/history diagnostic v103 enabled via -D{}=true; panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, auxiliary-lighting-components=not-registered",
                         RestirDiagnostics.SOURCE_HISTORY_PROPERTY
                 );
             } else {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v101 requested via -D{}=true but requires split GI and block lighting; diagnostic disabled for this pipeline",
+                        "Photonics ReSTIR source/history diagnostic v103 requested via -D{}=true but requires split GI and block lighting; diagnostic disabled for this pipeline",
                         RestirDiagnostics.SOURCE_HISTORY_PROPERTY
                 );
             }
@@ -213,14 +213,14 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         "restir_source_lighting",
                         ITextureFormat.rgb16f(),
                         CREATE_SAMPLER,
-                        RestirDiagnostics::isSourceHistoryEnabled
+                        this::isSourceHistoryDiagnosticEnabled
                 )
                 .build(this::registerComponent);
 
         var directReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_direct_reservoirs0"
         );
-        var diffuseFramebuffer = RestirDiagnostics.isSourceHistoryEnabled()
+        var diffuseFramebuffer = isSourceHistoryDiagnosticEnabled()
                 ? restirFramebuffer.withDrawBuffers(
                         "restir_lighting",
                         "restir_direct_reservoirs0",
@@ -415,6 +415,8 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     private void buildAuxiliaryLightingPipeline(IrisFactory irisFactory) {
+        if (isSourceHistoryDiagnosticEnabled()) return;
+
         var localLightingFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment("restir_local_lighting", ITextureFormat.rgb16f(), CREATE_SAMPLER, this::isBlockLightEnabled)
                 .build(this::registerComponent);
@@ -530,6 +532,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     public boolean isSplitGiEnabled() {
         return isRestirGiEnabled()
                 && properties.getGiRenderScale() < properties.getRenderScale() - 0.0001f;
+    }
+
+    public boolean isSourceHistoryDiagnosticEnabled() {
+        return RestirDiagnostics.isSourceHistoryEnabled()
+                && isSplitGiEnabled()
+                && isBlockLightEnabled();
     }
 
     public boolean isRestirEnabled() {
