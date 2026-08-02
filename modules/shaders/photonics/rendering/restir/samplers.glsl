@@ -372,6 +372,13 @@ vec3 ph_sample_denoised_direct(vec2 tex_coord) {
 #endif
 }
 
+#if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
+float ph_decode_restir_estimator_luminance(float encoded) {
+    if (isnan(encoded) || isinf(encoded)) return 0.0f;
+    return min(exp2(clamp(encoded, 0.0f, 16.0f)) - 1.0f, 65504.0f);
+}
+#endif
+
 vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
     bool right = tex_coord.x >= 0.5f;
     bool top = tex_coord.y >= 0.5f;
@@ -388,6 +395,18 @@ vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
 
     // Keep full-screen UVs so every signal remains aligned with the shader
     // pack's geometry and albedo in its own quadrant.
+#if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
+    vec3 packed = texture(restir_local_lighting, tex_coord).rgb;
+    float unshadowed = ph_decode_restir_estimator_luminance(packed.r);
+    float visible = ph_decode_restir_estimator_luminance(packed.g);
+    if (top && !right)
+        return vec3(unshadowed);
+    if (top)
+        return vec3(visible);
+    if (!right)
+        return vec3(clamp(packed.b, 0.0f, 1.0f));
+    return vec3(max(unshadowed - visible, 0.0f));
+#else
     if (top && !right)
         return texture(restir_local_lighting, tex_coord).rgb;
     if (top)
@@ -395,6 +414,7 @@ vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
     if (!right)
         return ph_sample_denoised_direct(tex_coord);
     return ph_sample_split_gi(tex_coord);
+#endif
 }
 #endif
 

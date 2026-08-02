@@ -122,6 +122,14 @@ void main() {
                 receiver_token
             )) direct_reservoir = direct_reservoir_empty();
 
+#if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
+    vec3 direct_unshadowed_lighting = direct_reservoir_get_unshadowed_color(
+        direct_reservoir,
+        frag_rt_pos,
+        frag_geo_normal,
+        frag_tex_normal
+    );
+#endif
     vec3 direct_lighting = direct_reservoir_get_final_color(
         direct_reservoir,
         frag_rt_pos,
@@ -152,9 +160,29 @@ void main() {
         di_history_state.y = 0.0f;
 #endif
     }
+#if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
+    float unshadowed_luminance = direct_sample_weight(
+        max(direct_unshadowed_lighting, vec3(0.0f))
+    );
+    float visible_luminance = direct_sample_weight(
+        max(direct_lighting, vec3(0.0f))
+    );
+    if (isnan(unshadowed_luminance) || isinf(unshadowed_luminance))
+        unshadowed_luminance = 0.0f;
+    if (isnan(visible_luminance) || isinf(visible_luminance))
+        visible_luminance = 0.0f;
+    float visibility_ratio = unshadowed_luminance > 0.000001f
+        ? clamp(visible_luminance / unshadowed_luminance, 0.0f, 1.0f)
+        : 0.0f;
+    source_history_lighting = vec3(
+        log2(1.0f + unshadowed_luminance),
+        log2(1.0f + visible_luminance),
+        visibility_ratio
+    );
+#endif
 #endif
 
-#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC && !defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
     source_history_lighting = lighting.rgb;
 #if defined PH_ENABLE_BLOCKLIGHT
     source_history_lighting += external_lighting.rgb;

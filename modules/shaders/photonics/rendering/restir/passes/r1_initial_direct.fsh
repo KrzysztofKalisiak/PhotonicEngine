@@ -88,13 +88,15 @@ void main() {
     }
 
     direct_reservoir_finalize_weight(reservoir, sample_weight);
-    // Validation consumes the reservoir selected by this pass. Keeping it
-    // here avoids a full-screen read/write pass without changing the ray test
-    // or the reservoir seen by temporal reuse.
+    // The estimator diagnostic needs this exact selected reservoir before and
+    // after one visibility test, so it defers validation to r6. Production
+    // still validates here before any temporal or spatial reuse.
+#ifndef PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
     direct_reservoir_validate_visiblity(
         reservoir,
         frag_rt_pos,
         frag_geo_normal
     );
+#endif
     direct_reservoir_encode(reservoir, di_reservoir_0);
 }

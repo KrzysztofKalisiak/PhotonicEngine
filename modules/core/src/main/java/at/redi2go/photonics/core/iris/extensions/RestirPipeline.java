@@ -61,18 +61,35 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         );
         if (RestirDiagnostics.isSourceHistoryEnabled()) {
             if (isSourceHistoryDiagnosticEnabled()) {
-                Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v105 enabled via -D{}=true; directTemporalReuse={}, bypassFlag=-D{}=true, panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, composition=internal-single-texture, rawSourceStorage=repurposed-restir_local_lighting",
-                        RestirDiagnostics.SOURCE_HISTORY_PROPERTY,
-                        isDirectTemporalReuseEnabled() ? "enabled" : "bypassed",
-                        RestirDiagnostics.DIRECT_TEMPORAL_BYPASS_PROPERTY
-                );
+                if (isDirectEstimatorDiagnosticEnabled()) {
+                    Photonics.LOGGER.warn(
+                            "Photonics ReSTIR direct-estimator diagnostic v106 enabled via -D{}=true and -D{}=true; directTemporalReuse=bypassed, directSpatialReuse=bypassed, initialVisibility=deferred-to-r6, panels=top-left-unshadowed-current-luminance/top-right-visible-current-luminance/bottom-left-visibility-ratio/bottom-right-rejected-current-luminance, values=log-packed-rgb16f, handheld-and-exact-local-lighting=omitted",
+                            RestirDiagnostics.SOURCE_HISTORY_PROPERTY,
+                            RestirDiagnostics.DIRECT_ESTIMATOR_PROPERTY
+                    );
+                } else {
+                    Photonics.LOGGER.warn(
+                            "Photonics ReSTIR source/history diagnostic v106 enabled via -D{}=true; directTemporalReuse={}, directTemporalBypassRequested={}, bypassProperty=-D{}=true, panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, composition=internal-single-texture, rawSourceStorage=repurposed-restir_local_lighting",
+                            RestirDiagnostics.SOURCE_HISTORY_PROPERTY,
+                            isDirectTemporalReuseEnabled() ? "enabled" : "bypassed",
+                            RestirDiagnostics.isDirectTemporalBypassEnabled(),
+                            RestirDiagnostics.DIRECT_TEMPORAL_BYPASS_PROPERTY
+                    );
+                }
             } else {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v105 requested via -D{}=true but requires split GI and block lighting; diagnostic and direct-temporal bypass disabled for this pipeline",
+                        "Photonics ReSTIR source/history diagnostic v106 requested via -D{}=true but requires split GI and block lighting; diagnostics and direct-pass bypasses disabled for this pipeline",
                         RestirDiagnostics.SOURCE_HISTORY_PROPERTY
                 );
             }
+        }
+        if (RestirDiagnostics.isDirectEstimatorEnabled()
+                && !isDirectEstimatorDiagnosticEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics ReSTIR direct-estimator diagnostic requested via -D{}=true but requires the active -D{}=true split-GI source/history diagnostic; production direct visibility remains enabled",
+                    RestirDiagnostics.DIRECT_ESTIMATOR_PROPERTY,
+                    RestirDiagnostics.SOURCE_HISTORY_PROPERTY
+            );
         }
         Photonics.LOGGER.info(
                 "Photonics ReSTIR GI transport v85+: stochastic tinted-glass traversal and endpoint-first transparent-hit validation"
@@ -576,13 +593,21 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isDirectSpatialReuseEnabled() {
-        return isBlockLightEnabled() && properties.getRestirSpatialReuseSamples() > 0;
+        return isBlockLightEnabled()
+                && properties.getRestirSpatialReuseSamples() > 0
+                && !isDirectEstimatorDiagnosticEnabled();
     }
 
     public boolean isDirectTemporalReuseEnabled() {
         return isBlockLightEnabled()
+                && !isDirectEstimatorDiagnosticEnabled()
                 && !(isSourceHistoryDiagnosticEnabled()
                 && RestirDiagnostics.isDirectTemporalBypassEnabled());
+    }
+
+    public boolean isDirectEstimatorDiagnosticEnabled() {
+        return isSourceHistoryDiagnosticEnabled()
+                && RestirDiagnostics.isDirectEstimatorEnabled();
     }
 
     public boolean isIndirectSpatialReuseEnabled() {
