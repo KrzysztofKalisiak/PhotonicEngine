@@ -22,25 +22,48 @@ void main() {
     uint receiver_token = frag_data_sublevel_token(_frag_data);
 
     if (light_list_size > 0) {
-        int priority_count = clamp(ph_priority_light_count, 0, light_list_size);
+        DirectProposalLayout proposal_layout = direct_build_proposal_layout();
+        int priority_count = proposal_layout.priority_count;
         int priority_offset = priority_count > 0
             ? ph_rand_next_int(frag_rnd_state, 0, priority_count)
             : 0;
-        int suffix_count = light_list_size - priority_count;
-        int camera_count = direct_camera_prefix_count();
+        bool uses_rank_strata = direct_layout_uses_rank_strata(
+            proposal_layout
+        );
+        int camera_count = uses_rank_strata
+            ? 0
+            : direct_camera_prefix_count();
         float camera_phase = camera_count > 0
             ? ph_rand_next_float(frag_rnd_state)
             : 0.0f;
-        int tail_count = suffix_count - camera_count;
+        int tail_count = uses_rank_strata
+            ? 0
+            : proposal_layout.ordinary_count - camera_count;
         float tail_phase = tail_count > 0
             ? ph_rand_next_float(frag_rnd_state)
             : 0.0f;
+        vec4 rank_phases_0_3 = vec4(0.0f);
+        float rank_phase_4 = 0.0f;
+        if (uses_rank_strata) {
+            rank_phases_0_3 = vec4(
+                ph_rand_next_float(frag_rnd_state),
+                ph_rand_next_float(frag_rnd_state),
+                ph_rand_next_float(frag_rnd_state),
+                ph_rand_next_float(frag_rnd_state)
+            );
+            rank_phase_4 = ph_rand_next_float(frag_rnd_state);
+        }
         for (int i = 0; i < PH_RESTIR_INITIAL_SAMPLES; i++) {
+            float proposal_probability;
             DirectSample smple = direct_sample_stratified(
                 i,
                 priority_offset,
                 camera_phase,
-                tail_phase
+                tail_phase,
+                proposal_layout,
+                rank_phases_0_3,
+                rank_phase_4,
+                proposal_probability
             );
             // A Sable receiver evaluates lights from its own rigid motion
             // domain directly in r6. Keeping them out of this reservoir makes
@@ -55,7 +78,6 @@ void main() {
                     frag_tex_normal
                 );
             }
-            float proposal_probability = direct_sample_probability(smple);
             float resampling_weight = proposal_probability > 0.0f
                 ? target_weight / proposal_probability
                 : 0.0f;
