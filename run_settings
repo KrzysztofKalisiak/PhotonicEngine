@@ -7,3 +7,6 @@
 
 # Run B
 -Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectTemporalBypassDiagnostic=true
+
+v106 
+-Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectEstimatorDiagnostic=true
