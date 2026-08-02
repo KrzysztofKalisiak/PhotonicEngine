@@ -396,15 +396,15 @@ vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
     // Keep full-screen UVs so every signal remains aligned with the shader
     // pack's geometry and albedo in its own quadrant.
 #if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
-    vec3 packed = texture(restir_local_lighting, tex_coord).rgb;
-    float unshadowed = ph_decode_restir_estimator_luminance(packed.r);
-    float visible = ph_decode_restir_estimator_luminance(packed.g);
+    vec3 estimator_signals = texture(restir_local_lighting, tex_coord).rgb;
+    float unshadowed = ph_decode_restir_estimator_luminance(estimator_signals.r);
+    float visible = ph_decode_restir_estimator_luminance(estimator_signals.g);
     if (top && !right)
         return vec3(unshadowed);
     if (top)
         return vec3(visible);
     if (!right)
-        return vec3(clamp(packed.b, 0.0f, 1.0f));
+        return vec3(clamp(estimator_signals.b, 0.0f, 1.0f));
     return vec3(max(unshadowed - visible, 0.0f));
 #else
     if (top && !right)
