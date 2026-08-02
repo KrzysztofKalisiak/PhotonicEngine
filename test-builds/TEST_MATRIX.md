@@ -460,6 +460,57 @@ This bypass affects only the split-direct r4 pass while both diagnostic flags
 are active. Split GI temporal reuse and every normal run without the bypass
 flag remain unchanged.
 
+## Test J: v106 Direct Estimator/Visibility Split
+
+Use `photonics-v106-restir-direct-estimator-diagnostic-mc1.21.1.jar` with:
+
+```text
+-Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectEstimatorDiagnostic=true
+```
+
+Keep the v105 world, camera position, resolution, hard shadows, direct scale
+`0.75`, GI scale `0.5`, and `restirInitialSamples=16`. Fully restart Minecraft.
+The estimator flag automatically bypasses direct temporal and spatial reuse;
+GI spatial reuse remains unchanged. The UI spatial setting may still show its
+configured value, but the log must contain `Photonics ReSTIR direct-estimator
+diagnostic v106 enabled` and report both direct reuse paths as bypassed.
+
+The panels are grayscale measurements of the same r1-selected representative:
+
+- Top-left: current unshadowed reservoir luminance before its first visibility
+  ray.
+- Top-right: that same current representative after r6 visibility, tint, and
+  transmission.
+- Bottom-left: visible/unshadowed ratio. White is visible, black is blocked,
+  and gray represents transmission.
+- Bottom-right: luminance rejected by visibility (`unshadowed - visible`).
+
+1. Wait for world tracing to report `settled=true`, then hold the known
+   98-light distant-bush view still for 30 seconds. Record all four panels at
+   native quality; do not resize, move, or reload during the sample.
+2. If top-left and top-right fireflies occur together, the impulse already
+   exists in r1 proposal weighting/representative selection. For 98 lights and
+   16 candidates, the compact tail samples 90 lights with eight proposals, so
+   an isolated tail contribution can appear at `90 / 8 = 11.25x`.
+3. If top-left remains stable while top-right flashes and the bottom-left ratio
+   toggles, investigate r6 voxel visibility/traversal instead.
+4. If top-left flashes mostly into bottom-right while top-right remains dark,
+   high-energy proposals are being selected but correctly rejected; report
+   whether any visible top-right event shares the same location and frame.
+5. If top-left is the first failing panel, repeat the exact view with:
+
+   ```text
+   -Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectEstimatorDiagnostic=true -Dphotonics.restirInitialSamplesOverride=32
+   ```
+
+   Confirm `restirInitial=32`. At 98 lights this raises compact-tail proposals
+   from eight to 24 and lowers the isolated multiplier from `11.25x` to
+   `3.75x`. A material reduction confirms finite proposal amplification.
+
+This is a diagnostic build. It defers r1 visibility to r6 only while both JVM
+diagnostic flags are active. Without the estimator flag, v106 preserves the
+v105 rendering and diagnostic behavior.
+
 ## Reporting
 
 Name each result with the jar and test, for example
