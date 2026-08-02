@@ -14,3 +14,6 @@ v106
 -Dphotonics.restirSourceHistoryDiagnostic=true
 -Dphotonics.restirDirectEstimatorDiagnostic=true
 -Dphotonics.restirInitialSamplesOverride=32
+
+last settings used:
+-Dphotonics.renderScaleOverride=0.75 -Dphotonics.giRenderScaleOverride=0.5 -Dphotonics.restirInitialSamplesOverride=16 -Dphotonics.restirDenoiserPassesOverride=5 -Dphotonics.restirGiDenoiserPassesOverride=3 -Dphotonics.temporalUpscalerSplitScreen=true -Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectEstimatorDiagnostic=true -Dphotonics.restirInitialSamplesOverride=32
