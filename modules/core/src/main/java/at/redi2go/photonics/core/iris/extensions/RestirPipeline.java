@@ -62,12 +62,14 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         if (RestirDiagnostics.isSourceHistoryEnabled()) {
             if (isSourceHistoryDiagnosticEnabled()) {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v104 enabled via -D{}=true; panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, composition=internal-single-texture, rawSourceStorage=repurposed-restir_local_lighting",
-                        RestirDiagnostics.SOURCE_HISTORY_PROPERTY
+                        "Photonics ReSTIR source/history diagnostic v105 enabled via -D{}=true; directTemporalReuse={}, bypassFlag=-D{}=true, panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, composition=internal-single-texture, rawSourceStorage=repurposed-restir_local_lighting",
+                        RestirDiagnostics.SOURCE_HISTORY_PROPERTY,
+                        isDirectTemporalReuseEnabled() ? "enabled" : "bypassed",
+                        RestirDiagnostics.DIRECT_TEMPORAL_BYPASS_PROPERTY
                 );
             } else {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v104 requested via -D{}=true but requires split GI and block lighting; diagnostic disabled for this pipeline",
+                        "Photonics ReSTIR source/history diagnostic v105 requested via -D{}=true but requires split GI and block lighting; diagnostic and direct-temporal bypass disabled for this pipeline",
                         RestirDiagnostics.SOURCE_HISTORY_PROPERTY
                 );
             }
@@ -256,13 +258,14 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         "/photonics/rendering/restir/passes/r1_initial_direct.fsh",
                         null
                 )
-                .debugGroup("restir direct temporal")
-                .withFramebuffer(directReservoirFramebuffer)
-                .deferredPass(
-                        "temporal reuse",
-                        "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh",
-                        null
-                )
+                .when(this::isDirectTemporalReuseEnabled, b -> b
+                        .debugGroup("restir direct temporal")
+                        .withFramebuffer(directReservoirFramebuffer)
+                        .deferredPass(
+                                "temporal reuse",
+                                "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh",
+                                null
+                        ))
                 .when(this::isDirectSpatialReuseEnabled, b -> b
                         .debugGroup("restir direct spatial copy")
                         .withFramebuffer(spatialInputFramebuffer)
@@ -574,6 +577,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
     public boolean isDirectSpatialReuseEnabled() {
         return isBlockLightEnabled() && properties.getRestirSpatialReuseSamples() > 0;
+    }
+
+    public boolean isDirectTemporalReuseEnabled() {
+        return isBlockLightEnabled()
+                && !(isSourceHistoryDiagnosticEnabled()
+                && RestirDiagnostics.isDirectTemporalBypassEnabled());
     }
 
     public boolean isIndirectSpatialReuseEnabled() {
