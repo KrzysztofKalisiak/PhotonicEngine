@@ -5,6 +5,7 @@ import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.iris.AbstractPhotonicsExtension;
 import at.redi2go.photonics.core.iris.Pipelines;
+import at.redi2go.photonics.core.iris.RestirDiagnostics;
 import at.redi2go.photonics.core.iris.TemporalUpscalerDiagnostics;
 import at.redi2go.photonics.core.iris.pipeline.rendering.IrisFactory;
 import at.redi2go.photonics.core.iris.pipeline.uniform.IDynamicUniformHolder;
@@ -58,6 +59,19 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
+        if (RestirDiagnostics.isSourceHistoryEnabled()) {
+            if (isSplitGiEnabled() && isBlockLightEnabled()) {
+                Photonics.LOGGER.warn(
+                        "Photonics ReSTIR source/history diagnostic v101 enabled via -D{}=true; panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted",
+                        RestirDiagnostics.SOURCE_HISTORY_PROPERTY
+                );
+            } else {
+                Photonics.LOGGER.warn(
+                        "Photonics ReSTIR source/history diagnostic v101 requested via -D{}=true but requires split GI and block lighting; diagnostic disabled for this pipeline",
+                        RestirDiagnostics.SOURCE_HISTORY_PROPERTY
+                );
+            }
+        }
         Photonics.LOGGER.info(
                 "Photonics ReSTIR GI transport v85+: stochastic tinted-glass traversal and endpoint-first transparent-hit validation"
         );
@@ -195,17 +209,31 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_direct_state", ITextureFormat.rg32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
+                .addAttachment(
+                        "restir_source_lighting",
+                        ITextureFormat.rgb16f(),
+                        CREATE_SAMPLER,
+                        RestirDiagnostics::isSourceHistoryEnabled
+                )
                 .build(this::registerComponent);
 
         var directReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_direct_reservoirs0"
         );
-        var diffuseFramebuffer = restirFramebuffer.withDrawBuffers(
-                "restir_lighting",
-                "restir_direct_reservoirs0",
-                "restir_direct_state",
-                "restir_external_lighting"
-        );
+        var diffuseFramebuffer = RestirDiagnostics.isSourceHistoryEnabled()
+                ? restirFramebuffer.withDrawBuffers(
+                        "restir_lighting",
+                        "restir_direct_reservoirs0",
+                        "restir_direct_state",
+                        "restir_external_lighting",
+                        "restir_source_lighting"
+                )
+                : restirFramebuffer.withDrawBuffers(
+                        "restir_lighting",
+                        "restir_direct_reservoirs0",
+                        "restir_direct_state",
+                        "restir_external_lighting"
+                );
         var accumulationFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_lighting",
                 "restir_lighting_variance",

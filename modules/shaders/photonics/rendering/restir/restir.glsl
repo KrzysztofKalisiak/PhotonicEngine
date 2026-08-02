@@ -22,6 +22,14 @@
 #endif
 #endif
 
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+#if defined PH_ENABLE_BLOCKLIGHT
+#define RESTIR_SOURCE_HISTORY_OUT 5
+#else
+#define RESTIR_SOURCE_HISTORY_OUT 4
+#endif
+#endif
+
 //ph_required: uniform sampler2D restir_lighting;
 //ph_required: uniform sampler2D restir_lighting_variance;
 

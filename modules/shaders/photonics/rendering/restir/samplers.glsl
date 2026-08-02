@@ -19,6 +19,10 @@
 //ph_required: uniform sampler2D restir_local_lighting;
 #endif
 
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+//ph_required: uniform sampler2D restir_source_lighting;
+#endif
+
 #if defined PH_ENABLE_HANDHELD_LIGHT
 //ph_required: uniform sampler2D other_handheld;
 #endif
@@ -319,7 +323,73 @@ vec3 ph_sample_temporal_diagnostic(vec2 tex_coord) {
 }
 #endif
 
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+bool ph_restir_source_history_is_marker(vec2 tex_coord) {
+    vec2 output_size = vec2(textureSize(restir_lighting, 0));
+    vec2 half_size = floor(output_size * 0.5f);
+    bool right = tex_coord.x >= 0.5f;
+    bool top = tex_coord.y >= 0.5f;
+    vec2 pixel = tex_coord * output_size;
+    vec2 quadrant_origin = vec2(
+        right ? half_size.x : 0.0f,
+        top ? half_size.y : 0.0f
+    );
+    vec2 quadrant_size = vec2(
+        right ? output_size.x - half_size.x : half_size.x,
+        top ? output_size.y - half_size.y : half_size.y
+    );
+    vec2 local_pixel = pixel - quadrant_origin;
+
+    return local_pixel.x >= 3.0f
+        && local_pixel.x < 9.0f
+        && local_pixel.y >= quadrant_size.y - 9.0f
+        && local_pixel.y < quadrant_size.y - 3.0f;
+}
+
+vec3 ph_sample_accumulated_direct(vec2 tex_coord) {
+    vec3 result = texture(restir_lighting, tex_coord).rgb;
+    result += texture(restir_external_lighting, tex_coord).rgb;
+    return result;
+}
+
+vec3 ph_sample_denoised_direct(vec2 tex_coord) {
+#if PH_RESTIR_DENOISER_PASSES != 0
+    return texture(denoise_result, tex_coord).rgb;
+#else
+    return ph_sample_accumulated_direct(tex_coord);
+#endif
+}
+
+vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
+    bool right = tex_coord.x >= 0.5f;
+    bool top = tex_coord.y >= 0.5f;
+
+    if (ph_restir_source_history_is_marker(tex_coord)) {
+        if (top && !right)
+            return vec3(0.0f, 1.0f, 1.0f);
+        if (top)
+            return vec3(0.10f, 0.35f, 1.0f);
+        if (!right)
+            return vec3(1.0f, 0.85f, 0.0f);
+        return vec3(1.0f, 0.0f, 1.0f);
+    }
+
+    // Keep full-screen UVs so every signal remains aligned with the shader
+    // pack's geometry and albedo in its own quadrant.
+    if (top && !right)
+        return texture(restir_source_lighting, tex_coord).rgb;
+    if (top)
+        return ph_sample_accumulated_direct(tex_coord);
+    if (!right)
+        return ph_sample_denoised_direct(tex_coord);
+    return ph_sample_split_gi(tex_coord);
+}
+#endif
+
 vec3 sample_photonics_direct(vec2 tex_coord) {
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+    return ph_sample_restir_source_history_diagnostic(tex_coord);
+#else
 #if defined PH_TEMPORAL_UPSCALER && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
     #if defined PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
     return ph_sample_temporal_diagnostic(tex_coord);
@@ -358,6 +428,7 @@ vec3 sample_photonics_direct(vec2 tex_coord) {
     #endif
     return result;
 #endif
+#endif
 }
 
 float ph_sample_photonics_source_variance(vec2 tex_coord) {
@@ -391,7 +462,9 @@ float ph_sample_photonics_source_variance(vec2 tex_coord) {
 }
 
 vec3 sample_photonics_handheld(vec2 tex_coord) {
-#if defined PH_ENABLE_HANDHELD_LIGHT
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+    return vec3(0.0f);
+#elif defined PH_ENABLE_HANDHELD_LIGHT
     return texture(other_handheld, tex_coord).rgb;
 #else
     return vec3(0.0f);

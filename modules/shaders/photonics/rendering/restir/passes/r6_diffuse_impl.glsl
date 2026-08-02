@@ -22,6 +22,10 @@ layout(location = INDIRECT_RESERVOIR_0) out vec4 gi_reservoir_0;
 layout(location = INDIRECT_RESERVOIR_1) out uvec3 gi_reservoir_1;
 #endif
 
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+layout(location = RESTIR_SOURCE_HISTORY_OUT) out vec3 source_history_lighting;
+#endif
+
 layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting;
 
 void main() {
@@ -30,6 +34,9 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     di_history_state = vec2(0.0f);
     external_lighting = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+#endif
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+    source_history_lighting = vec3(0.0f);
 #endif
 
     setup_frag_data(0);
@@ -145,5 +152,12 @@ void main() {
         di_history_state.y = 0.0f;
 #endif
     }
+#endif
+
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+    source_history_lighting = lighting.rgb;
+#if defined PH_ENABLE_BLOCKLIGHT
+    source_history_lighting += external_lighting.rgb;
+#endif
 #endif
 }

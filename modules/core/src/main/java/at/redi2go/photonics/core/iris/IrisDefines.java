@@ -75,6 +75,14 @@ public class IrisDefines {
                 && phProperties.getGiRenderScale() < phProperties.getRenderScale() - 0.0001f)
             defines.stringDefine("PH_RESTIR_SPLIT_GI", "");
 
+        if (phProperties.getLightingMode() == LightingMode.RESTIR
+                && phProperties.isBlockLightEnabled()
+                && phProperties.isGiEnabled()
+                && phProperties.useRestirCombinedGi()
+                && phProperties.getGiRenderScale() < phProperties.getRenderScale() - 0.0001f
+                && RestirDiagnostics.isSourceHistoryEnabled())
+            defines.stringDefine("PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC", "");
+
         defines.intDefine("PH_MAX_SAMPLES",  phProperties.getMaxSamples());
     }
 }
