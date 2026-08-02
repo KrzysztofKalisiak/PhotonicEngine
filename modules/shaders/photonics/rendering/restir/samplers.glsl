@@ -1,3 +1,19 @@
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC && !defined PH_RESTIR_SOURCE_HISTORY_COMPOSE_PASS
+//ph_required: uniform sampler2D restir_source_history_diagnostic;
+
+vec3 sample_photonics_direct(vec2 tex_coord) {
+    return texture(restir_source_history_diagnostic, tex_coord).rgb;
+}
+
+float ph_sample_photonics_source_variance(vec2 tex_coord) {
+    return 0.0f;
+}
+
+vec3 sample_photonics_handheld(vec2 tex_coord) {
+    return vec3(0.0f);
+}
+#else
+
 #if !defined PH_RESTIR_SPLIT_GI || defined PH_ENABLE_BLOCKLIGHT
 //ph_required: uniform sampler2D restir_lighting;
 #endif
@@ -15,12 +31,8 @@
 //ph_required: uniform sampler2D restir_external_lighting;
 #endif
 
-#if defined PH_ENABLE_BLOCKLIGHT && !defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+#if defined PH_ENABLE_BLOCKLIGHT
 //ph_required: uniform sampler2D restir_local_lighting;
-#endif
-
-#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
-//ph_required: uniform sampler2D restir_source_lighting;
 #endif
 
 #if defined PH_ENABLE_HANDHELD_LIGHT && !defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
@@ -323,7 +335,7 @@ vec3 ph_sample_temporal_diagnostic(vec2 tex_coord) {
 }
 #endif
 
-#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC && defined PH_RESTIR_SOURCE_HISTORY_COMPOSE_PASS
 bool ph_restir_source_history_is_marker(vec2 tex_coord) {
     vec2 output_size = vec2(textureSize(restir_lighting, 0));
     vec2 half_size = floor(output_size * 0.5f);
@@ -377,7 +389,7 @@ vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
     // Keep full-screen UVs so every signal remains aligned with the shader
     // pack's geometry and albedo in its own quadrant.
     if (top && !right)
-        return texture(restir_source_lighting, tex_coord).rgb;
+        return texture(restir_local_lighting, tex_coord).rgb;
     if (top)
         return ph_sample_accumulated_direct(tex_coord);
     if (!right)
@@ -387,9 +399,6 @@ vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
 #endif
 
 vec3 sample_photonics_direct(vec2 tex_coord) {
-#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
-    return ph_sample_restir_source_history_diagnostic(tex_coord);
-#else
 #if defined PH_TEMPORAL_UPSCALER && !defined PH_TEMPORAL_UPSCALER_SOURCE_PASS
     #if defined PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
     return ph_sample_temporal_diagnostic(tex_coord);
@@ -427,7 +436,6 @@ vec3 sample_photonics_direct(vec2 tex_coord) {
     result += texture(restir_local_lighting, tex_coord).rgb;
     #endif
     return result;
-#endif
 #endif
 }
 
@@ -470,3 +478,5 @@ vec3 sample_photonics_handheld(vec2 tex_coord) {
     return vec3(0.0f);
 #endif
 }
+
+#endif

@@ -62,12 +62,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         if (RestirDiagnostics.isSourceHistoryEnabled()) {
             if (isSourceHistoryDiagnosticEnabled()) {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v103 enabled via -D{}=true; panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, auxiliary-lighting-components=not-registered",
+                        "Photonics ReSTIR source/history diagnostic v104 enabled via -D{}=true; panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, composition=internal-single-texture, rawSourceStorage=repurposed-restir_local_lighting",
                         RestirDiagnostics.SOURCE_HISTORY_PROPERTY
                 );
             } else {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v103 requested via -D{}=true but requires split GI and block lighting; diagnostic disabled for this pipeline",
+                        "Photonics ReSTIR source/history diagnostic v104 requested via -D{}=true but requires split GI and block lighting; diagnostic disabled for this pipeline",
                         RestirDiagnostics.SOURCE_HISTORY_PROPERTY
                 );
             }
@@ -108,6 +108,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         } else {
             buildCombinedPipeline(irisFactory);
         }
+        buildSourceHistoryDiagnosticPipeline(irisFactory);
         buildAuxiliaryLightingPipeline(irisFactory);
         buildTemporalUpscalerPipeline(irisFactory);
     }
@@ -210,7 +211,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_direct_state", ITextureFormat.rg32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment(
-                        "restir_source_lighting",
+                        "restir_local_lighting",
                         ITextureFormat.rgb16f(),
                         CREATE_SAMPLER,
                         this::isSourceHistoryDiagnosticEnabled
@@ -226,7 +227,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         "restir_direct_reservoirs0",
                         "restir_direct_state",
                         "restir_external_lighting",
-                        "restir_source_lighting"
+                        "restir_local_lighting"
                 )
                 : restirFramebuffer.withDrawBuffers(
                         "restir_lighting",
@@ -411,6 +412,28 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         );
                     });
                 })
+                .build(this::registerRenderer);
+    }
+
+    private void buildSourceHistoryDiagnosticPipeline(IrisFactory irisFactory) {
+        if (!isSourceHistoryDiagnosticEnabled()) return;
+
+        var diagnosticFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
+                .addAttachment(
+                        "restir_source_history_diagnostic",
+                        ITextureFormat.rgb16f(),
+                        CREATE_SAMPLER
+                )
+                .build(this::registerComponent);
+
+        irisFactory.newPipeline()
+                .debugGroup("restir source/history diagnostic")
+                .withFramebuffer(diagnosticFramebuffer)
+                .deferredPass(
+                        "compose diagnostic panels",
+                        "/photonics/rendering/restir/passes/r10_source_history_diagnostic.fsh",
+                        null
+                )
                 .build(this::registerRenderer);
     }
 
