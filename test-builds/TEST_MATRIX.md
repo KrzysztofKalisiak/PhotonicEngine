@@ -26,6 +26,7 @@ Restart Minecraft between JVM-argument changes.
 | `photonics-v97-upscaler-reprojected-fireflies-mc1.21.1.jar` | `fix/v97-temporal-upscaler-reprojected-fireflies` / `128363ab` | Restores confidence-driven firefly rejection during motion and recovers validated history for distant and thin geometry | `7FA999939852DEA70B9E3F8DDC96BD56E330BB91CBF6B023A43BE8F173F4B3CE` |
 | `photonics-v98-upscaler-split-screen-diagnostic-mc1.21.1.jar` | `fix/v98-temporal-upscaler-split-screen` / `b172c235` | Debug-only four-quadrant capture of temporal source, pre-limiter resolve, state, and production output | `9EB27AB3D7F2B7868925B10E4DA08555408958153E3C5AC20C9DE82D646046F8` |
 | `photonics-v99-restir-source-fireflies-mc1.21.1.jar` | `fix/v99-restir-source-fireflies` / `86148e5a` | Removes GI normal-ratio amplification, clears empty GI reservoirs, and restores distinct direct-prefix proposals | `184CF46E822ECA4A408795641B238D9DD8532F0B8BF0EE0BE25F7309A6F82CC6` |
+| `photonics-v100-large-list-rank-strata-mc1.21.1.jar` | `fix/v100-ranked-tail-proposals` / `9e3c4994` | Bounds large-list direct proposal energy with exact logarithmic rank strata while preserving compact-list sampling | `4B1195EC139DC7005A5D0DA1191FD815C30234592612AD713A40A2A5FE820E5A` |
 
 ## Capture Rules
 
@@ -321,6 +322,38 @@ used for v98.
 GI on strongly normal-mapped surfaces may differ slightly from v98 because
 v99 follows the geometric normal used to sample the indirect ray. Direct light
 and shaderpack lighting should not otherwise lose brightness.
+
+## Test G: v100 Large-List Direct Proposals
+
+Use `photonics-v100-large-list-rank-strata-mc1.21.1.jar` with the exact v99
+world, route, Photon settings, resource pack, resolution, and JVM arguments.
+Keep `MAX_LIGHTS=4000` and `photonics.restirInitialSamples=32`.
+
+1. Confirm the log contains `Photonics direct startup v100` and reports about
+   4,000 selected lights in the village. Do not compare world-entry build-up.
+2. Repeat the two long village captures after `settled=true`. First keep the
+   camera still for 20 seconds, then pan slowly for 20 seconds. Inspect the
+   upper-left raw-source quadrant frame by frame at the v99 pulse locations.
+3. Repeat once with ReSTIR GI disabled in Photon. Warm compact pulses should
+   reduce strongly; this isolates direct sampling from residual GI variance.
+4. Re-enable GI and repeat the moonlit mountain view. Record cool/neutral and
+   warm events separately because v100 changes direct proposals only.
+5. Place one nearby light and orbit it slowly. Check for new shimmer or delayed
+   response: large-list mode samples ordinary ranks 0-7 with two proposals
+   instead of evaluating all eight every frame.
+6. Repeat the short roughly 150-light capture. Lists with at most 512 ordinary
+   lights intentionally use the exact v99 sampler and should not regress.
+7. Record the same stationary, rotation, and traversal FPS windows used for
+   v99. The proposal ray count is unchanged; report any measurable initial-pass
+   GPU regression.
+
+For the observed 4,000-light configuration, one priority proposal remains
+unchanged and the 31 ordinary proposals are allocated `[2,1,2,3,23]` across
+rank bands `[0,8)`, `[8,32)`, `[32,128)`, `[128,512)`, and `[512,3999)`.
+The worst single-hit expansion falls from about `173.5x` to `151.6x`, without
+removing support for any of the selected lights. If compact raw-source pulses
+remain, include their timestamps; the next defense is a pre-history provisional
+admission gate, not another temporal-upscaler clamp.
 
 ## Reporting
 
