@@ -363,9 +363,9 @@ never entered v100's greater-than-512-light path, yet it reproduced the same
 single-frame impulses on distant bushes. Treat large-list expansion as an
 amplifier, not the common root cause.
 
-## Test H: v102 ReSTIR Source/History Diagnostic
+## Test H: v103 ReSTIR Source/History Diagnostic
 
-Use `photonics-v102-restir-diagnostic-sampler-budget-mc1.21.1.jar` with this JVM
+Use `photonics-v103-restir-diagnostic-component-budget-mc1.21.1.jar` with this JVM
 argument:
 
 ```text
@@ -376,12 +376,14 @@ Keep ReSTIR direct lighting and combined GI enabled, direct scale `0.75`, GI
 scale `0.5`, `restirInitialSamples=16`, and temporal upscaling disabled. The
 different direct/GI scales are required so the split-GI pipeline is active.
 
-Do not use v101. Its additional source sampler exceeded Iris' per-program
-texture-unit budget with Photon before the diagnostic pipeline could load.
-v102 omits the exact Sable-local and handheld sampler declarations while the
-diagnostic is active, matching the streams that the four panels already omit.
+Do not use v101 or v102. The additional source sampler exceeded Iris'
+per-program texture-unit budget with Photon before the diagnostic pipeline
+could load. v102 removed the omitted streams' GLSL declarations, but Iris
+reserves registered custom textures before those declarations matter. v103
+does not construct or register the exact Sable-local and handheld framebuffer
+components while the diagnostic is active.
 
-1. Confirm the log contains `Photonics ReSTIR source/history diagnostic v102
+1. Confirm the log contains `Photonics ReSTIR source/history diagnostic v103
    enabled`. If it instead says `requested ... but requires split GI`, do not
    use that recording.
 2. The four screen regions preserve normal full-screen UVs and scene geometry:
