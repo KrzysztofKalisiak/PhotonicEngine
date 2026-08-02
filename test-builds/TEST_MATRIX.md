@@ -355,6 +355,56 @@ removing support for any of the selected lights. If compact raw-source pulses
 remain, include their timestamps; the next defense is a pre-history provisional
 admission gate, not another temporal-upscaler clamp.
 
+The submitted v100 feedback actually ran with `restirInitialSamples=16`, not
+32. At that budget the five ordinary bands receive `[2,1,2,3,7]` proposals and
+the deepest band still expands a hit by about `498.1x`, only 12.6% below v99's
+roughly `570.1x`. The second recording used only 98-157 selected lights, so it
+never entered v100's greater-than-512-light path, yet it reproduced the same
+single-frame impulses on distant bushes. Treat large-list expansion as an
+amplifier, not the common root cause.
+
+## Test H: v101 ReSTIR Source/History Diagnostic
+
+Use `photonics-v101-restir-source-history-diagnostic-mc1.21.1.jar` with this JVM
+argument:
+
+```text
+-Dphotonics.restirSourceHistoryDiagnostic=true
+```
+
+Keep ReSTIR direct lighting and combined GI enabled, direct scale `0.75`, GI
+scale `0.5`, `restirInitialSamples=16`, and temporal upscaling disabled. The
+different direct/GI scales are required so the split-GI pipeline is active.
+
+1. Confirm the log contains `Photonics ReSTIR source/history diagnostic v101
+   enabled`. If it instead says `requested ... but requires split GI`, do not
+   use that recording.
+2. The four screen regions preserve normal full-screen UVs and scene geometry:
+   top-left is current direct before accumulation, top-right is accumulated
+   direct before SVGF, bottom-left is final denoised direct, and bottom-right
+   is final reconstructed GI. Small cyan, blue, yellow, and magenta markers
+   identify those regions. Exact Sable-local and handheld lighting are omitted.
+3. In the flat blocked-skylight room, hold the camera completely still on the
+   repeated distant bushes and fences for 30 seconds. Do not resize or cross a
+   section boundary. Record all four regions at native quality.
+4. Repeat after moving far enough away that the list reports about 98 lights,
+   then return to the 157-light position. Capture at least one known impulse in
+   each position.
+5. Repeat the stationary village view for 30 seconds only after world tracing
+   reports `settled=true`; then perform one slow 20-second pan.
+6. Interpret the first region that pulses: top-left means the direct estimator
+   produced the impulse; a clean top-left with top-right pulsing means temporal
+   accumulation/reprojection introduced it; a pulse appearing only bottom-left
+   implicates variance prefilter/SVGF; bottom-right isolates GI.
+7. If practical, make one compact control with no more than eight selected
+   lights. This removes direct tail undersampling instead of merely reducing
+   it. Reproduce the same distant bush angle for 30 seconds.
+8. Launch once without the JVM argument. The normal v100 rendering path should
+   return, and no diagnostic attachment or warning should appear.
+
+This jar is diagnostic rather than a visual-quality candidate. Its extra
+RGB16F direct-source attachment exists only when the JVM flag is enabled.
+
 ## Reporting
 
 Name each result with the jar and test, for example
