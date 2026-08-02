@@ -464,6 +464,11 @@ flag remain unchanged.
 
 Use `photonics-v106-restir-direct-estimator-diagnostic-mc1.21.1.jar` with:
 
+Corrected Mesa-compatible artifact SHA-256:
+`63962AF6D2CE617195C5272A68F1B8D4E069611F05AAF1403167FBC273EC1FB4`.
+The initial upload used the GLSL reserved word `packed` and cannot compile on
+Mesa; replace any older copy of the jar with this checksum.
+
 ```text
 -Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectEstimatorDiagnostic=true
 ```
