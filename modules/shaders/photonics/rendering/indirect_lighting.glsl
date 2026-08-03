@@ -10,27 +10,41 @@
 const int max_gi_rays = PH_MAX_GI_BOUNCES;
 const int max_gi_iterations = PH_MAX_GI_ITERATIONS;
 
-#if defined NO_SHADOW_MAPPED
-#define should_trace_to_sun(rnd_state, bounce_count, surface_rt_pos, surface_normal, is_tracing_to_sun) \
-    (bounce_count) > -1 && ph_rand_next_float(rnd_state) < 0.25f && dot(get_sun_direction(), (surface_normal)) >= 0.707f;
-#else
-#define should_trace_to_sun(rnd_state, bounce_count, surface_rt_pos, surface_normal, is_tracing_to_sun) \
-    is_tracing_to_sun
-#endif
-
 vec3 next_gi_direction(
         inout uint rnd_state,
         int bounce_count,
         vec3 surface_rt_pos,
         vec3 surface_normal,
-        inout bool is_tracing_to_sun
+        inout bool is_tracing_to_sun,
+        out float proposal_weight
 ) {
     // the first random call needs to be the direction for ReSTIR GI
     vec3 next_dir = ph_rand_direction(rnd_state, surface_normal);
-    if (should_trace_to_sun(rnd_state, bounce_count, surface_rt_pos, surface_normal, is_tracing_to_sun)) {
-        is_tracing_to_sun = true;
-        return get_sun_direction();
+    proposal_weight = 1.0f;
+
+#if defined NO_SHADOW_MAPPING
+#if defined PH_RESTIR_GI_SUN_PROPOSAL && defined OVERWORLD
+    if (bounce_count > -1) {
+        float sun_cosine = max(
+            dot(get_sun_direction(), surface_normal),
+            0.0f
+        );
+        if (sun_cosine > 0.0f) {
+            const float sun_probability = 0.25f;
+            if (ph_rand_next_float(rnd_state) < sun_probability) {
+                is_tracing_to_sun = true;
+                proposal_weight = sun_cosine / sun_probability;
+                return get_sun_direction();
+            }
+
+            proposal_weight = 1.0f / (1.0f - sun_probability);
+        }
     }
+#endif
+#else
+    if (is_tracing_to_sun)
+        return get_sun_direction();
+#endif
 
     return next_dir;
 }
@@ -42,8 +56,10 @@ void prepare_next_gi_ray(
 
         vec3 rt_pos,
         vec3 normal,
-        inout bool is_tracing_to_sun
+        inout bool is_tracing_to_sun,
+        inout float path_sampling_weight
 ) {
+    float proposal_weight;
     ray_iter_set_direction(
             ray,
             next_gi_direction(
@@ -51,9 +67,11 @@ void prepare_next_gi_ray(
                 bounce_count,
                 rt_pos,
                 normal,
-                is_tracing_to_sun
+                is_tracing_to_sun,
+                proposal_weight
             )
     );
+    path_sampling_weight *= proposal_weight;
 
     // The primary ray already starts on the visible surface. Offsetting it
     // changes the serialized ReSTIR hit distance and can skip nearby geometry.
@@ -97,12 +115,21 @@ void sample_indirect(
 
     int bounce_count = -1;
     bool is_tracing_to_sun = false;
+    float path_sampling_weight = 1.0f;
 
     RayIterator ray;
 
     ray.iterations = max_gi_iterations;
     ray_iter_set_position(ray, sample_rt_pos);
-    prepare_next_gi_ray(ray, rnd_state, bounce_count, sample_rt_pos, normal, is_tracing_to_sun);
+    prepare_next_gi_ray(
+        ray,
+        rnd_state,
+        bounce_count,
+        sample_rt_pos,
+        normal,
+        is_tracing_to_sun,
+        path_sampling_weight
+    );
 
     while (bounce_count < bounce_limit) {
         RayResult hit = ray_iter_next(ray);
@@ -163,6 +190,11 @@ void sample_indirect(
 
                 continue;
             }
+
+            // A sun proposal is a next-event visibility query, not another
+            // diffuse path. An opaque hit contributes zero for this proposal.
+            if (is_tracing_to_sun)
+                return;
 
             if (bounce_count == -1) {
                 first_hit = hit_position;
@@ -229,7 +261,8 @@ void sample_indirect(
         indirect_color += radiance_color
             * gi_tint_color
             * gi_bounce_color
-            * running_light_transmittance;
+            * running_light_transmittance
+            * path_sampling_weight;
 
         if (!ray_result_is_hit(hit)) return;
 
@@ -239,6 +272,14 @@ void sample_indirect(
         sample_rt_pos = hit_position;
         normal = hit_normal;
 
-        prepare_next_gi_ray(ray, rnd_state, bounce_count, sample_rt_pos, normal, is_tracing_to_sun);
+        prepare_next_gi_ray(
+            ray,
+            rnd_state,
+            bounce_count,
+            sample_rt_pos,
+            normal,
+            is_tracing_to_sun,
+            path_sampling_weight
+        );
     }
 }

@@ -1,5 +1,7 @@
 #version 430
 
+#define PH_LIGHTING_PASS
+
 #if defined PH_RESTIR_SPLIT_GI
 #define PH_RESTIR_GI_PASS
 #endif
@@ -23,6 +25,8 @@ void main() {
         );
         return;
     }
+
+    ph_load_indirect_environment();
 
     uint initial_rnd_state = frag_rnd_state;
     uint trace_rnd_state = initial_rnd_state;
