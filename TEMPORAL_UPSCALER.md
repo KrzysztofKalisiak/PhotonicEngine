@@ -359,6 +359,34 @@ accepted by receiver-plane validation that the old fixed three-block distance
 test would reject. Violet on distant or grazing coplanar terrain is expected;
 new violet bleeding across visibly different planes is not.
 
+### Source-validation lane diagnostic
+
+V110 can compare the remaining hard current-source validation gates in one
+capture. Start Minecraft with:
+
+```text
+-Dphotonics.temporalUpscalerSourceValidationLanes=true
+```
+
+The flag keeps the final temporal output visible and divides the screen into
+four equal vertical lanes, from left to right:
+
+| Lane | Current-source validation |
+| --- | --- |
+| 1 | V109 baseline: domain, geometric normal, texture normal, receiver plane |
+| 2 | Baseline without the texture-normal rejection |
+| 3 | Baseline without the receiver-plane rejection |
+| 4 | Domain and geometric normal only |
+
+This is a diagnostic, not a quality mode. Lanes 2-4 can bleed lighting across
+normal-mapped details or parallel surfaces. Record a slow vertical camera sweep
+over a directly lit flat plane. A horizontal row that disappears in lane 2
+isolates the texture-normal gate; disappearance in lane 3 isolates the plane
+gate; disappearance only in lane 4 means both gates contribute. The property is
+read at startup and does not allocate the split-screen diagnostic attachment.
+If both diagnostic properties are present, the source-validation lanes take
+precedence so a leftover split-screen argument cannot hide the final output.
+
 ## Expected Performance
 
 The feature pays for:

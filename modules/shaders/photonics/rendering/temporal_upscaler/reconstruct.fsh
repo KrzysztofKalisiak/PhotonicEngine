@@ -171,6 +171,7 @@ bool ph_source_matches_surface(
     int receiver_slot,
     uint receiver_token,
     float base_plane_tolerance,
+    int validation_lane,
     out float score,
     out bool extended_plane_match
 ) {
@@ -198,7 +199,16 @@ bool ph_source_matches_surface(
         return false;
 
     float texture_normal_alignment = dot(source_tex_normal, tex_normal);
-    if (texture_normal_alignment < PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD)
+    bool validate_texture_normal = true;
+    bool validate_receiver_plane = true;
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+    // Lanes isolate the two hard gates: baseline, no texture normal, no plane,
+    // and neither gate. Domain and geometric-normal validation stay enabled.
+    validate_texture_normal = validation_lane != 1 && validation_lane != 3;
+    validate_receiver_plane = validation_lane != 2 && validation_lane != 3;
+#endif
+    if (validate_texture_normal
+            && texture_normal_alignment < PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD)
         return false;
 
     float plane_tolerance = ph_temporal_precision_plane_tolerance(
@@ -214,7 +224,7 @@ bool ph_source_matches_surface(
         abs(dot(position_delta, source_normal)),
         abs(dot(position_delta, geo_normal))
     );
-    if (plane_distance > plane_tolerance)
+    if (validate_receiver_plane && plane_distance > plane_tolerance)
         return false;
 
     // Screen-neighboring rays can land arbitrarily far apart on a grazing
@@ -246,6 +256,7 @@ bool ph_find_source_receiver(
     int receiver_slot,
     uint receiver_token,
     float base_plane_tolerance,
+    int validation_lane,
     out ivec2 best_texel,
     out bool best_extended_plane_match
 ) {
@@ -275,6 +286,7 @@ bool ph_find_source_receiver(
                     receiver_slot,
                     receiver_token,
                     base_plane_tolerance,
+                    validation_lane,
                     score,
                     extended_plane_match
             )) continue;
@@ -315,6 +327,7 @@ bool ph_find_source_receiver(
                     receiver_slot,
                     receiver_token,
                     base_plane_tolerance,
+                    validation_lane,
                     score,
                     extended_plane_match
             )) continue;
@@ -343,6 +356,7 @@ bool ph_reconstruct_current(
     int receiver_slot,
     uint receiver_token,
     float base_plane_tolerance,
+    int validation_lane,
     out vec3 radiance,
     out float variance,
     out vec3 neighborhood_min,
@@ -364,6 +378,7 @@ bool ph_reconstruct_current(
             receiver_slot,
             receiver_token,
             base_plane_tolerance,
+            validation_lane,
             best_texel,
             best_extended_plane_match
     )) return false;
@@ -402,6 +417,7 @@ bool ph_reconstruct_current(
                     receiver_slot,
                     receiver_token,
                     base_plane_tolerance,
+                    validation_lane,
                     unused_score,
                     extended_plane_match
             ))
@@ -994,6 +1010,14 @@ void main() {
         source_size,
         output_size
     );
+    int source_validation_lane = 0;
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+    source_validation_lane = clamp(
+        int(floor(tex_coord.x * 4.0f)),
+        0,
+        3
+    );
+#endif
 
     vec3 current_radiance;
     float current_variance;
@@ -1013,6 +1037,7 @@ void main() {
             receiver_slot,
             receiver_token,
             base_plane_tolerance,
+            source_validation_lane,
             current_radiance,
             current_variance,
             neighborhood_min,
