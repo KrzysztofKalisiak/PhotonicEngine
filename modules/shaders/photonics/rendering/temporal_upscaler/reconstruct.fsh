@@ -23,6 +23,7 @@ const uint PH_TEMPORAL_DIAGNOSTIC_NO_HISTORY = 2u;
 const uint PH_TEMPORAL_DIAGNOSTIC_ENVELOPE = 3u;
 const uint PH_TEMPORAL_DIAGNOSTIC_NEAREST_HISTORY = 4u;
 const uint PH_TEMPORAL_DIAGNOSTIC_BILINEAR_HISTORY = 5u;
+const uint PH_TEMPORAL_DIAGNOSTIC_PLANE_HISTORY = 6u;
 #endif
 
 const float PH_UPSCALE_NORMAL_THRESHOLD = 0.85f;
@@ -503,12 +504,21 @@ bool ph_reproject_receiver(
 bool ph_history_tap(
     ivec2 texel,
     ivec2 history_size,
-    vec3 expected_previous_pos,
+    vec2 previous_uv,
+    float expected_depth,
     vec3 expected_previous_normal,
+    vec3 expected_view_pos,
+    vec3 expected_view_normal,
+    vec2 projection_scale,
+    float expected_clip_w,
+    bool can_validate_plane,
     float expected_identity,
     out vec3 radiance,
     out float age,
     out float revision_match
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    , out bool used_plane_validation
+#endif
 ) {
     if (any(lessThan(texel, ivec2(0)))
             || any(greaterThanEqual(texel, history_size)))
@@ -542,10 +552,45 @@ bool ph_history_tap(
             < PH_UPSCALE_HISTORY_NORMAL_THRESHOLD)
         return false;
 
-    float expected_depth = length(expected_previous_pos);
-    float depth_tolerance = max(0.15f, expected_depth * 0.0015f);
-    if (abs(surface.b - expected_depth) > depth_tolerance)
+    float depth_tolerance = max(
+        0.15f,
+        max(expected_depth, surface.b) * 0.0015f
+    );
+    bool radial_depth_matches
+        = abs(surface.b - expected_depth) <= depth_tolerance;
+
+    // Neighboring rays naturally have different radial depths on a sloped or
+    // grazing plane. Comparing both taps to the center depth rejects valid
+    // history as coherent screen-space bands. Reconstruct this tap's ray and
+    // test the stored point against the expected receiver plane instead.
+    vec2 tap_uv = (vec2(texel) + vec2(0.5f)) / vec2(history_size);
+    vec2 tap_ndc_delta = 2.0f * (tap_uv - previous_uv);
+    vec3 tap_view_ray = expected_view_pos;
+    bool tap_can_validate_plane = can_validate_plane;
+    if (tap_can_validate_plane) {
+        tap_view_ray.xy += expected_clip_w
+            * tap_ndc_delta
+            / projection_scale;
+        tap_can_validate_plane = ph_temporal_normalize(tap_view_ray);
+    }
+    bool plane_depth_matches = false;
+    if (tap_can_validate_plane) {
+        vec3 stored_view_pos = tap_view_ray * surface.b;
+        float plane_distance = abs(dot(
+            stored_view_pos - expected_view_pos,
+            expected_view_normal
+        ));
+        plane_depth_matches = plane_distance <= depth_tolerance;
+    }
+
+    if (!(tap_can_validate_plane ? plane_depth_matches : radial_depth_matches))
         return false;
+
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+    used_plane_validation = tap_can_validate_plane
+        && plane_depth_matches
+        && !radial_depth_matches;
+#endif
 
     radiance = history.rgb;
     age = decoded_age;
@@ -564,6 +609,7 @@ bool ph_reconstruct_history(
     out float revision_support
 #ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
     , out bool used_nearest_fallback
+    , out bool used_plane_validation
 #endif
 ) {
     ivec2 history_size = textureSize(
@@ -572,6 +618,28 @@ bool ph_reconstruct_history(
     );
     vec2 history_position = previous_uv * vec2(history_size) - 0.5f;
     ivec2 base_texel = ivec2(floor(history_position));
+    float expected_depth = length(expected_previous_pos);
+    mat3 previous_view_rotation = mat3(gbufferPreviousModelView);
+    vec3 expected_view_pos
+        = previous_view_rotation * expected_previous_pos;
+    vec3 expected_view_normal
+        = previous_view_rotation * expected_previous_normal;
+    vec2 projection_scale = vec2(
+        gbufferPreviousProjection[0][0],
+        gbufferPreviousProjection[1][1]
+    );
+    float expected_clip_w = gbufferPreviousProjection[2].w
+        * expected_view_pos.z
+        + gbufferPreviousProjection[3].w;
+    bool can_validate_plane = ph_temporal_finite_vec3(expected_view_pos)
+        && !any(isnan(projection_scale))
+        && !any(isinf(projection_scale))
+        && all(greaterThan(abs(projection_scale), vec2(1e-6f)))
+        && !isnan(expected_clip_w)
+        && !isinf(expected_clip_w)
+        && abs(expected_clip_w) > 1e-6f;
+    if (can_validate_plane)
+        can_validate_plane = ph_temporal_normalize(expected_view_normal);
 
     radiance = vec3(0.0f);
     age = 0.0f;
@@ -579,6 +647,7 @@ bool ph_reconstruct_history(
     revision_support = 0.0f;
 #ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
     used_nearest_fallback = false;
+    used_plane_validation = false;
 #endif
     float weight_sum = 0.0f;
     for (int y = 0; y <= 1; y++) {
@@ -587,16 +656,33 @@ bool ph_reconstruct_history(
             vec3 tap_radiance;
             float tap_age;
             float tap_revision_match;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+            bool tap_used_plane_validation;
+#endif
             if (!ph_history_tap(
                     texel,
                     history_size,
-                    expected_previous_pos,
+                    previous_uv,
+                    expected_depth,
                     expected_previous_normal,
+                    expected_view_pos,
+                    expected_view_normal,
+                    projection_scale,
+                    expected_clip_w,
+                    can_validate_plane,
                     expected_identity,
                     tap_radiance,
                     tap_age,
                     tap_revision_match
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+                    , tap_used_plane_validation
+#endif
             )) continue;
+
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+            used_plane_validation = used_plane_validation
+                || tap_used_plane_validation;
+#endif
 
             float weight = ph_bilinear_weight(history_position, texel);
             radiance += tap_radiance * weight;
@@ -627,15 +713,27 @@ bool ph_reconstruct_history(
             vec3 tap_radiance;
             float tap_age;
             float tap_revision_match;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+            bool tap_used_plane_validation;
+#endif
             if (!ph_history_tap(
                     texel,
                     history_size,
-                    expected_previous_pos,
+                    previous_uv,
+                    expected_depth,
                     expected_previous_normal,
+                    expected_view_pos,
+                    expected_view_normal,
+                    projection_scale,
+                    expected_clip_w,
+                    can_validate_plane,
                     expected_identity,
                     tap_radiance,
                     tap_age,
                     tap_revision_match
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+                    , tap_used_plane_validation
+#endif
             )) continue;
 
             vec2 tap_offset = vec2(texel) - history_position;
@@ -648,6 +746,9 @@ bool ph_reconstruct_history(
             revision_support = tap_revision_match;
             nearest_distance_sq = distance_sq;
             found_nearest = true;
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+            used_plane_validation = tap_used_plane_validation;
+#endif
         }
     }
 
@@ -964,6 +1065,7 @@ void main() {
     float history_revision_support;
 #ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
     bool history_used_nearest_fallback;
+    bool history_used_plane_validation;
 #endif
     bool has_history = can_reproject && ph_reconstruct_history(
         previous_uv,
@@ -976,6 +1078,7 @@ void main() {
         history_revision_support
 #ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
         , history_used_nearest_fallback
+        , history_used_plane_validation
 #endif
     );
 
@@ -1199,9 +1302,11 @@ void main() {
 #ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
     ph_write_temporal_diagnostic(
         diagnostic_pre_limiter_radiance,
-        history_used_nearest_fallback
-            ? PH_TEMPORAL_DIAGNOSTIC_NEAREST_HISTORY
-            : PH_TEMPORAL_DIAGNOSTIC_BILINEAR_HISTORY,
+        history_used_plane_validation
+            ? PH_TEMPORAL_DIAGNOSTIC_PLANE_HISTORY
+            : (history_used_nearest_fallback
+                ? PH_TEMPORAL_DIAGNOSTIC_NEAREST_HISTORY
+                : PH_TEMPORAL_DIAGNOSTIC_BILINEAR_HISTORY),
         current_confidence,
         diagnostic_limiter_strength,
         ph_temporal_limiter_materially_changed(
