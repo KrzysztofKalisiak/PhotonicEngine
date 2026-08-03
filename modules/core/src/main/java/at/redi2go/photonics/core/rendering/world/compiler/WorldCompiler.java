@@ -79,6 +79,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
     private int mostRecentBlockContainerScale = 0;
     private boolean mostRecentWorldReady = false;
+    private boolean mostRecentWorldSettled = false;
     private boolean mostRecentBlockBoundsFallback = false;
 
     private long compilationRevision = 0;
@@ -305,7 +306,6 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
             worldAllocator.upload();
             paletteTexture.upload();
-            uniformUpdater.updateAll();
 
             var treeMinBounds = treeManager.minBounds();
             var treeMaxBounds = treeManager.maxBounds();
@@ -336,6 +336,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                 lastObservedCompilationRevision = mostRecentCompilationRevision;
                 lastCompilationChangeNanos = now;
                 settledDiagnosticLogged = false;
+                setWorldSettled(false);
                 if (now >= nextActiveDiagnosticNanos) {
                     nextActiveDiagnosticNanos = now + ACTIVE_DIAGNOSTIC_INTERVAL_NANOS;
                     logWorldTracingDiagnostic(false, depth, worldReady, blockBoundsFallback);
@@ -344,15 +345,30 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     && lastObservedCompilationRevision > 0
                     && now - lastCompilationChangeNanos >= SETTLED_DIAGNOSTIC_DELAY_NANOS) {
                 settledDiagnosticLogged = true;
+                setWorldSettled(worldReady);
                 logWorldTracingDiagnostic(true, depth, worldReady, blockBoundsFallback);
             }
             mostRecentWorldReady = worldReady;
+            if (!worldReady)
+                setWorldSettled(false);
             mostRecentBlockBoundsFallback = blockBoundsFallback;
+
+            // Publish tree-dependent uniforms only after every field reflects
+            // the tree uploaded above. In particular, a new revision must not
+            // receive one frame of environment samples while still "settled".
+            uniformUpdater.updateAll();
 
             uploadDone.signalAll();
         } finally {
             uploadLock.unlock();
         }
+    }
+
+    private void setWorldSettled(boolean settled) {
+        if (mostRecentWorldSettled == settled) return;
+
+        mostRecentWorldSettled = settled;
+        uniformUpdater.updateNextFrame();
     }
 
     private void logWorldTracingDiagnostic(
@@ -425,6 +441,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         dynamicUniforms.uniform3f("world_max_block", () -> new Vector3f(mostRecentMaxBlock), uniformUpdater.newNotifier());
 
         dynamicUniforms.uniform1i("ph_world_ready", () -> mostRecentWorldReady ? 1 : 0, uniformUpdater.newNotifier());
+        dynamicUniforms.uniform1i("ph_world_settled", () -> mostRecentWorldSettled ? 1 : 0, uniformUpdater.newNotifier());
         dynamicUniforms.uniform1i(
                 "ph_world_revision_slot",
                 () -> (int) (mostRecentCompilationRevision & 31L),

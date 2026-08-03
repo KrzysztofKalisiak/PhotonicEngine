@@ -35,6 +35,7 @@ void main() {
     vec3 hit_normal;
     vec3 hit_position;
     uint path_hash;
+    bool sampled_environment;
 
     int gi_bounce_limit = PH_MAX_GI_BOUNCES;
 #if defined PH_RESTIR_GI_TRANSPORT_LANES
@@ -52,8 +53,20 @@ void main() {
 
         hit_position,
         hit_normal,
-        path_hash
+        path_hash,
+        sampled_environment
     );
+
+    // Streaming revisions temporarily remove sections from the sparse tree.
+    // Keep valid history instead of interpreting those transient holes as sky.
+    if (sampled_environment && ph_world_settled == 0) {
+        indirect_reservoir_encode(
+            reservoir,
+            gi_reservoir_0,
+            gi_reservoir_1
+        );
+        return;
+    }
 
     indirect_sample_set_hit_point(
         reservoir.smple,

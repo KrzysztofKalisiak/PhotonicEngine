@@ -109,6 +109,10 @@ public class PhotonicsRenderer extends CompositeRenderer {
 
     @Override
     public void renderAll() {
+        // Attachment textures resize lazily. Refresh the Iris pass dimensions
+        // in the same frame so view uniforms cannot retain the old viewport.
+        recalculateSizes();
+
         ensureGpuQueries();
         pollGpuQueries();
 

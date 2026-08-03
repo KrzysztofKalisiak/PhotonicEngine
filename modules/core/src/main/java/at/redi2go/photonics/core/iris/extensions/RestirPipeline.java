@@ -131,6 +131,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI environment v115: initialized independently in the indirect pass; native Photon reads direct sun and hemispherical skylight from colortex4; sunProposalDiagnostic={}",
                 RestirDiagnostics.isGiSunProposalEnabled()
         );
+        Photonics.LOGGER.info(
+                "Photonics GI environment v116: new environment-radiance samples pause while voxel sections are streaming; finite-hit GI and revalidated temporal history remain active"
+        );
         if (RestirDiagnostics.isGiSunProposalEnabled()) {
             Photonics.LOGGER.warn(
                     "Photonics GI sun-proposal diagnostic v115 enabled via -D{}=true; selectionProbability=0.25, estimator=sun-cosine/probability+sky/complement-probability, dimensions=overworld-only, opaqueBlockers=zero-contribution termination",
