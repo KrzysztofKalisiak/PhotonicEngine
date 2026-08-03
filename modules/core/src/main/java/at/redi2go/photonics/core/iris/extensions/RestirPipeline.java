@@ -127,6 +127,13 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         Photonics.LOGGER.info(
                 "Photonics ReSTIR GI transport v85+: stochastic tinted-glass traversal and endpoint-first transparent-hit validation"
         );
+        if (RestirDiagnostics.isGiTransportLanesEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics ReSTIR GI transport diagnostic v114 enabled via -D{}=true; left-to-right lanes=configured-bounces/1x, configured-plus-one-bounce/1x, configured-bounces/4x, configured-plus-one-bounce/4x; configuredBounces={}",
+                    RestirDiagnostics.GI_TRANSPORT_LANES_PROPERTY,
+                    properties.getMaxGiBounces()
+            );
+        }
         Photonics.LOGGER.info(
                 "Photonics stability v86: deterministic thin-cutout GI coverage and bounded palette-heap compiler recovery probes"
         );

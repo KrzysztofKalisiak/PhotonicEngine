@@ -52,6 +52,12 @@ void main() {
     modify_restir_gi(lighting.rgb);
 #endif
 
+#if defined PH_RESTIR_GI_TRANSPORT_LANES
+    int gi_transport_lane = min(int(frag_tex_coord.x * 4.0f), 3);
+    if ((gi_transport_lane & 2) != 0)
+        lighting.rgb *= 4.0f;
+#endif
+
     indirect_reservoir_encode(indirect_reservoir, gi_reservoir_0, gi_reservoir_1);
 #endif
 

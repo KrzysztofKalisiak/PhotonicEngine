@@ -32,11 +32,19 @@ void main() {
     vec3 hit_position;
     uint path_hash;
 
+    int gi_bounce_limit = PH_MAX_GI_BOUNCES;
+#if defined PH_RESTIR_GI_TRANSPORT_LANES
+    int gi_transport_lane = min(int(frag_tex_coord.x * 4.0f), 3);
+    if ((gi_transport_lane & 1) != 0)
+        gi_bounce_limit += 1;
+#endif
+
     sample_indirect(
         indirect_result,
         frag_rt_pos,
         frag_geo_normal,
         trace_rnd_state,
+        gi_bounce_limit,
 
         hit_position,
         hit_normal,

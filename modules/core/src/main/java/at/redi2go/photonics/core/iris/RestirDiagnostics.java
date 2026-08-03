@@ -6,11 +6,13 @@ public final class RestirDiagnostics {
     public static final String DIRECT_ESTIMATOR_PROPERTY = "photonics.restirDirectEstimatorDiagnostic";
     public static final String DIRECT_ESTIMATOR_RANK_PROPERTY = "photonics.restirDirectEstimatorRankDiagnostic";
     public static final String DIRECT_VISIBILITY_LANES_PROPERTY = "photonics.restirDirectVisibilityLanesOverride";
+    public static final String GI_TRANSPORT_LANES_PROPERTY = "photonics.restirGiTransportDiagnostic";
 
     private static final boolean SOURCE_HISTORY_ENABLED = Boolean.getBoolean(SOURCE_HISTORY_PROPERTY);
     private static final boolean DIRECT_TEMPORAL_BYPASS_ENABLED = Boolean.getBoolean(DIRECT_TEMPORAL_BYPASS_PROPERTY);
     private static final boolean DIRECT_ESTIMATOR_ENABLED = Boolean.getBoolean(DIRECT_ESTIMATOR_PROPERTY);
     private static final boolean DIRECT_ESTIMATOR_RANK_ENABLED = Boolean.getBoolean(DIRECT_ESTIMATOR_RANK_PROPERTY);
+    private static final boolean GI_TRANSPORT_LANES_ENABLED = Boolean.getBoolean(GI_TRANSPORT_LANES_PROPERTY);
     private static final int REQUESTED_DIRECT_VISIBILITY_LANES = Integer.getInteger(
             DIRECT_VISIBILITY_LANES_PROPERTY,
             1
@@ -45,5 +47,9 @@ public final class RestirDiagnostics {
 
     public static int getDirectVisibilityLanes() {
         return DIRECT_VISIBILITY_LANES;
+    }
+
+    public static boolean isGiTransportLanesEnabled() {
+        return GI_TRANSPORT_LANES_ENABLED;
     }
 }

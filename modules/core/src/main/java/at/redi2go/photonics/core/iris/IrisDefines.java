@@ -75,6 +75,12 @@ public class IrisDefines {
             defines.stringDefine("PH_RESTIR_COMBINED_GI", "");
 
         if (phProperties.getLightingMode() == LightingMode.RESTIR
+                && phProperties.isGiEnabled()
+                && phProperties.useRestirCombinedGi()
+                && RestirDiagnostics.isGiTransportLanesEnabled())
+            defines.stringDefine("PH_RESTIR_GI_TRANSPORT_LANES", "");
+
+        if (phProperties.getLightingMode() == LightingMode.RESTIR
                 && phProperties.useRestirCombinedGi()
                 && phProperties.getGiRenderScale() < phProperties.getRenderScale() - 0.0001f)
             defines.stringDefine("PH_RESTIR_SPLIT_GI", "");

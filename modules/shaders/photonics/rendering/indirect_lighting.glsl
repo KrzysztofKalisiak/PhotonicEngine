@@ -79,6 +79,7 @@ void sample_indirect(
         vec3 sample_rt_pos,
         vec3 normal,
         inout uint rnd_state,
+        int bounce_limit,
 
         out vec3 first_hit,
         out vec3 first_normal,
@@ -103,7 +104,7 @@ void sample_indirect(
     ray_iter_set_position(ray, sample_rt_pos);
     prepare_next_gi_ray(ray, rnd_state, bounce_count, sample_rt_pos, normal, is_tracing_to_sun);
 
-    while (bounce_count < PH_MAX_GI_BOUNCES) {
+    while (bounce_count < bounce_limit) {
         RayResult hit = ray_iter_next(ray);
         if (ray.iterations <= 0) {
             indirect_color = vec3(0.0f);
