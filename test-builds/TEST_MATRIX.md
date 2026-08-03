@@ -646,6 +646,49 @@ Coherent red or orange rows there still indicate lost or bootstrap history and
 should be reported with their exact timestamps. The top-right and bottom-right
 panels should remain free of the original lines.
 
+## Test M: v109 Grazing-Plane Current Source
+
+Use `photonics-v109-temporal-grazing-source-plane-mc1.21.1.jar`.
+
+Artifact SHA-256:
+`E61FD20238B53033CDE05BD2C2F255E74861AA7C2651A00F5EFD62F7BDA6A045`.
+
+V109 includes v108 and removes the current-source reconstruction's fixed
+three-block distance rejection. Screen-neighboring perspective rays may land
+many blocks apart on the same grazing plane. Receiver domain, geometric and
+texture normals, and the bidirectional receiver-plane test remain mandatory.
+
+### Run A: v108/v109 production A/B
+
+1. First run v108, then v109 with no split-screen or ReSTIR diagnostic flags.
+   Keep the window resolution, `temporalUpscalerSourceScaleOverride`, camera
+   position, light layout, and Photon settings identical.
+2. Reproduce the flat-world `13-09-59` view. Hold still for 15 seconds, then
+   slowly pitch through the illuminated ground for 30 seconds. Repeat the
+   village view once.
+3. Confirm v109 logs
+   `sourceValidation=screen-neighbor-domain+normal+receiver-plane-v109/no-fixed-world-distance`.
+4. Compare the thin dark rows in grazing direct light. V109 should remove the
+   rows caused by changing current-source support; v108 may independently
+   remove cyan/history-loss rows.
+5. Inspect wall silhouettes, coplanar disconnected surfaces, fences, flowers,
+   and light boundaries for new lateral bleeding or over-smoothed shadows.
+
+### Run B: split-screen rescue map
+
+Add only:
+
+```text
+-Dphotonics.temporalUpscalerSplitScreen=true
+```
+
+In the lower-left state panel, violet marks a current source tap accepted by
+the receiver-plane test that the old three-block cutoff rejected. Violet on
+distant flat or sloped terrain is expected and should coincide with areas that
+previously formed dark rows. Cyan retains the v108 history-rescue meaning.
+Report any violet crossing a visibly different plane, plus any black or striped
+green rows that remain in the failing terrain.
+
 ## Reporting
 
 Name each result with the jar and test, for example
