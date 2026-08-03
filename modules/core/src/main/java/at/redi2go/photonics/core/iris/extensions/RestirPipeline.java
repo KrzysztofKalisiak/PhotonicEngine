@@ -132,7 +132,10 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 RestirDiagnostics.isGiSunProposalEnabled()
         );
         Photonics.LOGGER.info(
-                "Photonics GI environment v116: new environment-radiance samples pause while voxel sections are streaming; finite-hit GI and revalidated temporal history remain active"
+                "Photonics GI environment v117: environment proposals remain active during section streaming; the v116 global pause was removed because it created camera-dependent dark fill"
+        );
+        Photonics.LOGGER.info(
+                "Photonics world upload v117: voxel-tree mutation is fenced before allocator reuse; tree-dependent uniforms remain published after the completed upload"
         );
         if (RestirDiagnostics.isGiSunProposalEnabled()) {
             Photonics.LOGGER.warn(

@@ -101,15 +101,13 @@ void sample_indirect(
 
         out vec3 first_hit,
         out vec3 first_normal,
-        out uint first_path_hash,
-        out bool sampled_environment
+        out uint first_path_hash
 ) {
     const float infinity = intBitsToFloat(0x7f800000);
 
     first_hit = vec3(infinity);
     first_normal = normal;
     first_path_hash = indirect_path_hash_seed;
-    sampled_environment = false;
 
     vec4 running_tint_color = vec4(0.0f);
     float running_light_transmittance = 1.0f;
@@ -250,7 +248,6 @@ void sample_indirect(
             );
 #endif
         } else {
-            sampled_environment = true;
             vec3 player_pos = hit_position - rt_camera_position;
 
             radiance_color = is_tracing_to_sun ? get_sun_color(player_pos, ray.direction) : get_sky_color(player_pos, ray.direction);

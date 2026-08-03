@@ -135,20 +135,23 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                 long compilationStart = System.nanoTime();
 
                 var unloadedSections = taskQueue.drainUnloadQueue();
-                if (!unloadedSections.isEmpty())
-                    clearUnloadedSections(unloadedSections);
-
-
                 var builtSections = taskQueue.drain(MAX_SECTIONS_PER_RUN);
-                if (!builtSections.isEmpty()) {
-                    recenter();
-
-                    clearPendingSections(builtSections);
-                    insertSections(builtSections);
-                }
-
                 if (!unloadedSections.isEmpty() || !builtSections.isEmpty()) {
+                    // Tree edits release and reuse heap allocations. Block the
+                    // render-thread upload before any edit so an old root can
+                    // never be paired with a partially rewritten heap.
                     stopUpload();
+
+                    if (!unloadedSections.isEmpty())
+                        clearUnloadedSections(unloadedSections);
+
+                    if (!builtSections.isEmpty()) {
+                        recenter();
+
+                        clearPendingSections(builtSections);
+                        insertSections(builtSections);
+                    }
+
                     writeSections();
 
                     compilationRevision++;
