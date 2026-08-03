@@ -516,6 +516,94 @@ This is a diagnostic build. It defers r1 visibility to r6 only while both JVM
 diagnostic flags are active. Without the estimator flag, v106 preserves the
 v105 rendering and diagnostic behavior.
 
+## Test K: v107 Same-Pixel Visibility Lanes
+
+Use `photonics-v107-restir-visibility-lanes-diagnostic-mc1.21.1.jar`.
+
+Artifact SHA-256:
+`8F67119D3A7BC6C5B8CD872C3DF2ACA2B1E9D32B28B54C3034BC1544CB414523`.
+
+Keep the v106 flat-world and village views, resolution, shader settings,
+direct/GI scales, and light counts. Fully restart Minecraft between JVM-flag
+runs. Start with the same `restirInitialSamples=16` used in the submitted v106
+evidence; do not add the 32-sample override unless making a separate control.
+
+### Run A: full-screen same-pixel cause map
+
+```text
+-Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectEstimatorDiagnostic=true
+```
+
+1. Confirm the log reports `Photonics ReSTIR direct-estimator diagnostic v107`
+   with `display=full-screen-same-pixel`, and reports both direct reuse paths as
+   bypassed. This mode always uses one direct-visibility lane.
+2. The whole screen now compares the same pixel and selected representative:
+   red is energy rejected by final visibility, green is visible energy, and
+   blue is the visible/unshadowed fraction weighted by signal strength. A
+   magenta pixel means the visible result exceeded its unshadowed input and is
+   an invalid estimator event.
+3. The six-cell marker at top center shows world state. Its first cell is green
+   when tracing is ready and red otherwise; the next five black/white cells
+   encode the current world-revision slot. Report whether a distant flash
+   coincides with either a readiness or revision change.
+4. Wait for `settled=true`, hold the modified flat-world distant-light view
+   still for 30 seconds, then turn slowly without translating. Repeat the same
+   stationary/rotation sequence in the village.
+5. Include the `Photonics direct estimator sample v107` log lines. In a valid
+   run, `impossibleGain` and `metadataInvalid` should remain zero. Compare
+   `visible` versus `finalRejected`; a mostly red pulse is a visibility-selected
+   rejection, while a green pulse is accepted proposal energy.
+
+### Run B: proposal stratum and expansion
+
+Add the rank flag to Run A:
+
+```text
+-Dphotonics.restirSourceHistoryDiagnostic=true -Dphotonics.restirDirectEstimatorDiagnostic=true -Dphotonics.restirDirectEstimatorRankDiagnostic=true
+```
+
+1. Confirm the v107 diagnostic log reports
+   `mode=proposal-stratum-expansion`.
+2. Repeat only the strongest flat-world and village views from Run A. Color
+   identifies the selected proposal stratum; brightness increases with both
+   unshadowed energy and that stratum's lights-per-proposal expansion.
+3. Include `selectedByStratum`, `rejectedByStratum`, and
+   `proposalExpansionRange` from the synchronized GPU readback logs. Arrays use
+   indices 1 through 6; index 0 is intentionally unused.
+4. Check whether flashes repeatedly select one color/stratum. This separates a
+   high-expansion proposal band from a general traversal/visibility failure.
+
+### Runs C and D: exact one-lane versus two-lane estimator
+
+Remove all source-history and estimator diagnostic flags. For Run C use the
+default lane count (or explicitly add
+`-Dphotonics.restirDirectVisibilityLanesOverride=1`). For Run D use:
+
+```text
+-Dphotonics.restirDirectVisibilityLanesOverride=2
+```
+
+1. Confirm Run C logs `effectiveLanes=1` and Run D logs `effectiveLanes=2`.
+   Run D performs one visibility decision for each disjoint half of the same
+   original proposal batch, then merges both lane estimators with the original
+   proposal probabilities and total sample count.
+2. Use the normal visual pipeline and the same temporal-upscaler settings that
+   reproduced the distant fireflies. Record the fixed flat-world view for 30
+   seconds, a slow pan, and the matching village view for both runs.
+3. Compare distant accepted-light flashes frame by frame. A material reduction
+   in Run D implicates one-representative visibility variance. No reduction
+   points back to proposal amplification or a later temporal stage.
+4. Record average FPS and the lowest repeatable FPS for both runs. Run D adds at
+   most one initial direct-visibility ray per direct pixel, so visual improvement
+   must be weighed against that cost.
+5. Also check nearby lights, fences, flowers, Sable-local lighting, world join,
+   and shader reload once. The default Run C path must remain visually identical
+   to v106 outside diagnostics.
+
+Do not combine the two-lane override with Runs A or B. v107 deliberately forces
+one lane during the estimator diagnostic so the unshadowed and visible values
+refer to one unchanged representative.
+
 ## Reporting
 
 Name each result with the jar and test, for example
