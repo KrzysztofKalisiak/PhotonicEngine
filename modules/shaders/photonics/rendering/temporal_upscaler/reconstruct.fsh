@@ -33,7 +33,6 @@ const float PH_UPSCALE_HISTORY_NORMAL_THRESHOLD = 0.95f;
 const float PH_UPSCALE_MIN_PLANE_DISTANCE = 1.0f / 64.0f;
 const float PH_UPSCALE_MAX_PLANE_DISTANCE = 1.0f / 32.0f;
 const float PH_UPSCALE_MAX_PRECISION_PLANE_DISTANCE = 1.0f / 4.0f;
-const float PH_UPSCALE_CARDINAL_SNAP_ALIGNMENT = 0.9999f;
 const float PH_UPSCALE_LEGACY_MAX_POSITION_DISTANCE_SQ = 9.0f;
 const float PH_HALF_MIN_NORMAL = 1.0f / 16384.0f;
 const float PH_UPSCALE_HISTORY_REVISION_STRIDE = 64.0f;
@@ -42,6 +41,10 @@ const float PH_UPSCALE_MIN_FRAME_TIME = 1.0f / 1000.0f;
 const float PH_UPSCALE_MAX_FRAME_TIME = 1.0f / 15.0f;
 const float PH_UPSCALE_HDR_LIMIT_MOTION_RATE_START = 0.5f;
 const float PH_UPSCALE_HDR_LIMIT_MOTION_RATE_END = 4.0f;
+
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+bool ph_temporal_receiver_bad_angle = false;
+#endif
 
 float ph_temporal_encode_history_age(float age) {
     return float(ph_world_revision_slot) * PH_UPSCALE_HISTORY_REVISION_STRIDE
@@ -81,6 +84,24 @@ bool ph_temporal_normalize(inout vec3 value) {
     value *= inversesqrt(length_sq);
     return ph_temporal_finite_vec3(value);
 }
+
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+bool ph_temporal_is_bad_angle(vec3 player_pos, vec3 normal) {
+    vec3 rt_pos = player_pos + rt_camera_position;
+    float distance_from_camera = distance(
+        floor(rt_pos),
+        floor(rt_camera_position)
+    );
+    float view_distance_sq = dot(player_pos, player_pos);
+    if (distance_from_camera <= 16.0f || view_distance_sq <= 1e-8f)
+        return false;
+
+    return dot(
+        normal,
+        player_pos * inversesqrt(view_distance_sq)
+    ) > -0.2f;
+}
+#endif
 
 float ph_temporal_base_plane_tolerance(
     ivec2 source_size,
@@ -136,25 +157,6 @@ float ph_temporal_precision_plane_tolerance(
         base_tolerance + projected_error
     );
 }
-
-#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
-vec3 ph_temporal_dominant_axis(vec3 normal, out float alignment) {
-    vec3 absolute_normal = abs(normal);
-    vec3 axis = vec3(0.0f);
-    if (absolute_normal.x >= absolute_normal.y
-            && absolute_normal.x >= absolute_normal.z) {
-        axis.x = normal.x < 0.0f ? -1.0f : 1.0f;
-        alignment = absolute_normal.x;
-    } else if (absolute_normal.y >= absolute_normal.z) {
-        axis.y = normal.y < 0.0f ? -1.0f : 1.0f;
-        alignment = absolute_normal.y;
-    } else {
-        axis.z = normal.z < 0.0f ? -1.0f : 1.0f;
-        alignment = absolute_normal.z;
-    }
-    return axis;
-}
-#endif
 
 float ph_temporal_identity(int slot, uint token, bool hand) {
     uint slot_value = uint(slot + 1);
@@ -235,50 +237,21 @@ bool ph_source_matches_surface(
         geo_normal
     );
 #ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
-    // Every lane retains domain and normal validation. Only the plane equation
-    // changes, so a clean lane still has parallel-surface protection.
-    if (validation_lane == 1) {
-        plane_distance = abs(dot(position_delta, geo_normal));
-        plane_tolerance = ph_temporal_precision_plane_tolerance(
-            base_plane_tolerance,
-            source_pos,
-            geo_normal,
-            geo_normal
-        );
-    } else if (validation_lane >= 2) {
-        vec3 plane_normal = source_normal + geo_normal;
-        if (!ph_temporal_normalize(plane_normal))
+    // Lanes 2 and 4 acknowledge the same grazing-angle position instability
+    // that Photonics already records in FragData. Domain and both normal gates
+    // remain active; only the unreliable hard plane rejection is bypassed.
+    bool relax_bad_angle_plane = validation_lane == 1
+        || validation_lane == 3;
+    bool bad_angle_pair = ph_temporal_receiver_bad_angle
+        || frag_data_is_bad_angle(source_frag);
+    if (!relax_bad_angle_plane || !bad_angle_pair) {
+        if (plane_distance > plane_tolerance)
             return false;
-
-        if (validation_lane == 3) {
-            float source_axis_alignment;
-            float receiver_axis_alignment;
-            vec3 source_axis = ph_temporal_dominant_axis(
-                source_normal,
-                source_axis_alignment
-            );
-            vec3 receiver_axis = ph_temporal_dominant_axis(
-                geo_normal,
-                receiver_axis_alignment
-            );
-            if (source_axis_alignment >= PH_UPSCALE_CARDINAL_SNAP_ALIGNMENT
-                    && receiver_axis_alignment
-                        >= PH_UPSCALE_CARDINAL_SNAP_ALIGNMENT
-                    && dot(source_axis, receiver_axis) > 0.5f)
-                plane_normal = receiver_axis;
-        }
-
-        plane_distance = abs(dot(position_delta, plane_normal));
-        plane_tolerance = ph_temporal_precision_plane_tolerance(
-            base_plane_tolerance,
-            source_pos,
-            plane_normal,
-            plane_normal
-        );
     }
-#endif
+#else
     if (plane_distance > plane_tolerance)
         return false;
+#endif
 
     // Screen-neighboring rays can land arbitrarily far apart on a grazing
     // plane. A fixed world-distance cutoff therefore removes valid rows from
@@ -1029,6 +1002,13 @@ void main() {
             || !ph_temporal_normalize(geo_normal)
             || !ph_temporal_normalize(tex_normal))
         return;
+
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+    ph_temporal_receiver_bad_angle = ph_temporal_is_bad_angle(
+        player_pos,
+        geo_normal
+    );
+#endif
 
     bool hand = is_hand_at();
     vec3 classified_previous_player_pos = player_pos;

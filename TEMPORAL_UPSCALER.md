@@ -359,33 +359,32 @@ accepted by receiver-plane validation that the old fixed three-block distance
 test would reject. Violet on distant or grazing coplanar terrain is expected;
 new violet bleeding across visibly different planes is not.
 
-### Source-plane formulation diagnostic
+### Bad-angle continuity diagnostic
 
-V111 compares candidate current-source receiver-plane formulations in one
-capture. Start Minecraft with:
+V112 isolates the two discontinuities at Photonics' grazing-angle receiver
+cutoff. Start Minecraft with:
 
 ```text
 -Dphotonics.temporalUpscalerSourceValidationLanes=true
 ```
 
-The flag keeps the final temporal output visible. Domain, geometric-normal, and
-texture-normal validation remain enabled in every lane. The screen is divided
-into four equal vertical lanes, from left to right:
+The flag keeps the final temporal output visible and divides the screen into
+four equal vertical lanes, from left to right:
 
-| Lane | Current-source validation |
-| --- | --- |
-| 1 | V110 baseline: maximum of source-plane and receiver-plane distance |
-| 2 | Receiver-plane distance only |
-| 3 | Distance to the normalized source/receiver normal bisector |
-| 4 | Cardinal-axis plane for axis-aligned block faces, otherwise the bisector |
+| Lane | Upscaler plane at bad angle | Direct spatial reuse at bad angle |
+| --- | --- | --- |
+| 1 | Strict V111 baseline | Disabled |
+| 2 | Relaxed; domain and both normal gates remain | Disabled |
+| 3 | Strict V111 baseline | Restored with current visibility revalidation |
+| 4 | Relaxed; domain and both normal gates remain | Restored |
 
-V110 established that the hard plane gate causes the grazing-angle rows. V111
-tests formulations that still reject a source point on a distinct parallel
-surface. Record a slow vertical camera sweep without translating or yawing so
-the same surfaces remain in their lanes. Compare missing rows, edge bleeding,
-and lighting discontinuities at silhouettes and nearby parallel walls. The
-property is read at startup and does not allocate the split-screen diagnostic
-attachment.
+At ordinary viewing angles all four lanes use identical validation. The direct
+spatial change deliberately does not affect indirect GI. Record a slow vertical
+camera sweep over the visible row and inspect both continuity and new leakage
+around silhouettes. Lane 2 isolates reconstruction, lane 3 isolates the
+low-resolution ReSTIR input, and lane 4 tests the combined production candidate.
+The property is read at startup and does not allocate the split-screen
+diagnostic attachment.
 If both diagnostic properties are present, the source-validation lanes take
 precedence so a leftover split-screen argument cannot hide the final output.
 

@@ -561,13 +561,13 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         if (TemporalUpscalerDiagnostics.isSourceValidationLanesEnabled()) {
             Photonics.LOGGER.warn(
-                    "Photonics temporal-upscaler plane-formulation lanes enabled via -D{}=true; lanes=bidirectional-baseline|receiver-plane|normal-bisector|cardinal-snap-or-bisector; domain and normal validation remain enabled",
+                    "Photonics bad-angle continuity lanes enabled via -D{}=true; lanes=strict-plane+spatial-off|relaxed-plane+spatial-off|strict-plane+direct-spatial|relaxed-plane+direct-spatial; domain/normal gates and direct visibility revalidation remain enabled; indirect spatial policy is unchanged",
                     TemporalUpscalerDiagnostics.SOURCE_VALIDATION_LANES_PROPERTY
             );
         }
 
         Photonics.LOGGER.info(
-            "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, sourceValidation=screen-neighbor-domain+normal+receiver-plane-v111/plane-formulation-lanes, sourceValidationLanes={}, historyValidation=screen-ray-receiver-plane-v108+normal+identity, historyWorldRevisionPolicy=local-reactive, sparseSupportPolicy=history-stable, composition=private-lighting-texture",
+            "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, sourceValidation=screen-neighbor-domain+normal+receiver-plane-v112/bad-angle-continuity-lanes, sourceValidationLanes={}, historyValidation=screen-ray-receiver-plane-v108+normal+identity, historyWorldRevisionPolicy=local-reactive, sparseSupportPolicy=history-stable, composition=private-lighting-texture",
                 properties.getTemporalUpscalerSourceScale(),
                 properties.getRenderScale(),
                 properties.getGiRenderScale(),
