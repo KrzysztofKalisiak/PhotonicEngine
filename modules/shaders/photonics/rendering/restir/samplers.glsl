@@ -336,6 +336,8 @@ vec3 ph_sample_temporal_diagnostic(vec2 tex_coord) {
 #endif
 
 #if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC && defined PH_RESTIR_SOURCE_HISTORY_COMPOSE_PASS
+#include "/photonics/uniforms.glsl"
+
 bool ph_restir_source_history_is_marker(vec2 tex_coord) {
     vec2 output_size = vec2(textureSize(restir_lighting, 0));
     vec2 half_size = floor(output_size * 0.5f);
@@ -377,9 +379,103 @@ float ph_decode_restir_estimator_luminance(float encoded) {
     if (isnan(encoded) || isinf(encoded)) return 0.0f;
     return min(exp2(clamp(encoded, 0.0f, 16.0f)) - 1.0f, 65504.0f);
 }
+
+void ph_decode_restir_proposal_metadata(
+    float encoded,
+    out int stratum,
+    out float expansion
+) {
+    if (isnan(encoded) || isinf(encoded) || encoded <= 0.0f) {
+        stratum = 0;
+        expansion = 0.0f;
+        return;
+    }
+
+    stratum = int(floor(encoded + 0.0001f));
+    float encoded_expansion = clamp(encoded - float(stratum), 0.0f, 0.999f);
+    expansion = exp2(encoded_expansion * 16.0f) - 1.0f;
+}
+
+vec3 ph_restir_proposal_stratum_color(int stratum) {
+    if (stratum == 1) return vec3(0.0f, 1.0f, 1.0f);
+    if (stratum == 2) return vec3(0.2f, 1.0f, 0.2f);
+    if (stratum == 3) return vec3(1.0f, 0.85f, 0.0f);
+    if (stratum == 4) return vec3(1.0f, 0.25f, 0.05f);
+    if (stratum == 5) return vec3(0.15f, 0.35f, 1.0f);
+    if (stratum == 6) return vec3(1.0f, 0.0f, 1.0f);
+    return vec3(0.0f);
+}
+
+bool ph_restir_estimator_revision_marker(vec2 tex_coord, out vec3 color) {
+    vec2 output_size = vec2(textureSize(restir_lighting, 0));
+    vec2 pixel = tex_coord * output_size;
+    float marker_width = 36.0f;
+    float marker_start = floor(0.5f * (output_size.x - marker_width));
+    if (pixel.x < marker_start || pixel.x >= marker_start + marker_width
+            || pixel.y < output_size.y - 9.0f
+            || pixel.y >= output_size.y - 3.0f) {
+        color = vec3(0.0f);
+        return false;
+    }
+
+    int marker_index = clamp(int((pixel.x - marker_start) / 6.0f), 0, 5);
+    if (marker_index == 0) {
+        color = ph_world_ready != 0
+            ? vec3(0.0f, 2.0f, 0.0f)
+            : vec3(2.0f, 0.0f, 0.0f);
+        return true;
+    }
+
+    int revision_bit = (ph_world_revision_slot >> (marker_index - 1)) & 1;
+    color = revision_bit != 0 ? vec3(2.0f) : vec3(0.03f);
+    return true;
+}
 #endif
 
 vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
+#if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
+    vec3 marker_color;
+    if (ph_restir_estimator_revision_marker(tex_coord, marker_color))
+        return marker_color;
+
+    vec3 estimator_signals = texture(restir_local_lighting, tex_coord).rgb;
+    float unshadowed = ph_decode_restir_estimator_luminance(estimator_signals.r);
+    float visible = ph_decode_restir_estimator_luminance(estimator_signals.g);
+    float rejected = max(unshadowed - visible, 0.0f);
+    float visibility_ratio = unshadowed > 0.000001f
+        ? clamp(visible / unshadowed, 0.0f, 1.0f)
+        : 0.0f;
+    float unshadowed_signal = clamp(estimator_signals.r / 8.0f, 0.0f, 1.0f);
+    float visible_signal = clamp(estimator_signals.g / 8.0f, 0.0f, 1.0f);
+
+    if (visible > unshadowed + max(0.0001f, unshadowed * 0.001f))
+        return vec3(2.0f, 0.0f, 2.0f);
+
+#if defined PH_RESTIR_DIRECT_ESTIMATOR_RANK_DIAGNOSTIC
+    int proposal_stratum;
+    float proposal_expansion;
+    ph_decode_restir_proposal_metadata(
+        estimator_signals.b,
+        proposal_stratum,
+        proposal_expansion
+    );
+    float expansion_signal = clamp(
+        log2(1.0f + proposal_expansion) / 12.0f,
+        0.0f,
+        1.0f
+    );
+    float strength = (0.15f + 0.85f * unshadowed_signal)
+        * (0.4f + 0.6f * expansion_signal);
+    return ph_restir_proposal_stratum_color(proposal_stratum) * strength;
+#else
+    float rejected_signal = clamp(log2(1.0f + rejected) / 8.0f, 0.0f, 1.0f);
+    return vec3(
+        rejected_signal,
+        visible_signal,
+        visibility_ratio * unshadowed_signal
+    );
+#endif
+#else
     bool right = tex_coord.x >= 0.5f;
     bool top = tex_coord.y >= 0.5f;
 
@@ -395,18 +491,6 @@ vec3 ph_sample_restir_source_history_diagnostic(vec2 tex_coord) {
 
     // Keep full-screen UVs so every signal remains aligned with the shader
     // pack's geometry and albedo in its own quadrant.
-#if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
-    vec3 estimator_signals = texture(restir_local_lighting, tex_coord).rgb;
-    float unshadowed = ph_decode_restir_estimator_luminance(estimator_signals.r);
-    float visible = ph_decode_restir_estimator_luminance(estimator_signals.g);
-    if (top && !right)
-        return vec3(unshadowed);
-    if (top)
-        return vec3(visible);
-    if (!right)
-        return vec3(clamp(estimator_signals.b, 0.0f, 1.0f));
-    return vec3(max(unshadowed - visible, 0.0f));
-#else
     if (top && !right)
         return texture(restir_local_lighting, tex_coord).rgb;
     if (top)

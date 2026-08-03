@@ -59,17 +59,25 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
+        Photonics.LOGGER.info(
+                "Photonics direct visibility v107: requestedLanes={}, effectiveLanes={}, policy=disjoint-proposal-lanes/exact-original-pdf/visibility-before-unbiased-lane-merge",
+                RestirDiagnostics.getRequestedDirectVisibilityLanes(),
+                getDirectVisibilityLanes()
+        );
         if (RestirDiagnostics.isSourceHistoryEnabled()) {
             if (isSourceHistoryDiagnosticEnabled()) {
                 if (isDirectEstimatorDiagnosticEnabled()) {
                     Photonics.LOGGER.warn(
-                            "Photonics ReSTIR direct-estimator diagnostic v106 enabled via -D{}=true and -D{}=true; directTemporalReuse=bypassed, directSpatialReuse=bypassed, initialVisibility=deferred-to-r6, panels=top-left-unshadowed-current-luminance/top-right-visible-current-luminance/bottom-left-visibility-ratio/bottom-right-rejected-current-luminance, values=log-packed-rgb16f, handheld-and-exact-local-lighting=omitted",
+                            "Photonics ReSTIR direct-estimator diagnostic v107 enabled via -D{}=true and -D{}=true; mode={}, directTemporalReuse=bypassed, directSpatialReuse=bypassed, directVisibilityLanes=1, initialVisibility=deferred-to-r6, display=full-screen-same-pixel, causeColors=red-rejected/green-visible/blue-visible-fraction, metadata=proposal-stratum+log-expansion-rgb16f, revisionMarker=ready+5-bit-world-revision, handheld-and-exact-local-lighting=omitted",
                             RestirDiagnostics.SOURCE_HISTORY_PROPERTY,
-                            RestirDiagnostics.DIRECT_ESTIMATOR_PROPERTY
+                            RestirDiagnostics.DIRECT_ESTIMATOR_PROPERTY,
+                            isDirectEstimatorRankDiagnosticEnabled()
+                                    ? "proposal-stratum-expansion"
+                                    : "visibility-cause-map"
                     );
                 } else {
                     Photonics.LOGGER.warn(
-                            "Photonics ReSTIR source/history diagnostic v106 enabled via -D{}=true; directTemporalReuse={}, directTemporalBypassRequested={}, bypassProperty=-D{}=true, panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, composition=internal-single-texture, rawSourceStorage=repurposed-restir_local_lighting",
+                            "Photonics ReSTIR source/history diagnostic v107 enabled via -D{}=true; directTemporalReuse={}, directTemporalBypassRequested={}, bypassProperty=-D{}=true, panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, composition=internal-single-texture, rawSourceStorage=repurposed-restir_local_lighting",
                             RestirDiagnostics.SOURCE_HISTORY_PROPERTY,
                             isDirectTemporalReuseEnabled() ? "enabled" : "bypassed",
                             RestirDiagnostics.isDirectTemporalBypassEnabled(),
@@ -78,7 +86,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 }
             } else {
                 Photonics.LOGGER.warn(
-                        "Photonics ReSTIR source/history diagnostic v106 requested via -D{}=true but requires split GI and block lighting; diagnostics and direct-pass bypasses disabled for this pipeline",
+                        "Photonics ReSTIR source/history diagnostic v107 requested via -D{}=true but requires split GI and block lighting; diagnostics and direct-pass bypasses disabled for this pipeline",
                         RestirDiagnostics.SOURCE_HISTORY_PROPERTY
                 );
             }
@@ -89,6 +97,31 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                     "Photonics ReSTIR direct-estimator diagnostic requested via -D{}=true but requires the active -D{}=true split-GI source/history diagnostic; production direct visibility remains enabled",
                     RestirDiagnostics.DIRECT_ESTIMATOR_PROPERTY,
                     RestirDiagnostics.SOURCE_HISTORY_PROPERTY
+            );
+        }
+        if (RestirDiagnostics.isDirectEstimatorRankEnabled()
+                && !isDirectEstimatorDiagnosticEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics ReSTIR proposal-rank diagnostic requested via -D{}=true but requires the active direct-estimator diagnostic; rank display disabled",
+                    RestirDiagnostics.DIRECT_ESTIMATOR_RANK_PROPERTY
+            );
+        }
+        if (RestirDiagnostics.getRequestedDirectVisibilityLanes()
+                != RestirDiagnostics.getDirectVisibilityLanes()) {
+            Photonics.LOGGER.warn(
+                    "Photonics direct visibility lane override {} clamped to supported range 1..2",
+                    RestirDiagnostics.getRequestedDirectVisibilityLanes()
+            );
+        }
+        if (isDirectEstimatorDiagnosticEnabled()
+                && RestirDiagnostics.getDirectVisibilityLanes() > 1) {
+            Photonics.LOGGER.warn(
+                    "Photonics direct visibility lane override suspended while the estimator diagnostic is active; the diagnostic requires one unchanged representative before and after visibility"
+            );
+        } else if (getDirectVisibilityLanes() > 1) {
+            Photonics.LOGGER.warn(
+                    "Photonics experimental two-lane direct visibility enabled via -D{}=2; one additional initial visibility ray may reduce performance",
+                    RestirDiagnostics.DIRECT_VISIBILITY_LANES_PROPERTY
             );
         }
         Photonics.LOGGER.info(
@@ -107,9 +140,10 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         this.giDenoiserPasses = properties.getRestirGiDenoiserPasses();
 
         Photonics.LOGGER.info(
-                "Photonics ReSTIR configuration v100: directCandidatesPerPixel={}, directTemporalSampleCap={}, directOutputSampleCap=world-128/sable-temporal-cap, spatialCandidates={}, spatialRadiusPixels={}, output=split-direct-and-gi-radiance-plus-exact-sable-local, samplingPolicy=large-list-logarithmic-rank-strata+compact-list-systematic-prefix-tail+distinct-priority-prefix/sable-external-reservoir/exact-all-same-token-lights/fail-closed-tri-state-conservative-local-dda/full-precision-motion-grid-receiver/normal-biased-endpoint/preserved-zero-current-batches, spatialPolicy=receiver-matched-current-frame/external-only-sable/current-rejection-accounting/immutable-input/initial-batch-cap+rejected-fallback-cap+background-finalization, historyPolicy=receiver-domain-complete-split-stable-external/direct-only-full-rigid-local-history/camera-relative-double-compose/normal-guided-receiver/soft-local-signature-reset/visibility-transition-reset/representative-scoped-external-reactivity/explicit-emitter-domain/0.15-block-trail/2-frame-floor, lightListPolicy=position-matched-250ms-alias-trail/250ms-after-loss-minecraft-light-proxy-ownership/125ms+2-frame-unmatched-proxy-quarantine/3-cell-alias-radius/render-thread-owned-merge, motionHoldMs=250, denoiserPolicy=post-denoise-exact-local-hard-shadow+representative-gated-world+soft-local-signature-sable, sableSkyLightDiagnostic=transition-log/optional-freeze-getter, directDenoiserPasses={}, giDenoiserPasses={}, softShadows={}, combinedGi={}, splitGi={}",
+                "Photonics ReSTIR configuration v107: directCandidatesPerPixel={}, directTemporalSampleCap={}, directVisibilityLanes={}, directOutputSampleCap=world-128/sable-temporal-cap, spatialCandidates={}, spatialRadiusPixels={}, output=split-direct-and-gi-radiance-plus-exact-sable-local, samplingPolicy=large-list-logarithmic-rank-strata+compact-list-systematic-prefix-tail+distinct-priority-prefix/sable-external-reservoir/exact-all-same-token-lights/fail-closed-tri-state-conservative-local-dda/full-precision-motion-grid-receiver/normal-biased-endpoint/preserved-zero-current-batches, spatialPolicy=receiver-matched-current-frame/external-only-sable/current-rejection-accounting/immutable-input/initial-batch-cap+rejected-fallback-cap+background-finalization, historyPolicy=receiver-domain-complete-split-stable-external/direct-only-full-rigid-local-history/camera-relative-double-compose/normal-guided-receiver/soft-local-signature-reset/visibility-transition-reset/representative-scoped-external-reactivity/explicit-emitter-domain/0.15-block-trail/2-frame-floor, lightListPolicy=position-matched-250ms-alias-trail/250ms-after-loss-minecraft-light-proxy-ownership/125ms+2-frame-unmatched-proxy-quarantine/3-cell-alias-radius/render-thread-owned-merge, motionHoldMs=250, denoiserPolicy=post-denoise-exact-local-hard-shadow+representative-gated-world+soft-local-signature-sable, sableSkyLightDiagnostic=transition-log/optional-freeze-getter, directDenoiserPasses={}, giDenoiserPasses={}, softShadows={}, combinedGi={}, splitGi={}",
                 properties.getRestirInitialSamples(),
                 20 * properties.getRestirInitialSamples(),
+                getDirectVisibilityLanes(),
                 properties.getRestirSpatialReuseSamples(),
                 properties.getRestirSpatialReuseRadius(),
                 denoiserPasses,
@@ -608,6 +642,17 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     public boolean isDirectEstimatorDiagnosticEnabled() {
         return isSourceHistoryDiagnosticEnabled()
                 && RestirDiagnostics.isDirectEstimatorEnabled();
+    }
+
+    public boolean isDirectEstimatorRankDiagnosticEnabled() {
+        return isDirectEstimatorDiagnosticEnabled()
+                && RestirDiagnostics.isDirectEstimatorRankEnabled();
+    }
+
+    public int getDirectVisibilityLanes() {
+        return isDirectEstimatorDiagnosticEnabled()
+                ? 1
+                : RestirDiagnostics.getDirectVisibilityLanes();
     }
 
     public boolean isIndirectSpatialReuseEnabled() {

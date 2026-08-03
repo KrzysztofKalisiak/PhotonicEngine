@@ -245,6 +245,79 @@ DirectProposalLayout direct_build_proposal_layout() {
     return proposal_layout;
 }
 
+void direct_sample_get_proposal_metadata(
+    DirectSample smple,
+    out int stratum,
+    out float expansion
+) {
+    stratum = 0;
+    expansion = 0.0f;
+    if (smple.light_index < 0 || smple.light_index >= light_list_size)
+        return;
+
+    DirectProposalLayout proposal_layout = direct_build_proposal_layout();
+    int priority_count = proposal_layout.priority_count;
+    int priority_samples = proposal_layout.priority_samples;
+    if (smple.light_index < priority_count) {
+        if (priority_samples <= 0) return;
+        stratum = 1;
+        expansion = float(priority_count) / float(priority_samples);
+        return;
+    }
+
+    int ordinary_index = smple.light_index - priority_count;
+    if (proposal_layout.stratum_count > 0) {
+        int light_start = 0;
+        for (int i = 0; i < ph_direct_rank_strata_max; i++) {
+            if (i >= proposal_layout.stratum_count) break;
+
+            int width = direct_layout_stratum_width(proposal_layout, i);
+            int samples = direct_layout_stratum_samples(proposal_layout, i);
+            if (ordinary_index < light_start + width) {
+                if (samples <= 0) return;
+                stratum = i + 2;
+                expansion = float(width) / float(samples);
+                return;
+            }
+            light_start += width;
+        }
+        return;
+    }
+
+    int camera_count = direct_camera_prefix_count();
+    int camera_samples = direct_camera_sample_count();
+    if (ordinary_index < camera_count) {
+        if (camera_samples <= 0) return;
+        stratum = 2;
+        expansion = float(camera_count) / float(camera_samples);
+        return;
+    }
+
+    int tail_count = proposal_layout.ordinary_count - camera_count;
+    int tail_samples = PH_RESTIR_INITIAL_SAMPLES
+        - priority_samples
+        - camera_samples;
+    if (ordinary_index < camera_count + tail_count && tail_samples > 0) {
+        stratum = 3;
+        expansion = float(tail_count) / float(tail_samples);
+    }
+}
+
+float direct_sample_encode_proposal_metadata(DirectSample smple) {
+    int stratum;
+    float expansion;
+    direct_sample_get_proposal_metadata(smple, stratum, expansion);
+    if (stratum <= 0 || expansion <= 0.0f)
+        return 0.0f;
+
+    float encoded_expansion = clamp(
+        log2(1.0f + expansion) / 16.0f,
+        0.0f,
+        0.999f
+    );
+    return float(stratum) + encoded_expansion;
+}
+
 bool direct_layout_uses_rank_strata(DirectProposalLayout proposal_layout) {
     return proposal_layout.stratum_count > 0;
 }

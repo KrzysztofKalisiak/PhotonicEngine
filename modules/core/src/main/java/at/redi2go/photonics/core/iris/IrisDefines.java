@@ -83,8 +83,17 @@ public class IrisDefines {
                 && RestirDiagnostics.isSourceHistoryEnabled();
         if (sourceHistoryDiagnostic)
             defines.stringDefine("PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC", "");
-        if (sourceHistoryDiagnostic && RestirDiagnostics.isDirectEstimatorEnabled())
+        boolean directEstimatorDiagnostic = sourceHistoryDiagnostic
+                && RestirDiagnostics.isDirectEstimatorEnabled();
+        if (directEstimatorDiagnostic)
             defines.stringDefine("PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC", "");
+        if (directEstimatorDiagnostic && RestirDiagnostics.isDirectEstimatorRankEnabled())
+            defines.stringDefine("PH_RESTIR_DIRECT_ESTIMATOR_RANK_DIAGNOSTIC", "");
+
+        defines.intDefine(
+                "PH_RESTIR_DIRECT_VISIBILITY_LANES",
+                directEstimatorDiagnostic ? 1 : RestirDiagnostics.getDirectVisibilityLanes()
+        );
 
         defines.intDefine("PH_MAX_SAMPLES",  phProperties.getMaxSamples());
     }

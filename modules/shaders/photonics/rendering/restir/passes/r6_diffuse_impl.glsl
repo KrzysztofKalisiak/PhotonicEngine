@@ -129,6 +129,9 @@ void main() {
         frag_geo_normal,
         frag_tex_normal
     );
+    float direct_proposal_metadata = direct_sample_encode_proposal_metadata(
+        direct_reservoir.smple
+    );
 #endif
     vec3 direct_lighting = direct_reservoir_get_final_color(
         direct_reservoir,
@@ -171,13 +174,10 @@ void main() {
         unshadowed_luminance = 0.0f;
     if (isnan(visible_luminance) || isinf(visible_luminance))
         visible_luminance = 0.0f;
-    float visibility_ratio = unshadowed_luminance > 0.000001f
-        ? clamp(visible_luminance / unshadowed_luminance, 0.0f, 1.0f)
-        : 0.0f;
     source_history_lighting = vec3(
         log2(1.0f + unshadowed_luminance),
         log2(1.0f + visible_luminance),
-        visibility_ratio
+        direct_proposal_metadata
     );
 #endif
 #endif

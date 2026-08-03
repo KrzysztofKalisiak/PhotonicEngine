@@ -1,6 +1,7 @@
 package at.redi2go.photonics.common.iris.pipeline.framebuffer;
 
 import at.redi2go.photonics.core.Photonics;
+import at.redi2go.photonics.core.iris.RestirDiagnostics;
 import at.redi2go.photonics.impl.mc.blaze3d.opengl.textures.IGlTexture;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
@@ -11,11 +12,14 @@ import org.lwjgl.opengl.GL45;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.Locale;
 
 final class ReservoirDiagnostics implements AutoCloseable {
     private static final String DIRECT_RESERVOIR = "restir_direct_reservoirs0";
-    private static final int SAMPLE_BYTES = 3 * Float.BYTES;
+    private static final String ESTIMATOR_SOURCE = "restir_local_lighting";
+    private static final int TEXTURE_SAMPLE_BYTES = 3 * Float.BYTES;
+    private static final int SAMPLE_BYTES = 2 * TEXTURE_SAMPLE_BYTES;
     private static final int SLOT_COUNT = 8;
     private static final int SAMPLE_FRAME_INTERVAL = 4;
     private static final int SAMPLE_GRID_WIDTH = 64;
@@ -26,6 +30,8 @@ final class ReservoirDiagnostics implements AutoCloseable {
     private static final long LOG_INTERVAL_NANOS = 5_000_000_000L;
     private static final float LEGACY_RESERVOIR_SAMPLE_CAP = 128.0f;
     private static final float TEMPORAL_RESERVOIR_SAMPLE_CAP = 640.0f;
+    private static final int ESTIMATOR_STRATUM_COUNT = 7;
+    private static final float ESTIMATOR_LIT_EPSILON = 0.000001f;
 
     private final Slot[] slots = new Slot[SLOT_COUNT];
 
@@ -46,6 +52,18 @@ final class ReservoirDiagnostics implements AutoCloseable {
     private float minimumTotalSamples = Float.POSITIVE_INFINITY;
     private float maximumTotalSamples = 0.0f;
 
+    private int estimatorSamples = 0;
+    private int estimatorLit = 0;
+    private int estimatorDark = 0;
+    private int estimatorVisible = 0;
+    private int estimatorRejected = 0;
+    private int estimatorImpossibleGain = 0;
+    private int estimatorMetadataInvalid = 0;
+    private final int[] estimatorSelectedByStratum = new int[ESTIMATOR_STRATUM_COUNT];
+    private final int[] estimatorRejectedByStratum = new int[ESTIMATOR_STRATUM_COUNT];
+    private float minimumProposalExpansion = Float.POSITIVE_INFINITY;
+    private float maximumProposalExpansion = 0.0f;
+
     ReservoirDiagnostics() {
         for (int i = 0; i < slots.length; i++)
             slots[i] = new Slot();
@@ -53,6 +71,10 @@ final class ReservoirDiagnostics implements AutoCloseable {
 
     void sampleCompletedFrame(SingleFramebuffer framebuffer) {
         var attachment = framebuffer.attachment(DIRECT_RESERVOIR);
+        var estimatorAttachment = RestirDiagnostics.isSourceHistoryEnabled()
+                && RestirDiagnostics.isDirectEstimatorEnabled()
+                ? framebuffer.attachment(ESTIMATOR_SOURCE)
+                : null;
         var size = framebuffer.currentSize();
         if (attachment == null || size.x() <= 0 || size.y() <= 0) return;
 
@@ -73,7 +95,15 @@ final class ReservoirDiagnostics implements AutoCloseable {
             int x = Math.min(size.x() - 1, ((2 * gridX + 1) * size.x()) / (2 * SAMPLE_GRID_WIDTH));
             int y = Math.min(size.y() - 1, ((2 * gridY + 1) * size.y()) / (2 * SAMPLE_GRID_HEIGHT));
 
-            submitSample(slot, ((IGlTexture) attachment.texture()).handle(), x, y);
+            submitSample(
+                    slot,
+                    ((IGlTexture) attachment.texture()).handle(),
+                    estimatorAttachment == null
+                            ? 0
+                            : ((IGlTexture) estimatorAttachment.texture()).handle(),
+                    x,
+                    y
+            );
         }
 
         logStatisticsIfReady();
@@ -116,19 +146,27 @@ final class ReservoirDiagnostics implements AutoCloseable {
                     if (data != null) {
                         data.order(ByteOrder.nativeOrder());
                         classify(data.getFloat(0), data.getFloat(Float.BYTES), data.getFloat(2 * Float.BYTES));
+                        if (slot.hasEstimatorSample) {
+                            classifyEstimator(
+                                    data.getFloat(TEXTURE_SAMPLE_BYTES),
+                                    data.getFloat(TEXTURE_SAMPLE_BYTES + Float.BYTES),
+                                    data.getFloat(TEXTURE_SAMPLE_BYTES + 2 * Float.BYTES)
+                            );
+                        }
                         GL15.glUnmapBuffer(GL21.GL_PIXEL_PACK_BUFFER);
                     }
                 }
 
                 GL32.glDeleteSync(slot.fence);
                 slot.fence = 0L;
+                slot.hasEstimatorSample = false;
             }
         } finally {
             GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, previousPixelPackBuffer);
         }
     }
 
-    private void submitSample(Slot slot, int texture, int x, int y) {
+    private void submitSample(Slot slot, int texture, int estimatorTexture, int x, int y) {
         int previousPixelPackBuffer = GL11.glGetInteger(GL21.GL_PIXEL_PACK_BUFFER_BINDING);
         try {
             GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, slot.pbo);
@@ -143,9 +181,26 @@ final class ReservoirDiagnostics implements AutoCloseable {
                     1,
                     GL11.GL_RGB,
                     GL11.GL_FLOAT,
-                    SAMPLE_BYTES,
+                    TEXTURE_SAMPLE_BYTES,
                     0L
             );
+            slot.hasEstimatorSample = estimatorTexture != 0;
+            if (slot.hasEstimatorSample) {
+                GL45.glGetTextureSubImage(
+                        estimatorTexture,
+                        0,
+                        x,
+                        y,
+                        0,
+                        1,
+                        1,
+                        1,
+                        GL11.GL_RGB,
+                        GL11.GL_FLOAT,
+                        TEXTURE_SAMPLE_BYTES,
+                        TEXTURE_SAMPLE_BYTES
+                );
+            }
             slot.fence = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
         } finally {
             GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, previousPixelPackBuffer);
@@ -191,6 +246,68 @@ final class ReservoirDiagnostics implements AutoCloseable {
         }
     }
 
+    private void classifyEstimator(float encodedUnshadowed, float encodedVisible, float metadata) {
+        estimatorSamples++;
+        if (!Float.isFinite(encodedUnshadowed)
+                || !Float.isFinite(encodedVisible)
+                || !Float.isFinite(metadata)
+                || encodedUnshadowed < 0.0f
+                || encodedVisible < 0.0f
+                || metadata < 0.0f) {
+            estimatorMetadataInvalid++;
+            return;
+        }
+
+        float unshadowed = decodeEstimatorLuminance(encodedUnshadowed);
+        float visible = decodeEstimatorLuminance(encodedVisible);
+        if (!Float.isFinite(unshadowed) || !Float.isFinite(visible)) {
+            estimatorMetadataInvalid++;
+            return;
+        }
+
+        if (unshadowed <= ESTIMATOR_LIT_EPSILON) {
+            estimatorDark++;
+            if (visible > ESTIMATOR_LIT_EPSILON)
+                estimatorImpossibleGain++;
+            return;
+        }
+
+        estimatorLit++;
+        boolean rejected = visible <= ESTIMATOR_LIT_EPSILON;
+        if (rejected)
+            estimatorRejected++;
+        else
+            estimatorVisible++;
+
+        if (visible > unshadowed + Math.max(0.0001f, unshadowed * 0.001f))
+            estimatorImpossibleGain++;
+
+        int stratum = (int) Math.floor(metadata + 0.0001f);
+        float encodedExpansion = metadata - stratum;
+        if (stratum <= 0
+                || stratum >= ESTIMATOR_STRATUM_COUNT
+                || encodedExpansion < -0.001f
+                || encodedExpansion >= 1.0f) {
+            estimatorMetadataInvalid++;
+            return;
+        }
+
+        float proposalExpansion = (float) Math.pow(
+                2.0,
+                Math.max(0.0f, encodedExpansion) * 16.0f
+        ) - 1.0f;
+        if (!Float.isFinite(proposalExpansion) || proposalExpansion <= 0.0f) {
+            estimatorMetadataInvalid++;
+            return;
+        }
+
+        estimatorSelectedByStratum[stratum]++;
+        if (rejected)
+            estimatorRejectedByStratum[stratum]++;
+        minimumProposalExpansion = Math.min(minimumProposalExpansion, proposalExpansion);
+        maximumProposalExpansion = Math.max(maximumProposalExpansion, proposalExpansion);
+    }
+
     private void logStatisticsIfReady() {
         long now = System.nanoTime();
         if (samples < MIN_LOG_SAMPLES || now - lastLogNanos < LOG_INTERVAL_NANOS) return;
@@ -211,6 +328,26 @@ final class ReservoirDiagnostics implements AutoCloseable {
                 sampledHeight
         );
 
+        if (estimatorSamples > 0) {
+            float minimumExpansion = minimumProposalExpansion == Float.POSITIVE_INFINITY
+                    ? 0.0f
+                    : minimumProposalExpansion;
+            Photonics.LOGGER.info(
+                    "Photonics direct estimator sample v107: samples={}, lit={}, darkOrBackground={}, visible={}, finalRejected={}, impossibleGain={}, metadataInvalid={}, selectedByStratum={}, rejectedByStratum={}, proposalExpansionRange={}..{}",
+                    estimatorSamples,
+                    estimatorLit,
+                    estimatorDark,
+                    estimatorVisible,
+                    estimatorRejected,
+                    estimatorImpossibleGain,
+                    estimatorMetadataInvalid,
+                    Arrays.toString(estimatorSelectedByStratum),
+                    Arrays.toString(estimatorRejectedByStratum),
+                    formatFloat(minimumExpansion),
+                    formatFloat(maximumProposalExpansion)
+            );
+        }
+
         resetStatistics();
         lastLogNanos = now;
     }
@@ -225,11 +362,26 @@ final class ReservoirDiagnostics implements AutoCloseable {
         overTemporalCap = 0;
         minimumTotalSamples = Float.POSITIVE_INFINITY;
         maximumTotalSamples = 0.0f;
+        estimatorSamples = 0;
+        estimatorLit = 0;
+        estimatorDark = 0;
+        estimatorVisible = 0;
+        estimatorRejected = 0;
+        estimatorImpossibleGain = 0;
+        estimatorMetadataInvalid = 0;
+        Arrays.fill(estimatorSelectedByStratum, 0);
+        Arrays.fill(estimatorRejectedByStratum, 0);
+        minimumProposalExpansion = Float.POSITIVE_INFINITY;
+        maximumProposalExpansion = 0.0f;
         lastLogNanos = System.nanoTime();
     }
 
     private static String formatFloat(float value) {
         return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static float decodeEstimatorLuminance(float encoded) {
+        return (float) Math.pow(2.0, Math.min(encoded, 16.0f)) - 1.0f;
     }
 
     @Override
@@ -253,5 +405,6 @@ final class ReservoirDiagnostics implements AutoCloseable {
     private static final class Slot {
         private int pbo = 0;
         private long fence = 0L;
+        private boolean hasEstimatorSample = false;
     }
 }

@@ -19,6 +19,10 @@ void main() {
 
     DirectReservoir reservoir = direct_reservoir_empty();
     float sample_weight = 0.0f;
+#if PH_RESTIR_DIRECT_VISIBILITY_LANES > 1
+    DirectReservoir secondary_reservoir = direct_reservoir_empty();
+    float secondary_sample_weight = 0.0f;
+#endif
     uint receiver_token = frag_data_sublevel_token(_frag_data);
 
     if (light_list_size > 0) {
@@ -82,11 +86,71 @@ void main() {
                 ? target_weight / proposal_probability
                 : 0.0f;
 
-            if (direct_reservoir_update(reservoir, smple, resampling_weight, 1.0f))
-                sample_weight = target_weight;
+#if PH_RESTIR_DIRECT_VISIBILITY_LANES > 1
+            if (i % 2 == 0) {
+                if (direct_reservoir_update(
+                        reservoir,
+                        smple,
+                        resampling_weight,
+                        1.0f
+                )) sample_weight = target_weight;
+            } else {
+                if (direct_reservoir_update(
+                        secondary_reservoir,
+                        smple,
+                        resampling_weight,
+                        1.0f
+                )) secondary_sample_weight = target_weight;
+            }
+#else
+            if (direct_reservoir_update(
+                    reservoir,
+                    smple,
+                    resampling_weight,
+                    1.0f
+            )) sample_weight = target_weight;
+#endif
         }
     }
 
+#if PH_RESTIR_DIRECT_VISIBILITY_LANES > 1
+    // Each lane estimates its disjoint subset of the original proposal batch.
+    // Visibility is sampled once per lane, then the finalized lane estimators
+    // are merged over their original combined M without changing proposal PDFs.
+    direct_reservoir_finalize_weight(reservoir, sample_weight);
+    direct_reservoir_finalize_weight(
+        secondary_reservoir,
+        secondary_sample_weight
+    );
+    direct_reservoir_validate_visiblity(
+        reservoir,
+        frag_rt_pos,
+        frag_geo_normal
+    );
+    direct_reservoir_validate_visiblity(
+        secondary_reservoir,
+        frag_rt_pos,
+        frag_geo_normal
+    );
+
+    DirectReservoir combined_reservoir = direct_reservoir_empty();
+    float combined_sample_weight = 0.0f;
+    direct_reservoir_merge_current_batch(
+        combined_reservoir,
+        reservoir,
+        combined_sample_weight
+    );
+    direct_reservoir_merge_current_batch(
+        combined_reservoir,
+        secondary_reservoir,
+        combined_sample_weight
+    );
+    direct_reservoir_finalize_weight(
+        combined_reservoir,
+        combined_sample_weight
+    );
+    reservoir = combined_reservoir;
+#else
     direct_reservoir_finalize_weight(reservoir, sample_weight);
     // The estimator diagnostic needs this exact selected reservoir before and
     // after one visibility test, so it defers validation to r6. Production
@@ -97,6 +161,7 @@ void main() {
         frag_rt_pos,
         frag_geo_normal
     );
+#endif
 #endif
     direct_reservoir_encode(reservoir, di_reservoir_0);
 }
