@@ -211,7 +211,7 @@ public class ShaderPatcher {
         return PhotonShaderCompatibility.apply(
                 path,
                 source,
-                pack.properties().isPhotonicsEnabled()
+                pack.supportsPhotonics()
         );
     }
 

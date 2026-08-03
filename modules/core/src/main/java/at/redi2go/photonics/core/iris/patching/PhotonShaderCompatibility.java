@@ -41,11 +41,12 @@ final class PhotonShaderCompatibility {
     static @Nullable String apply(
             IPackPath path,
             @Nullable String source,
-            boolean photonicsEnabled
+            boolean nativePhotonicsPack
     ) {
-        if (!photonicsEnabled
+        String normalizedPath = path.ph$pathString().replace('\\', '/');
+        if (!nativePhotonicsPack
                 || source == null
-                || !DIFFUSE_LIGHTING_PATH.equals(path.ph$pathString()))
+                || !normalizedPath.endsWith(DIFFUSE_LIGHTING_PATH))
             return source;
 
         String normalizedSource = normalizeNewlines(source);
@@ -53,8 +54,8 @@ final class PhotonShaderCompatibility {
         if (!SUPPORTED_DIFFUSE_LIGHTING_SHA256.equals(sourceHash)) {
             logOnce(
                     "unsupported:" + sourceHash,
-                    "Photon compatibility v117 skipped for {}: unsupported sha256={}",
-                    path.ph$pathString(),
+                    "Photon compatibility v118 skipped for {}: unsupported sha256={}",
+                    normalizedPath,
                     sourceHash
             );
             return source;
@@ -65,8 +66,8 @@ final class PhotonShaderCompatibility {
                 || normalizedSource.indexOf(CAVE_LIGHTING, firstMatch + CAVE_LIGHTING.length()) >= 0) {
             logOnce(
                     "ambiguous:" + sourceHash,
-                    "Photon compatibility v117 skipped for {}: cave-lighting block was not unique",
-                    path.ph$pathString()
+                    "Photon compatibility v118 skipped for {}: cave-lighting block was not unique",
+                    normalizedPath
             );
             return source;
         }
@@ -76,8 +77,10 @@ final class PhotonShaderCompatibility {
                 + normalizedSource.substring(firstMatch + CAVE_LIGHTING.length());
         logOnce(
                 "applied:" + sourceHash,
-                "Photon compatibility v117 applied to {}: native Photonics receivers use traced GI; Photon cave lighting remains enabled for DH receivers",
-                path.ph$pathString()
+                "Photon compatibility v118 applied to {}: sourceSha256={}, patchedSha256={}; native Photonics receivers use traced GI while Photon cave lighting remains enabled for DH receivers",
+                normalizedPath,
+                sourceHash,
+                sha256(patchedSource)
         );
         return patchedSource;
     }
