@@ -33,6 +33,7 @@ const float PH_UPSCALE_HISTORY_NORMAL_THRESHOLD = 0.95f;
 const float PH_UPSCALE_MIN_PLANE_DISTANCE = 1.0f / 64.0f;
 const float PH_UPSCALE_MAX_PLANE_DISTANCE = 1.0f / 32.0f;
 const float PH_UPSCALE_MAX_PRECISION_PLANE_DISTANCE = 1.0f / 4.0f;
+const float PH_UPSCALE_CARDINAL_SNAP_ALIGNMENT = 0.9999f;
 const float PH_UPSCALE_LEGACY_MAX_POSITION_DISTANCE_SQ = 9.0f;
 const float PH_HALF_MIN_NORMAL = 1.0f / 16384.0f;
 const float PH_UPSCALE_HISTORY_REVISION_STRIDE = 64.0f;
@@ -136,6 +137,25 @@ float ph_temporal_precision_plane_tolerance(
     );
 }
 
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+vec3 ph_temporal_dominant_axis(vec3 normal, out float alignment) {
+    vec3 absolute_normal = abs(normal);
+    vec3 axis = vec3(0.0f);
+    if (absolute_normal.x >= absolute_normal.y
+            && absolute_normal.x >= absolute_normal.z) {
+        axis.x = normal.x < 0.0f ? -1.0f : 1.0f;
+        alignment = absolute_normal.x;
+    } else if (absolute_normal.y >= absolute_normal.z) {
+        axis.y = normal.y < 0.0f ? -1.0f : 1.0f;
+        alignment = absolute_normal.y;
+    } else {
+        axis.z = normal.z < 0.0f ? -1.0f : 1.0f;
+        alignment = absolute_normal.z;
+    }
+    return axis;
+}
+#endif
+
 float ph_temporal_identity(int slot, uint token, bool hand) {
     uint slot_value = uint(slot + 1);
     uint value = token ^ (slot_value * 0x9e3779b9u)
@@ -199,32 +219,65 @@ bool ph_source_matches_surface(
         return false;
 
     float texture_normal_alignment = dot(source_tex_normal, tex_normal);
-    bool validate_texture_normal = true;
-    bool validate_receiver_plane = true;
-#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
-    // Lanes isolate the two hard gates: baseline, no texture normal, no plane,
-    // and neither gate. Domain and geometric-normal validation stay enabled.
-    validate_texture_normal = validation_lane != 1 && validation_lane != 3;
-    validate_receiver_plane = validation_lane != 2 && validation_lane != 3;
-#endif
-    if (validate_texture_normal
-            && texture_normal_alignment < PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD)
+    if (texture_normal_alignment < PH_UPSCALE_TEXTURE_NORMAL_THRESHOLD)
         return false;
 
+    vec3 position_delta = source_pos - player_pos;
+    float position_distance_sq = dot(position_delta, position_delta);
+    float plane_distance = max(
+        abs(dot(position_delta, source_normal)),
+        abs(dot(position_delta, geo_normal))
+    );
     float plane_tolerance = ph_temporal_precision_plane_tolerance(
         base_plane_tolerance,
         source_pos,
         source_normal,
         geo_normal
     );
-    vec3 position_delta = source_pos - player_pos;
-    float position_distance_sq = dot(position_delta, position_delta);
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+    // Every lane retains domain and normal validation. Only the plane equation
+    // changes, so a clean lane still has parallel-surface protection.
+    if (validation_lane == 1) {
+        plane_distance = abs(dot(position_delta, geo_normal));
+        plane_tolerance = ph_temporal_precision_plane_tolerance(
+            base_plane_tolerance,
+            source_pos,
+            geo_normal,
+            geo_normal
+        );
+    } else if (validation_lane >= 2) {
+        vec3 plane_normal = source_normal + geo_normal;
+        if (!ph_temporal_normalize(plane_normal))
+            return false;
 
-    float plane_distance = max(
-        abs(dot(position_delta, source_normal)),
-        abs(dot(position_delta, geo_normal))
-    );
-    if (validate_receiver_plane && plane_distance > plane_tolerance)
+        if (validation_lane == 3) {
+            float source_axis_alignment;
+            float receiver_axis_alignment;
+            vec3 source_axis = ph_temporal_dominant_axis(
+                source_normal,
+                source_axis_alignment
+            );
+            vec3 receiver_axis = ph_temporal_dominant_axis(
+                geo_normal,
+                receiver_axis_alignment
+            );
+            if (source_axis_alignment >= PH_UPSCALE_CARDINAL_SNAP_ALIGNMENT
+                    && receiver_axis_alignment
+                        >= PH_UPSCALE_CARDINAL_SNAP_ALIGNMENT
+                    && dot(source_axis, receiver_axis) > 0.5f)
+                plane_normal = receiver_axis;
+        }
+
+        plane_distance = abs(dot(position_delta, plane_normal));
+        plane_tolerance = ph_temporal_precision_plane_tolerance(
+            base_plane_tolerance,
+            source_pos,
+            plane_normal,
+            plane_normal
+        );
+    }
+#endif
+    if (plane_distance > plane_tolerance)
         return false;
 
     // Screen-neighboring rays can land arbitrarily far apart on a grazing

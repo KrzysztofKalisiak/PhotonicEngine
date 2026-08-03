@@ -359,31 +359,33 @@ accepted by receiver-plane validation that the old fixed three-block distance
 test would reject. Violet on distant or grazing coplanar terrain is expected;
 new violet bleeding across visibly different planes is not.
 
-### Source-validation lane diagnostic
+### Source-plane formulation diagnostic
 
-V110 can compare the remaining hard current-source validation gates in one
+V111 compares candidate current-source receiver-plane formulations in one
 capture. Start Minecraft with:
 
 ```text
 -Dphotonics.temporalUpscalerSourceValidationLanes=true
 ```
 
-The flag keeps the final temporal output visible and divides the screen into
-four equal vertical lanes, from left to right:
+The flag keeps the final temporal output visible. Domain, geometric-normal, and
+texture-normal validation remain enabled in every lane. The screen is divided
+into four equal vertical lanes, from left to right:
 
 | Lane | Current-source validation |
 | --- | --- |
-| 1 | V109 baseline: domain, geometric normal, texture normal, receiver plane |
-| 2 | Baseline without the texture-normal rejection |
-| 3 | Baseline without the receiver-plane rejection |
-| 4 | Domain and geometric normal only |
+| 1 | V110 baseline: maximum of source-plane and receiver-plane distance |
+| 2 | Receiver-plane distance only |
+| 3 | Distance to the normalized source/receiver normal bisector |
+| 4 | Cardinal-axis plane for axis-aligned block faces, otherwise the bisector |
 
-This is a diagnostic, not a quality mode. Lanes 2-4 can bleed lighting across
-normal-mapped details or parallel surfaces. Record a slow vertical camera sweep
-over a directly lit flat plane. A horizontal row that disappears in lane 2
-isolates the texture-normal gate; disappearance in lane 3 isolates the plane
-gate; disappearance only in lane 4 means both gates contribute. The property is
-read at startup and does not allocate the split-screen diagnostic attachment.
+V110 established that the hard plane gate causes the grazing-angle rows. V111
+tests formulations that still reject a source point on a distinct parallel
+surface. Record a slow vertical camera sweep without translating or yawing so
+the same surfaces remain in their lanes. Compare missing rows, edge bleeding,
+and lighting discontinuities at silhouettes and nearby parallel walls. The
+property is read at startup and does not allocate the split-screen diagnostic
+attachment.
 If both diagnostic properties are present, the source-validation lanes take
 precedence so a leftover split-screen argument cannot hide the final output.
 
