@@ -604,6 +604,48 @@ Do not combine the two-lane override with Runs A or B. v107 deliberately forces
 one lane during the estimator diagnostic so the unshadowed and visible values
 refer to one unchanged representative.
 
+## Test L: v108 Receiver-Plane Temporal History
+
+Use `photonics-v108-temporal-plane-history-mc1.21.1.jar`.
+
+Artifact SHA-256:
+`001995B78B14B739E4CE61CFFDDF017433D0A6D43BAAACE5FE167E2D70312C4B`.
+
+This build replaces the temporal upscaler's neighboring-history radial-depth
+comparison with a screen-ray/receiver-plane test. Material identity and normal
+validation remain enabled. The change targets the intermittent horizontal
+bands seen on distant or grazing direct-lit surfaces during vertical camera
+motion.
+
+### Run A: production behavior
+
+1. Remove all v107 diagnostic flags and use the same upscaler scale and shader
+   settings as the failing recording.
+2. Keep the Minecraft window size and resolution unchanged for every run. Do
+   not compare the earlier 942x780 and 1807x1032 recordings as a restart pair.
+3. Fully restart Minecraft, join the same world, wait for tracing to settle,
+   then hold the known distant-lit view for 15 seconds and slowly pitch the
+   camera up and down for 30 seconds. Repeat this from two more full restarts.
+4. Confirm the log contains
+   `historyValidation=screen-ray-receiver-plane-v108+normal+identity`.
+5. Check that distant lit roofs and walls no longer acquire coherent horizontal
+   lines. Also inspect silhouette edges for newly introduced history bleeding.
+
+### Run B: optional split-screen cause check
+
+Add only:
+
+```text
+-Dphotonics.temporalUpscalerSplitScreen=true
+```
+
+Repeat the strongest vertical-pitch view. In the lower-left state panel, cyan
+marks history taps accepted by the receiver-plane test that the old radial
+test would have rejected. Cyan on stable distant/sloped surfaces is expected.
+Coherent red or orange rows there still indicate lost or bootstrap history and
+should be reported with their exact timestamps. The top-right and bottom-right
+panels should remain free of the original lines.
+
 ## Reporting
 
 Name each result with the jar and test, for example
