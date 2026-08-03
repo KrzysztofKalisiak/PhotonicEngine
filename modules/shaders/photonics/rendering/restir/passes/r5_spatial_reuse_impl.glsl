@@ -56,13 +56,13 @@ int ph_spatial_continuity_lane(ivec2 texture_size) {
         / float(max(texture_size.x, 1));
     return clamp(int(floor(normalized_x * 4.0f)), 0, 3);
 #else
-    return 0;
+    return 3;
 #endif
 }
 
-bool ph_spatial_current_receiver_can_reuse(bool allow_bad_angle) {
+bool ph_spatial_current_receiver_can_reuse(bool continuous_spatial) {
     if (frag_is_hand
-            || (!allow_bad_angle && frag_is_bad_angle)
+            || (!continuous_spatial && frag_is_bad_angle)
             || !ph_spatial_is_finite(frag_geo_normal)
             || !ph_spatial_is_finite(frag_player_pos))
         return false;
@@ -83,12 +83,12 @@ bool ph_spatial_current_receiver_can_reuse(bool allow_bad_angle) {
 
 bool ph_spatial_receiver_matches(
     FragData sample_frag,
-    bool allow_bad_angle
+    bool continuous_spatial
 ) {
     bool sample_bad_angle = frag_data_is_bad_angle(sample_frag);
     if (!frag_data_is_in_world(sample_frag)
             || frag_data_is_hand(sample_frag)
-            || (!allow_bad_angle && sample_bad_angle))
+            || (!continuous_spatial && sample_bad_angle))
         return false;
 
     if (frag_data_sublevel_slot(sample_frag)
@@ -107,21 +107,28 @@ bool ph_spatial_receiver_matches(
         return false;
 
     vec3 position_delta = sample_position - frag_player_pos;
-    bool relax_bad_angle_position = allow_bad_angle
-        && (frag_is_bad_angle || sample_bad_angle);
-    if (!relax_bad_angle_position) {
+    float plane_distance = max(
+        abs(dot(position_delta, frag_geo_normal)),
+        abs(dot(position_delta, sample_normal))
+    );
+    if (!continuous_spatial) {
         if (dot(position_delta, position_delta)
                 >= ph_spatial_max_receiver_distance_sq)
             return false;
 
-        float plane_distance = max(
-            abs(dot(position_delta, frag_geo_normal)),
-            abs(dot(position_delta, sample_normal))
-        );
-        if (plane_distance > ph_spatial_max_plane_distance)
-            return false;
+        return plane_distance <= ph_spatial_max_plane_distance;
     }
-    return true;
+
+    // A bounded screen-space neighbor can be many blocks away laterally on a
+    // grazing plane. Keep receiver-plane validation, including RGBA16F
+    // position precision, but do not impose the invalid lateral cutoff.
+    return plane_distance <= ph_restir_precision_plane_tolerance(
+        ph_spatial_max_plane_distance,
+        sample_position,
+        frag_player_pos,
+        sample_normal,
+        frag_geo_normal
+    );
 }
 
 #if defined PH_ENABLE_BLOCKLIGHT
@@ -366,10 +373,10 @@ void main() {
     int spatial_continuity_lane = ph_spatial_continuity_lane(
         spatial_texture_size
     );
-    bool allow_direct_bad_angle = spatial_continuity_lane >= 2;
+    bool continuous_direct_spatial = spatial_continuity_lane >= 2;
 #if defined PH_ENABLE_BLOCKLIGHT
     bool direct_spatial_receiver_can_reuse =
-        ph_spatial_current_receiver_can_reuse(allow_direct_bad_angle);
+        ph_spatial_current_receiver_can_reuse(continuous_direct_spatial);
 #endif
 #if defined PH_ENABLE_RESTIR_GI
     bool indirect_spatial_receiver_can_reuse =
@@ -396,7 +403,7 @@ void main() {
         frag_data_load(sample_frag, sample_texel);
         if (!ph_spatial_receiver_matches(
                 sample_frag,
-                allow_direct_bad_angle
+                continuous_direct_spatial
         )) continue;
 
 #if PH_RESTIR_SPATIAL_REUSE_SAMPLES > 0

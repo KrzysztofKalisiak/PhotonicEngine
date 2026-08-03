@@ -361,30 +361,38 @@ new violet bleeding across visibly different planes is not.
 
 ### Bad-angle continuity diagnostic
 
-V112 isolates the two discontinuities at Photonics' grazing-angle receiver
-cutoff. Start Minecraft with:
+V113 keeps current low-resolution source validation strict and isolates the
+remaining internal ReSTIR history cutoff from direct spatial reuse. Start
+Minecraft with:
 
 ```text
 -Dphotonics.temporalUpscalerSourceValidationLanes=true
 ```
 
 The flag keeps the final temporal output visible and divides the screen into
-four equal vertical lanes, from left to right:
+four equal vertical lanes, from left to right. It does not draw separators or
+labels; the quarters differ only where one of the tested policies affects the
+lighting:
 
-| Lane | Upscaler plane at bad angle | Direct spatial reuse at bad angle |
+| Lane | Internal ReSTIR history | Direct spatial reuse |
 | --- | --- | --- |
-| 1 | Strict V111 baseline | Disabled |
-| 2 | Relaxed; domain and both normal gates remain | Disabled |
-| 3 | Strict V111 baseline | Restored with current visibility revalidation |
-| 4 | Relaxed; domain and both normal gates remain | Restored |
+| 1 | Upstream 16-block/bad-angle switch | Disabled at bad angle |
+| 2 | Continuous precision-aware receiver plane | Disabled at bad angle |
+| 3 | Upstream 16-block/bad-angle switch | Continuous receiver plane plus current visibility |
+| 4 | Continuous precision-aware receiver plane | Continuous receiver plane plus current visibility |
 
-At ordinary viewing angles all four lanes use identical validation. The direct
-spatial change deliberately does not affect indirect GI. Record a slow vertical
-camera sweep over the visible row and inspect both continuity and new leakage
-around silhouettes. Lane 2 isolates reconstruction, lane 3 isolates the
-low-resolution ReSTIR input, and lane 4 tests the combined production candidate.
-The property is read at startup and does not allocate the split-screen
-diagnostic attachment.
+All four lanes use the same strict domain, normal, and precision-aware receiver
+plane validation when reconstructing the current low-resolution source. V112
+showed that dropping that plane check can import bright lighting from a different
+coplanar-looking receiver, so that relaxed path is no longer a candidate.
+
+The direct-spatial change deliberately does not affect indirect GI. Record a
+slow vertical camera sweep over the visible row and inspect continuity around
+the 16-block grazing boundary. A defect absent in lanes 2 and 4 implicates
+internal temporal/accumulation history; one absent in lanes 3 and 4 implicates
+direct spatial reuse; one absent only in lane 4 requires both changes. With the
+property absent, v113 uses the lane-4 production candidate. The property is read
+at startup and does not allocate the split-screen diagnostic attachment.
 If both diagnostic properties are present, the source-validation lanes take
 precedence so a leftover split-screen argument cannot hide the final output.
 

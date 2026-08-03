@@ -42,10 +42,6 @@ const float PH_UPSCALE_MAX_FRAME_TIME = 1.0f / 15.0f;
 const float PH_UPSCALE_HDR_LIMIT_MOTION_RATE_START = 0.5f;
 const float PH_UPSCALE_HDR_LIMIT_MOTION_RATE_END = 4.0f;
 
-#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
-bool ph_temporal_receiver_bad_angle = false;
-#endif
-
 float ph_temporal_encode_history_age(float age) {
     return float(ph_world_revision_slot) * PH_UPSCALE_HISTORY_REVISION_STRIDE
         + clamp(age, 1.0f, 32.0f);
@@ -84,24 +80,6 @@ bool ph_temporal_normalize(inout vec3 value) {
     value *= inversesqrt(length_sq);
     return ph_temporal_finite_vec3(value);
 }
-
-#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
-bool ph_temporal_is_bad_angle(vec3 player_pos, vec3 normal) {
-    vec3 rt_pos = player_pos + rt_camera_position;
-    float distance_from_camera = distance(
-        floor(rt_pos),
-        floor(rt_camera_position)
-    );
-    float view_distance_sq = dot(player_pos, player_pos);
-    if (distance_from_camera <= 16.0f || view_distance_sq <= 1e-8f)
-        return false;
-
-    return dot(
-        normal,
-        player_pos * inversesqrt(view_distance_sq)
-    ) > -0.2f;
-}
-#endif
 
 float ph_temporal_base_plane_tolerance(
     ivec2 source_size,
@@ -236,22 +214,12 @@ bool ph_source_matches_surface(
         source_normal,
         geo_normal
     );
-#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
-    // Lanes 2 and 4 acknowledge the same grazing-angle position instability
-    // that Photonics already records in FragData. Domain and both normal gates
-    // remain active; only the unreliable hard plane rejection is bypassed.
-    bool relax_bad_angle_plane = validation_lane == 1
-        || validation_lane == 3;
-    bool bad_angle_pair = ph_temporal_receiver_bad_angle
-        || frag_data_is_bad_angle(source_frag);
-    if (!relax_bad_angle_plane || !bad_angle_pair) {
-        if (plane_distance > plane_tolerance)
-            return false;
-    }
-#else
+    // V112 proved that dropping this check at a grazing angle can import a
+    // bright source texel from a different receiver. Keep current-source
+    // validation identical in every diagnostic lane; v113 varies only the
+    // internal ReSTIR history and direct-spatial policies.
     if (plane_distance > plane_tolerance)
         return false;
-#endif
 
     // Screen-neighboring rays can land arbitrarily far apart on a grazing
     // plane. A fixed world-distance cutoff therefore removes valid rows from
@@ -1002,13 +970,6 @@ void main() {
             || !ph_temporal_normalize(geo_normal)
             || !ph_temporal_normalize(tex_normal))
         return;
-
-#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
-    ph_temporal_receiver_bad_angle = ph_temporal_is_bad_angle(
-        player_pos,
-        geo_normal
-    );
-#endif
 
     bool hand = is_hand_at();
     vec3 classified_previous_player_pos = player_pos;

@@ -54,6 +54,98 @@ const SampleHistory INVALID_HISTORY = SampleHistory(
     vec4(INVALID_SAMPLE_COMPONENT)
 );
 const float PH_HISTORY_POSITION_ERROR_SQ = 0.3f;
+const float PH_HISTORY_BASE_PLANE_DISTANCE = 1.0f / 32.0f;
+const float PH_HISTORY_MAX_PRECISION_PLANE_DISTANCE = 0.5f;
+const float PH_HISTORY_HALF_MIN_NORMAL = 1.0f / 16384.0f;
+
+int ph_restir_continuity_lane(ivec2 texture_size) {
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+    float normalized_x = (float(frag_tex_coord.x) + 0.5f)
+        / float(max(texture_size.x, 1));
+    return clamp(int(floor(normalized_x * 4.0f)), 0, 3);
+#else
+    // Production v113 uses continuous history and direct spatial reuse.
+    return 3;
+#endif
+}
+
+bool ph_restir_use_continuous_history(ivec2 texture_size) {
+    int lane = ph_restir_continuity_lane(texture_size);
+    return lane == 1 || lane == 3;
+}
+
+float ph_restir_half_component_rounding_bound(float stored_component) {
+    float magnitude = max(
+        abs(stored_component),
+        PH_HISTORY_HALF_MIN_NORMAL
+    );
+    uint exponent_bits = (
+        floatBitsToUint(magnitude) >> 23u
+    ) & 0xffu;
+    int exponent = int(exponent_bits) - 127;
+    return exp2(float(exponent - 11));
+}
+
+vec3 ph_restir_half_position_rounding_bound(vec3 stored_position) {
+    return vec3(
+        ph_restir_half_component_rounding_bound(stored_position.x),
+        ph_restir_half_component_rounding_bound(stored_position.y),
+        ph_restir_half_component_rounding_bound(stored_position.z)
+    );
+}
+
+float ph_restir_precision_plane_tolerance(
+    float base_tolerance,
+    vec3 stored_position,
+    vec3 expected_position,
+    vec3 stored_normal,
+    vec3 expected_normal
+) {
+    // Both positions originate in RGBA16F fragment attachments. Account for
+    // the worst projected round-to-nearest error from both endpoints.
+    vec3 component_error = ph_restir_half_position_rounding_bound(
+        stored_position
+    ) + ph_restir_half_position_rounding_bound(expected_position);
+    float stored_normal_error = dot(abs(stored_normal), component_error);
+    float expected_normal_error = dot(abs(expected_normal), component_error);
+    return min(
+        PH_HISTORY_MAX_PRECISION_PLANE_DISTANCE,
+        base_tolerance + max(stored_normal_error, expected_normal_error)
+    );
+}
+
+bool ph_restir_history_surface_matches(
+    FragData previous_frag,
+    vec3 expected_previous_position,
+    vec3 expected_previous_normal,
+    bool continuous_history,
+    float legacy_position_error_sq
+) {
+    vec3 previous_normal = frag_data_geo_normal(previous_frag);
+    if (dot(previous_normal, expected_previous_normal) < 0.99f)
+        return false;
+
+    vec3 previous_position = frag_data_player_pos(previous_frag);
+    vec3 position_delta = previous_position - expected_previous_position;
+    if (!continuous_history) {
+        // Preserve the upstream rule in diagnostic lanes 1 and 3.
+        return frag_is_bad_angle
+            || dot(position_delta, position_delta)
+                < legacy_position_error_sq;
+    }
+
+    float plane_distance = max(
+        abs(dot(position_delta, previous_normal)),
+        abs(dot(position_delta, expected_previous_normal))
+    );
+    return plane_distance <= ph_restir_precision_plane_tolerance(
+        PH_HISTORY_BASE_PLANE_DISTANCE,
+        previous_position,
+        expected_previous_position,
+        previous_normal,
+        expected_previous_normal
+    );
+}
 
 bool sample_history_is_valid(SampleHistory history) {
     return history.lighting.x != INVALID_SAMPLE_COMPONENT;
@@ -102,15 +194,16 @@ SampleHistory sample_history_reproject_single(
     if (!frag_data_is_in_world(prev_frag)) return INVALID_HISTORY;
     if (frag_data_sublevel_token(prev_frag) != sublevel_token) return INVALID_HISTORY;
 
-    if (!frag_is_bad_angle) {
-        vec3 projected_player_pos = frag_data_player_pos(prev_frag);
-        vec3 d = projected_player_pos - previous_player_pos;
-
-        if (dot(d, d) > distance_factor) return INVALID_HISTORY;
-    }
-
-    vec3 n = frag_data_geo_normal(prev_frag);
-    if (dot(n, expected_previous_normal) < 0.99f) return INVALID_HISTORY;
+    bool continuous_history = ph_restir_use_continuous_history(
+        history_size
+    );
+    if (!ph_restir_history_surface_matches(
+            prev_frag,
+            previous_player_pos,
+            expected_previous_normal,
+            continuous_history,
+            distance_factor
+    )) return INVALID_HISTORY;
 
     vec4 lighting = texelFetch(prev_restir_lighting, ivec2(texel), 0);
     if (any(isnan(lighting)) || any(isinf(lighting))) return INVALID_HISTORY;
@@ -209,13 +302,13 @@ bool sample_history_reproject_nearest_texel(out ivec2 texel) {
     if (!frag_data_is_in_world(prev_frag)) return false;
     if (frag_data_sublevel_token(prev_frag) != sublevel_token) return false;
 
-    if (!frag_is_bad_angle) {
-        vec3 projected_player_pos = frag_data_player_pos(prev_frag);
-        vec3 d = projected_player_pos - previous_player_pos;
-        if (dot(d, d) >= PH_HISTORY_POSITION_ERROR_SQ) return false;
-    }
-
-    return dot(frag_data_geo_normal(prev_frag), expected_previous_normal) >= 0.99f;
+    return ph_restir_history_surface_matches(
+        prev_frag,
+        previous_player_pos,
+        expected_previous_normal,
+        ph_restir_use_continuous_history(history_size),
+        PH_HISTORY_POSITION_ERROR_SQ
+    );
 }
 
 const int DIRECT_HISTORY_UNKNOWN = 0;

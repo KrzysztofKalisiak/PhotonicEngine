@@ -561,13 +561,13 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
         if (TemporalUpscalerDiagnostics.isSourceValidationLanesEnabled()) {
             Photonics.LOGGER.warn(
-                    "Photonics bad-angle continuity lanes enabled via -D{}=true; lanes=strict-plane+spatial-off|relaxed-plane+spatial-off|strict-plane+direct-spatial|relaxed-plane+direct-spatial; domain/normal gates and direct visibility revalidation remain enabled; indirect spatial policy is unchanged",
+                    "Photonics v113 bad-angle continuity lanes enabled via -D{}=true; lanes=legacy-history+spatial-off|plane-history+spatial-off|legacy-history+direct-spatial|plane-history+direct-spatial; current-source receiver-plane validation is strict in every lane; direct spatial candidates retain receiver-plane and current-visibility validation; indirect spatial policy is unchanged",
                     TemporalUpscalerDiagnostics.SOURCE_VALIDATION_LANES_PROPERTY
             );
         }
 
         Photonics.LOGGER.info(
-            "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, sourceValidation=screen-neighbor-domain+normal+receiver-plane-v112/bad-angle-continuity-lanes, sourceValidationLanes={}, historyValidation=screen-ray-receiver-plane-v108+normal+identity, historyWorldRevisionPolicy=local-reactive, sparseSupportPolicy=history-stable, composition=private-lighting-texture",
+            "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, sourceValidation=screen-neighbor-domain+normal+strict-precision-receiver-plane-v113, sourceValidationLanes={}, historyValidation=screen-ray-receiver-plane-v108+normal+identity, restirHistoryValidation=legacy-or-continuous-precision-plane-v113, historyWorldRevisionPolicy=local-reactive, sparseSupportPolicy=history-stable, composition=private-lighting-texture",
                 properties.getTemporalUpscalerSourceScale(),
                 properties.getRenderScale(),
                 properties.getGiRenderScale(),
