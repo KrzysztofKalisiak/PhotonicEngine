@@ -259,6 +259,8 @@ vec3 ph_temporal_diagnostic_state(vec4 diagnostic) {
         state_color = vec3(1.00f, 0.90f, 0.02f);
     else if (mode == 6u)
         state_color = vec3(0.02f, 0.95f, 1.00f);
+    else if (mode == 7u)
+        state_color = vec3(0.70f, 0.08f, 1.00f);
     else
         state_color = vec3(0.05f, 1.00f, 0.15f);
 

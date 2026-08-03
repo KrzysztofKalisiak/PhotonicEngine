@@ -67,6 +67,13 @@ projected source position. A source texel participates only when:
 - its geometric and texture normals agree with the output surface;
 - its reconstructed position is close to the output surface plane.
 
+There is deliberately no fixed world-space distance cutoff between an output
+receiver and a neighboring source texel. Screen-adjacent perspective rays can
+land arbitrarily far apart on a grazing plane, so a fixed cutoff creates
+horizontal holes near the horizon. Receiver domain, normals, and the two-sided
+plane test establish compatibility; lateral distance remains only a candidate
+ranking signal for the bounded fallback search.
+
 The geometric base tolerance scales from 1/64 block at equal resolution toward
 1/32 block as source resolution decreases. The fetched candidate position,
 however, came through the RGBA16F `ph_frag_data0` attachment. Its effective
@@ -345,6 +352,12 @@ upscaler. A stable top-left with a flashing top-right isolates reconstruction;
 a stable top-right with a flashing bottom-right implicates the final limiter or
 later sampling. If all three radiance views are stable while the composed game
 image flashes, investigate shaderpack exposure, bloom, or later composition.
+
+V108 adds cyan for history accepted by receiver-plane validation that the old
+radial-depth test would reject. V109 adds violet for current source samples
+accepted by receiver-plane validation that the old fixed three-block distance
+test would reject. Violet on distant or grazing coplanar terrain is expected;
+new violet bleeding across visibly different planes is not.
 
 ## Expected Performance
 

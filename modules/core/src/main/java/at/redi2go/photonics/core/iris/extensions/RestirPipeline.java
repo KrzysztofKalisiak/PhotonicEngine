@@ -560,7 +560,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         }
 
         Photonics.LOGGER.info(
-            "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, historyValidation=screen-ray-receiver-plane-v108+normal+identity, historyWorldRevisionPolicy=local-reactive, sparseSupportPolicy=history-stable, composition=private-lighting-texture",
+            "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, sourceValidation=screen-neighbor-domain+normal+receiver-plane-v109/no-fixed-world-distance, historyValidation=screen-ray-receiver-plane-v108+normal+identity, historyWorldRevisionPolicy=local-reactive, sparseSupportPolicy=history-stable, composition=private-lighting-texture",
                 properties.getTemporalUpscalerSourceScale(),
                 properties.getRenderScale(),
                 properties.getGiRenderScale(),

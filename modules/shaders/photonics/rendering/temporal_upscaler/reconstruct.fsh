@@ -24,6 +24,7 @@ const uint PH_TEMPORAL_DIAGNOSTIC_ENVELOPE = 3u;
 const uint PH_TEMPORAL_DIAGNOSTIC_NEAREST_HISTORY = 4u;
 const uint PH_TEMPORAL_DIAGNOSTIC_BILINEAR_HISTORY = 5u;
 const uint PH_TEMPORAL_DIAGNOSTIC_PLANE_HISTORY = 6u;
+const uint PH_TEMPORAL_DIAGNOSTIC_EXTENDED_PLANE_SOURCE = 7u;
 #endif
 
 const float PH_UPSCALE_NORMAL_THRESHOLD = 0.85f;
@@ -32,7 +33,7 @@ const float PH_UPSCALE_HISTORY_NORMAL_THRESHOLD = 0.95f;
 const float PH_UPSCALE_MIN_PLANE_DISTANCE = 1.0f / 64.0f;
 const float PH_UPSCALE_MAX_PLANE_DISTANCE = 1.0f / 32.0f;
 const float PH_UPSCALE_MAX_PRECISION_PLANE_DISTANCE = 1.0f / 4.0f;
-const float PH_UPSCALE_MAX_POSITION_DISTANCE_SQ = 9.0f;
+const float PH_UPSCALE_LEGACY_MAX_POSITION_DISTANCE_SQ = 9.0f;
 const float PH_HALF_MIN_NORMAL = 1.0f / 16384.0f;
 const float PH_UPSCALE_HISTORY_REVISION_STRIDE = 64.0f;
 const float PH_UPSCALE_HDR_GROWTH_RATE = 4.0f;
@@ -170,9 +171,11 @@ bool ph_source_matches_surface(
     int receiver_slot,
     uint receiver_token,
     float base_plane_tolerance,
-    out float score
+    out float score,
+    out bool extended_plane_match
 ) {
     score = -1e30f;
+    extended_plane_match = false;
     if (!frag_data_is_in_world(source_frag)
             || frag_data_is_hand(source_frag) != hand
             || !ph_source_matches_receiver_domain(
@@ -206,8 +209,6 @@ bool ph_source_matches_surface(
     );
     vec3 position_delta = source_pos - player_pos;
     float position_distance_sq = dot(position_delta, position_delta);
-    if (position_distance_sq > PH_UPSCALE_MAX_POSITION_DISTANCE_SQ)
-        return false;
 
     float plane_distance = max(
         abs(dot(position_delta, source_normal)),
@@ -216,6 +217,12 @@ bool ph_source_matches_surface(
     if (plane_distance > plane_tolerance)
         return false;
 
+    // Screen-neighboring rays can land arbitrarily far apart on a grazing
+    // plane. A fixed world-distance cutoff therefore removes valid rows from
+    // the low-resolution source. Domain, normal, and bidirectional plane
+    // validation identify the receiver; distance only ranks fallback taps.
+    extended_plane_match = position_distance_sq
+        > PH_UPSCALE_LEGACY_MAX_POSITION_DISTANCE_SQ;
     score = normal_alignment * 8.0f
         + texture_normal_alignment * 2.0f
         - plane_distance * 16.0f
@@ -239,11 +246,13 @@ bool ph_find_source_receiver(
     int receiver_slot,
     uint receiver_token,
     float base_plane_tolerance,
-    out ivec2 best_texel
+    out ivec2 best_texel,
+    out bool best_extended_plane_match
 ) {
     ivec2 base_texel = ivec2(floor(source_position));
     float best_score = -1e30f;
     bool found = false;
+    best_extended_plane_match = false;
 
     for (int y = 0; y <= 1; y++) {
         for (int x = 0; x <= 1; x++) {
@@ -256,6 +265,7 @@ bool ph_find_source_receiver(
             frag_data_load(candidate, texel);
 
             float score;
+            bool extended_plane_match;
             if (!ph_source_matches_surface(
                     candidate,
                     player_pos,
@@ -265,7 +275,8 @@ bool ph_find_source_receiver(
                     receiver_slot,
                     receiver_token,
                     base_plane_tolerance,
-                    score
+                    score,
+                    extended_plane_match
             )) continue;
 
             vec2 pixel_delta = vec2(texel) - source_position;
@@ -274,6 +285,7 @@ bool ph_find_source_receiver(
                 found = true;
                 best_score = score;
                 best_texel = texel;
+                best_extended_plane_match = extended_plane_match;
             }
         }
     }
@@ -293,6 +305,7 @@ bool ph_find_source_receiver(
             frag_data_load(candidate, texel);
 
             float score;
+            bool extended_plane_match;
             if (!ph_source_matches_surface(
                     candidate,
                     player_pos,
@@ -302,7 +315,8 @@ bool ph_find_source_receiver(
                     receiver_slot,
                     receiver_token,
                     base_plane_tolerance,
-                    score
+                    score,
+                    extended_plane_match
             )) continue;
 
             vec2 pixel_delta = vec2(texel) - source_position;
@@ -311,6 +325,7 @@ bool ph_find_source_receiver(
                 found = true;
                 best_score = score;
                 best_texel = texel;
+                best_extended_plane_match = extended_plane_match;
             }
         }
     }
@@ -334,9 +349,11 @@ bool ph_reconstruct_current(
     out vec3 neighborhood_max,
     out float support,
     out float tap_count,
-    out float bright_tap_coherence
+    out float bright_tap_coherence,
+    out bool used_extended_plane_match
 ) {
     ivec2 best_texel;
+    bool best_extended_plane_match;
     if (!ph_find_source_receiver(
             source_position,
             source_size,
@@ -347,7 +364,8 @@ bool ph_reconstruct_current(
             receiver_slot,
             receiver_token,
             base_plane_tolerance,
-            best_texel
+            best_texel,
+            best_extended_plane_match
     )) return false;
 
     ivec2 base_texel = ivec2(floor(source_position));
@@ -358,6 +376,7 @@ bool ph_reconstruct_current(
     support = 0.0f;
     tap_count = 0.0f;
     bright_tap_coherence = 0.0f;
+    used_extended_plane_match = false;
     float weight_sum = 0.0f;
     float brightest_luma = 0.0f;
     float second_brightest_luma = 0.0f;
@@ -373,6 +392,7 @@ bool ph_reconstruct_current(
             frag_data_load(candidate, texel);
 
             float unused_score;
+            bool extended_plane_match;
             if (!ph_source_matches_surface(
                     candidate,
                     player_pos,
@@ -382,7 +402,8 @@ bool ph_reconstruct_current(
                     receiver_slot,
                     receiver_token,
                     base_plane_tolerance,
-                    unused_score
+                    unused_score,
+                    extended_plane_match
             ))
                 continue;
 
@@ -402,6 +423,8 @@ bool ph_reconstruct_current(
             neighborhood_max = max(neighborhood_max, source.rgb);
             weight_sum += weight;
             tap_count += 1.0f;
+            used_extended_plane_match = used_extended_plane_match
+                || extended_plane_match;
 
             float source_luma = dot(
                 source.rgb,
@@ -444,6 +467,7 @@ bool ph_reconstruct_current(
     support = 0.0f;
     tap_count = 1.0f;
     bright_tap_coherence = 0.0f;
+    used_extended_plane_match = best_extended_plane_match;
     return true;
 }
 
@@ -978,6 +1002,7 @@ void main() {
     float source_support;
     float source_tap_count;
     float source_bright_tap_coherence;
+    bool current_used_extended_plane_match;
     if (!ph_reconstruct_current(
             source_position,
             source_size,
@@ -994,7 +1019,8 @@ void main() {
             neighborhood_max,
             source_support,
             source_tap_count,
-            source_bright_tap_coherence
+            source_bright_tap_coherence,
+            current_used_extended_plane_match
     )) return;
 
     float current_luma = ph_luminance(current_radiance);
@@ -1111,6 +1137,10 @@ void main() {
 #endif
             );
         }
+#ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
+        if (current_used_extended_plane_match)
+            diagnostic_mode = PH_TEMPORAL_DIAGNOSTIC_EXTENDED_PLANE_SOURCE;
+#endif
         temporal_lighting_out = vec4(
             bootstrap_radiance,
             ph_temporal_encode_history_age(1.0f)
@@ -1302,11 +1332,13 @@ void main() {
 #ifdef PH_TEMPORAL_UPSCALER_SPLIT_SCREEN
     ph_write_temporal_diagnostic(
         diagnostic_pre_limiter_radiance,
-        history_used_plane_validation
-            ? PH_TEMPORAL_DIAGNOSTIC_PLANE_HISTORY
-            : (history_used_nearest_fallback
-                ? PH_TEMPORAL_DIAGNOSTIC_NEAREST_HISTORY
-                : PH_TEMPORAL_DIAGNOSTIC_BILINEAR_HISTORY),
+        current_used_extended_plane_match
+            ? PH_TEMPORAL_DIAGNOSTIC_EXTENDED_PLANE_SOURCE
+            : (history_used_plane_validation
+                ? PH_TEMPORAL_DIAGNOSTIC_PLANE_HISTORY
+                : (history_used_nearest_fallback
+                    ? PH_TEMPORAL_DIAGNOSTIC_NEAREST_HISTORY
+                    : PH_TEMPORAL_DIAGNOSTIC_BILINEAR_HISTORY)),
         current_confidence,
         diagnostic_limiter_strength,
         ph_temporal_limiter_materially_changed(
