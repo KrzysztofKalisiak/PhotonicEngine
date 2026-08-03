@@ -22,3 +22,6 @@ last settings used:
 
 -Dphotonics.renderScaleOverride=0.75 -Dphotonics.giRenderScaleOverride=0.5 -Dphotonics.restirInitialSamplesOverride=32 -Dphotonics.restirDenoiserPassesOverride=5 -Dphotonics.restirGiDenoiserPassesOverride=3 -Dphotonics.temporalUpscalerOverride=true -Dphotonics.temporalUpscalerSourceScaleOverride=0.5
 -Dphotonics.restirDirectVisibilityLanesOverride=2
+
+
+-Dphotonics.temporalUpscalerSourceValidationLanes=true
