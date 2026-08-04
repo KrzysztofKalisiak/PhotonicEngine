@@ -1,0 +1,15 @@
+Manifest-Version: 1.0
+Class-Path: common-0.4.0-dev.jar photonics-mc-api-0.4.0.jar photonics-co
+ re-0.4.0.jar semver4j-3.1.0.jar fastutil-concurrent-wrapper-0.2.3.jar
+Fabric-Jar-Type: classes
+Fabric-Loom-Mixin-Remap-Type: static
+Fabric-Gradle-Version: 9.5.1
+Fabric-Loom-Version: 1.17.3
+Fabric-Mixin-Compile-Extensions-Version: 0.6.0
+Fabric-Minecraft-Version: 1.21.1
+Fabric-Tiny-Remapper-Version: 0.14.0
+Fabric-Loader-Version: 0.18.4
+Fabric-Mixin-Version: 0.17.0+mixin.0.8.7
+Fabric-Mixin-Group: net.fabricmc
+Fabric-Mapping-Namespace: intermediary
+
