@@ -425,6 +425,11 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         dynamicUniforms.uniform3f("world_max_block", () -> new Vector3f(mostRecentMaxBlock), uniformUpdater.newNotifier());
 
         dynamicUniforms.uniform1i("ph_world_ready", () -> mostRecentWorldReady ? 1 : 0, uniformUpdater.newNotifier());
+        dynamicUniforms.uniform1i(
+                "ph_world_revision",
+                () -> (int) mostRecentCompilationRevision,
+                uniformUpdater.newNotifier()
+        );
         dynamicUniforms.uniform3f("world_tree_min", () -> new Vector3f(mostRecentMinBounds), uniformUpdater.newNotifier());
         dynamicUniforms.uniform3f("world_tree_size", () -> new Vector3f(mostRecentMaxBounds).sub(mostRecentMinBounds), uniformUpdater.newNotifier());
         dynamicUniforms.uniform1i("world_block_scale_exp", () -> mostRecentBlockContainerScale, uniformUpdater.newNotifier());

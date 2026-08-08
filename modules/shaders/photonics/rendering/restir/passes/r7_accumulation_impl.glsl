@@ -9,12 +9,18 @@ layout(location = RESTIR_LIGHTING_VARIANCE_OUT) out vec4 lighting_variance_frag_
 #if defined PH_ENABLE_BLOCKLIGHT
 layout(location = RESTIR_EXTERNAL_LIGHTING_OUT) out vec4 external_lighting_frag_out;
 #endif
+#if defined PH_ENABLE_RESTIR_GI
+layout(location = RESTIR_GI_HISTORY_EPOCH_OUT) out uint gi_history_epoch_frag_out;
+#endif
 
 void main() {
     lighting_frag_out = vec4(0.0f);
     lighting_variance_frag_out = vec4(0.0f);
 #if defined PH_ENABLE_BLOCKLIGHT
     external_lighting_frag_out = vec4(0.0f);
+#endif
+#if defined PH_ENABLE_RESTIR_GI
+    gi_history_epoch_frag_out = uint(max(ph_world_revision, 0));
 #endif
 
     setup_frag_data(0);
@@ -25,7 +31,10 @@ void main() {
 
     SampleHistory accumulator;
 
-    sample_history_reproject(accumulator);
+    if (ph_restir_gi_history_epoch_matches(frag_tex_coord))
+        sample_history_reproject(accumulator);
+    else
+        accumulator = SampleHistory(vec4(0.0f), vec4(0.0f), vec4(0.0f));
     sample_history_combine_lighting(accumulator, smple);
 
 #if PH_RESTIR_DENOISER_PASSES != 0
