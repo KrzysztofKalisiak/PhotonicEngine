@@ -30,6 +30,16 @@
 #endif
 #endif
 
+#if defined PH_ENABLE_RESTIR_GI
+#if defined PH_RESTIR_GI_PASS
+#define RESTIR_GI_HISTORY_EPOCH_OUT 4
+#elif defined PH_ENABLE_BLOCKLIGHT
+#define RESTIR_GI_HISTORY_EPOCH_OUT 7
+#else
+#define RESTIR_GI_HISTORY_EPOCH_OUT 4
+#endif
+#endif
+
 //ph_required: uniform sampler2D restir_lighting;
 //ph_required: uniform sampler2D restir_lighting_variance;
 
@@ -57,6 +67,22 @@ const float PH_HISTORY_POSITION_ERROR_SQ = 0.3f;
 const float PH_HISTORY_BASE_PLANE_DISTANCE = 1.0f / 32.0f;
 const float PH_HISTORY_MAX_PRECISION_PLANE_DISTANCE = 0.5f;
 const float PH_HISTORY_HALF_MIN_NORMAL = 1.0f / 16384.0f;
+
+#if defined PH_ENABLE_RESTIR_GI
+bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
+    ivec2 history_size = textureSize(prev_restir_gi_history_epoch, 0);
+    if (any(lessThan(texel, ivec2(0)))
+            || any(greaterThanEqual(texel, history_size)))
+        return false;
+
+    return texelFetch(prev_restir_gi_history_epoch, texel, 0).r
+            == uint(ph_world_revision);
+}
+#else
+bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
+    return true;
+}
+#endif
 
 int ph_restir_continuity_lane(ivec2 texture_size) {
 #ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
@@ -187,6 +213,11 @@ SampleHistory sample_history_reproject_single(
     ivec2 history_size = textureSize(prev_restir_lighting, 0);
     if (any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, history_size)))
         return INVALID_HISTORY;
+
+#if defined PH_ENABLE_RESTIR_GI
+    if (!ph_restir_gi_history_epoch_matches(texel))
+        return INVALID_HISTORY;
+#endif
 
     FragData prev_frag;
     frag_data_load_previous(prev_frag, texel);

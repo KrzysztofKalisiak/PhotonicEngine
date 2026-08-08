@@ -57,6 +57,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI stability v82: world-hit temporal reservoir reuse enabled for rigidly reprojected Sable receivers; hand history remains isolated"
         );
         Photonics.LOGGER.info(
+                "Photonics GI stability v120: scene-revision epoch invalidates indirect temporal reservoirs, lighting accumulation, and GI denoiser history"
+        );
+        Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         Photonics.LOGGER.info(
@@ -197,6 +200,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_direct_state", ITextureFormat.rg32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
                 .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgb32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
+                .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
                 .build(this::registerComponent);
 
@@ -223,7 +227,8 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         var accumulationFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_lighting",
                 "restir_lighting_variance",
-                "restir_external_lighting"
+                "restir_external_lighting",
+                "restir_gi_history_epoch"
         );
 
         var denoiseFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
@@ -286,6 +291,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_direct_state", ITextureFormat.rg32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
+                .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment(
                         "restir_local_lighting",
                         ITextureFormat.rgb16f(),
@@ -314,7 +320,8 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         var accumulationFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_lighting",
                 "restir_lighting_variance",
-                "restir_external_lighting"
+                "restir_external_lighting",
+                "restir_gi_history_epoch"
         );
         var denoiseFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment("denoise_result", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isDirectDenoisingEnabled)
@@ -401,6 +408,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_gi_lighting_variance", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_gi_indirect_reservoirs0", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_gi_indirect_reservoirs1", ITextureFormat.rgb32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
+                .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .build(this::registerComponent);
         var giReservoirFramebuffer = giFramebuffer.withDrawBuffers(
                 "restir_gi_indirect_reservoirs0",
@@ -413,7 +421,8 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         );
         var giAccumulationFramebuffer = giFramebuffer.withDrawBuffers(
                 "restir_gi_lighting",
-                "restir_gi_lighting_variance"
+                "restir_gi_lighting_variance",
+                "restir_gi_history_epoch"
         );
         var giDenoiseFramebuffer = irisFactory.newFramebuffer(properties.getGiRenderScale())
                 .addAttachment("restir_gi_denoise_result", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isGiDenoisingEnabled)

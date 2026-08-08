@@ -116,8 +116,10 @@ void main() {
     //
     // Once GI can hit Sable geometry, the sample must also carry the hit
     // sublevel identity and local-space point before this remains valid.
+    bool previous_scene_matches = ph_restir_gi_history_epoch_matches(prev_texel);
     if (!frag_is_hand
             && !frag_data_is_hand(prev_frag)
+            && previous_scene_matches
             && indirect_reservoir_load_previous(temp_indirect, prev_texel)
             && indirect_reservoir_has_sample(temp_indirect)) {
         // Previous fragment positions are camera-relative. Convert the source

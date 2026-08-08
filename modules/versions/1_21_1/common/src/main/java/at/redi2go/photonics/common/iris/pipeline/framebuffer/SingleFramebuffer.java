@@ -99,7 +99,8 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
             for (int i = 0; i < attachments.size(); i++) {
                 var attachment = attachments.get(i);
                 String name = attachment.name();
-                if (attachment.texture().ph$format() == ITextureFormat.Values.RGB32UI) {
+                if (attachment.texture().ph$format() == ITextureFormat.Values.RGB32UI
+                        || attachment.texture().ph$format() == ITextureFormat.Values.R32UI) {
                     GL30.glClearBufferuiv(
                             GL11.GL_COLOR,
                             i,
