@@ -32,6 +32,7 @@ void main() {
     vec3 indirect_result = vec3(0.0f);
     vec3 hit_normal;
     vec3 hit_position;
+    uint path_hash;
 
     sample_indirect(
         indirect_result,
@@ -40,16 +41,21 @@ void main() {
         trace_rnd_state,
 
         hit_position,
-        hit_normal
+        hit_normal,
+        path_hash
     );
 
-    indirect_sample_set_hit_normal(reservoir.smple, hit_normal);
     indirect_sample_set_hit_point(
         reservoir.smple,
         hit_position,
         frag_rt_pos,
         frag_geo_normal,
         initial_rnd_state
+    );
+    indirect_sample_set_hit_metadata(
+        reservoir.smple,
+        hit_normal,
+        path_hash
     );
 
     // Use the serialized finite hit point for both world and sky samples so
