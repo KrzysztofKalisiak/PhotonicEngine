@@ -14,6 +14,7 @@
 //ph_required: uniform int ph_world_settled;
 //ph_required: uniform int ph_world_revision_slot;
 //ph_required: uniform int ph_world_revision;
+//ph_required: uniform int ph_scene_revision;
 //ph_required: uniform int world_block_scale_exp;
 
 

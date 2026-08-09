@@ -20,7 +20,9 @@ void main() {
     external_lighting_frag_out = vec4(0.0f);
 #endif
 #if defined PH_ENABLE_RESTIR_GI
-    gi_history_epoch_frag_out = uint(max(ph_world_revision, 0));
+    // Radiance history follows physical section content, not compiler
+    // publication/layout revisions caused by chunk streaming.
+    gi_history_epoch_frag_out = uint(max(ph_scene_revision, 0));
 #endif
 
     setup_frag_data(0);

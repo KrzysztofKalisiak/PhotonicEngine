@@ -24,6 +24,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -38,6 +39,7 @@ public class SectionManager implements RenderingComponent {
 
     private final IntSupplier renderDistanceSupplier;
     private long remeshCount = 0;
+    private final AtomicLong sceneRevision = new AtomicLong();
 
     public SectionManager(IntSupplier renderDistanceSupplier) {
         this.renderDistanceSupplier = renderDistanceSupplier;
@@ -162,6 +164,14 @@ public class SectionManager implements RenderingComponent {
         return queue;
     }
 
+    /**
+     * Tracks section-content changes separately from compiler publication and
+     * voxel-tree layout revisions caused by streaming.
+     */
+    public long sceneRevision() {
+        return sceneRevision.get();
+    }
+
     public <T> TaskQueue<T> newTaskQueue(int maxCapacity, boolean trackUnloads) {
         var queue = new TaskQueue<T>(maxCapacity, trackUnloads);
         taskQueues.add(queue);
@@ -226,6 +236,8 @@ public class SectionManager implements RenderingComponent {
     public void onSectionChanged(int x, int y, int z) {
         ILevel level = Minecraft.getLevel();
         if (level == null) return;
+
+        sceneRevision.incrementAndGet();
 
         try {
             Vector3i sectionPos = new Vector3i(x, y, z);
