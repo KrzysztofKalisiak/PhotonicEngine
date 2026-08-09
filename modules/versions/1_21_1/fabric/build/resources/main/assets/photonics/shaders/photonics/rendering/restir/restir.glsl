@@ -69,6 +69,12 @@ const float PH_HISTORY_MAX_PRECISION_PLANE_DISTANCE = 0.5f;
 const float PH_HISTORY_HALF_MIN_NORMAL = 1.0f / 16384.0f;
 
 #if defined PH_ENABLE_RESTIR_GI
+bool ph_restir_gi_history_texel_available(ivec2 texel) {
+    ivec2 history_size = textureSize(prev_restir_gi_history_epoch, 0);
+    return !any(lessThan(texel, ivec2(0)))
+        && !any(greaterThanEqual(texel, history_size));
+}
+
 bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
     // Section streaming publishes several intermediate tree revisions before
     // the completed snapshot is settled. Keep history during that window and
@@ -77,9 +83,7 @@ bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
     if (ph_world_settled == 0)
         return true;
 
-    ivec2 history_size = textureSize(prev_restir_gi_history_epoch, 0);
-    if (any(lessThan(texel, ivec2(0)))
-            || any(greaterThanEqual(texel, history_size)))
+    if (!ph_restir_gi_history_texel_available(texel))
         return false;
 
     return texelFetch(prev_restir_gi_history_epoch, texel, 0).r
