@@ -76,13 +76,10 @@ bool ph_restir_gi_history_texel_available(ivec2 texel) {
 }
 
 bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
-    // A streamed voxel tree can invalidate the receiver and every indirect
-    // path at once. Do not reuse the previous GI frame while that tree is in
-    // flight; path validation alone cannot repair already accumulated
-    // radiance from the old layout.
-    if (ph_world_settled == 0)
-        return false;
-
+    // Layout revisions are produced while sections stream in and do not
+    // necessarily change the geometry seen by this receiver. Do not reject
+    // the entire screen's GI history merely because the compiler is unsettled;
+    // reservoir path validation below handles changed voxel paths locally.
     if (!ph_restir_gi_history_texel_available(texel))
         return false;
 
