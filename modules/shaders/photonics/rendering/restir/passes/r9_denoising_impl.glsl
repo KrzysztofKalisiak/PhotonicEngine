@@ -12,6 +12,17 @@
 
 layout(location = 0) out vec4 denoise_out;
 
+// Keep the scene-revision fallback independent from the r8 variance pass.
+// r9 is compiled as a separate shader and therefore cannot see helpers
+// declared by r8.
+vec3 ph_accumulated_lighting(ivec2 texel) {
+    vec3 result = texelFetch(restir_lighting, texel, 0).rgb;
+#if defined PH_ENABLE_BLOCKLIGHT
+    result += texelFetch(restir_external_lighting, texel, 0).rgb;
+#endif
+    return result;
+}
+
 bool ph_should_skip_denoise_pass(float variance) {
     return !frag_is_hand
         && atrous_iteration >= PH_RESTIR_DENOISER_PASSES
