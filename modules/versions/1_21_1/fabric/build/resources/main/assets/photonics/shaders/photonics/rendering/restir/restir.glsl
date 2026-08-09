@@ -76,10 +76,8 @@ bool ph_restir_gi_history_texel_available(ivec2 texel) {
 }
 
 bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
-    // Section streaming publishes several intermediate tree revisions before
-    // the completed snapshot is settled. Keep history during that window and
-    // let path validation reject only rays invalidated by the current edits.
-    // The settled revision still performs the global epoch transition once.
+    // During an in-flight compiler publication, keep temporal continuity.
+    // The current-frame path validation still rejects stale GI reservoirs.
     if (ph_world_settled == 0)
         return true;
 
@@ -87,7 +85,7 @@ bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
         return false;
 
     return texelFetch(prev_restir_gi_history_epoch, texel, 0).r
-            == uint(ph_world_revision);
+            == uint(ph_scene_revision);
 }
 #else
 bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
