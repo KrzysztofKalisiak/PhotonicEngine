@@ -70,6 +70,13 @@ const float PH_HISTORY_HALF_MIN_NORMAL = 1.0f / 16384.0f;
 
 #if defined PH_ENABLE_RESTIR_GI
 bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
+    // Section streaming publishes several intermediate tree revisions before
+    // the completed snapshot is settled. Keep history during that window and
+    // let path validation reject only rays invalidated by the current edits.
+    // The settled revision still performs the global epoch transition once.
+    if (ph_world_settled == 0)
+        return true;
+
     ivec2 history_size = textureSize(prev_restir_gi_history_epoch, 0);
     if (any(lessThan(texel, ivec2(0)))
             || any(greaterThanEqual(texel, history_size)))

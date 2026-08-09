@@ -12,17 +12,6 @@
 
 layout(location = 0) out vec4 denoise_out;
 
-// Keep the scene-revision fallback independent from the r8 variance pass.
-// r9 is compiled as a separate shader and therefore cannot see helpers
-// declared by r8.
-vec3 ph_accumulated_lighting(ivec2 texel) {
-    vec3 result = texelFetch(restir_lighting, texel, 0).rgb;
-#if defined PH_ENABLE_BLOCKLIGHT
-    result += texelFetch(restir_external_lighting, texel, 0).rgb;
-#endif
-    return result;
-}
-
 bool ph_should_skip_denoise_pass(float variance) {
     return !frag_is_hand
         && atrous_iteration >= PH_RESTIR_DENOISER_PASSES
@@ -56,16 +45,10 @@ void main() {
     setup_frag_data(0);
     if (!frag_is_in_world) return;
 
-#if defined PH_ENABLE_RESTIR_GI
-    // A denoiser history belongs to the voxel snapshot that produced it.
-    // Reusing it across a world revision creates camera-dependent dark bands
-    // while the new GI reservoirs are still converging.
-    if (!ph_restir_gi_history_epoch_matches(frag_tex_coord)) {
-        denoise_out = vec4(ph_accumulated_lighting(frag_tex_coord), 1.0f);
-        return;
-    }
-#endif
-
+    // r8 immediately seeds this pass from the current frame's accumulated
+    // lighting. A world revision invalidates the temporal reservoirs in r4/r7,
+    // but must not bypass the current-frame SVGF chain here; doing so exposes
+    // the one-sample GI buffer as raw noise during section streaming.
     denoise_out = texelFetch(prev_denoise_result, frag_tex_coord, 0);
     if (ph_should_skip_denoise_pass(denoise_out.a)) return;
 
