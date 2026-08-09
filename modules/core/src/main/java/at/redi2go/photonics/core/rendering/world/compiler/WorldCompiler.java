@@ -387,7 +387,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             boolean blockBoundsFallback
     ) {
         Photonics.LOGGER.info(
-                "Photonics world tracing v124: layoutRevision={}, sceneRevision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, boundsSource={}, compileMs={}",
+                "Photonics world tracing v125: layoutRevision={}, sceneRevision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, boundsSource={}, compileMs={}",
                 mostRecentCompilationRevision,
                 mostRecentSceneRevision,
                 settled,

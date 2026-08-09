@@ -73,18 +73,24 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
         }
     }
 
-    public long computeSectionHash(@Nullable ILevel level) {
-        final long[] hash = {0};
+    public SectionHashes computeSectionHashes(@Nullable ILevel level) {
+        final long[] sectionHash = {0};
+        final long[] sceneHash = {0};
 
         forEachBlock((ignored, blockPos, block) -> {
             int blockHash = (block.hashCode() ^ block.ph$block().hashCode());
             int skylight = level == null ? 0 : compileSkylight(level, blockPos);
 
             long packedBlock = (((long) skylight) << 32) | Integer.toUnsignedLong(blockHash);
-            hash[0] = hash[0] * 31 + packedBlock;
+            sectionHash[0] = sectionHash[0] * 31 + packedBlock;
+            sceneHash[0] = sceneHash[0] * 31 + Integer.toUnsignedLong(blockHash);
         });
 
-        return hash[0];
+        return new SectionHashes(sectionHash[0], sceneHash[0]);
+    }
+
+    public long computeSectionHash(@Nullable ILevel level) {
+        return computeSectionHashes(level).sectionHash();
     }
 
     public static Vector3i getSectionCoord(IBlockPos blockPos) {
@@ -109,4 +115,6 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
 
         return result;
     }
+
+    public record SectionHashes(long sectionHash, long sceneHash) {}
 }

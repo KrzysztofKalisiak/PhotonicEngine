@@ -50,6 +50,12 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
     private final ConcurrentMap<Vector3i, Long> latestSection = new ConcurrentHashMap<>();
     private final ConcurrentMap<Vector3i, Long> sectionHashes = new ConcurrentHashMap<>();
+    /**
+     * Block/model content only. The full section hash also contains sampled skylight,
+     * which can change while neighboring sections stream in and must not invalidate
+     * temporal GI history by itself.
+     */
+    private final ConcurrentMap<Vector3i, Long> sceneHashes = new ConcurrentHashMap<>();
 
     private final Thread[] threads = new Thread[THREAD_COUNT];
     private final AtomicInteger consecutiveHeapFailures = new AtomicInteger();
@@ -116,12 +122,14 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         if (!isLatestSection(section.pos(), section.priority())) return;
 
         // Computing the hash immediately is cheaper than meshing an entire section just to discard it
-        long hash = section.computeSectionHash(level);
+        var hashes = section.computeSectionHashes(level);
+        long hash = hashes.sectionHash();
+        long sceneHash = hashes.sceneHash();
         if (isDuplicateSection(section.pos(), hash)) return;
 
         GpuBufferHeapStats worldHeapBefore = worldRegistry.worldHeapStats();
         GpuBufferHeapStats paletteHeapBefore = worldRegistry.paletteHeapStats();
-        var buildResult = new BuildResult(section.pos(), section.blockPos(), hash, section.priority());
+        var buildResult = new BuildResult(section.pos(), section.blockPos(), hash, sceneHash, section.priority());
         boolean submitted = false;
         try {
             BlockMesher.REGISTRY.setup();
@@ -425,6 +433,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             if (section == null) continue;
 
             sectionHashes.remove(section);
+            sceneHashes.remove(section);
             latestSection.remove(section);
         }
     }
@@ -513,6 +522,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         private final Vector3i chunkPos;
         private final Vector3i chunkBlockPos;
         private final long hash;
+        private final long sceneHash;
         private final long priority;
 
         private final Queue<BlockResult> blocks = new ConcurrentLinkedQueue<>();
@@ -528,11 +538,13 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                 Vector3i chunkPos,
                 Vector3i chunkBlockPos,
                 long hash,
+                long sceneHash,
                 long priority
         ) {
             this.chunkPos = chunkPos;
             this.chunkBlockPos = chunkBlockPos;
             this.hash = hash;
+            this.sceneHash = sceneHash;
             this.priority = priority;
         }
 
@@ -654,9 +666,10 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             if (Objects.equals(previousHash, hash))
                 return false;
 
-            // The first accepted hash is initial streaming. Only a changed
-            // hash for an already-known section represents a scene edit.
-            if (previousHash != null)
+            Long previousSceneHash = sceneHashes.put(chunkPos, sceneHash);
+            // The first accepted content hash is initial streaming. A changed
+            // block/model hash is a scene edit; skylight-only changes are not.
+            if (previousSceneHash != null && !Objects.equals(previousSceneHash, sceneHash))
                 sectionManager.markSceneChanged();
 
             builtSectionQueue.offer(chunkPos, this);
