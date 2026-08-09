@@ -669,8 +669,16 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             Long previousSceneHash = sceneHashes.put(chunkPos, sceneHash);
             // The first accepted content hash is initial streaming. A changed
             // block/model hash is a scene edit; skylight-only changes are not.
-            if (previousSceneHash != null && !Objects.equals(previousSceneHash, sceneHash))
+            if (previousSceneHash != null && !Objects.equals(previousSceneHash, sceneHash)) {
+                Photonics.LOGGER.info(
+                        "Photonics scene content change v127: section={}, previousSceneHash={}, sceneHash={}, fullHash={}",
+                        chunkPos,
+                        previousSceneHash,
+                        sceneHash,
+                        hash
+                );
                 sectionManager.markSceneChanged();
+            }
 
             builtSectionQueue.offer(chunkPos, this);
             return true;

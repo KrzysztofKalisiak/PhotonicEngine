@@ -76,10 +76,12 @@ bool ph_restir_gi_history_texel_available(ivec2 texel) {
 }
 
 bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
-    // During an in-flight compiler publication, keep temporal continuity.
-    // The current-frame path validation still rejects stale GI reservoirs.
+    // A streamed voxel tree can invalidate the receiver and every indirect
+    // path at once. Do not reuse the previous GI frame while that tree is in
+    // flight; path validation alone cannot repair already accumulated
+    // radiance from the old layout.
     if (ph_world_settled == 0)
-        return true;
+        return false;
 
     if (!ph_restir_gi_history_texel_available(texel))
         return false;

@@ -78,13 +78,16 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
         final long[] sceneHash = {0};
 
         forEachBlock((ignored, blockPos, block) -> {
-            int blockHash = (block.hashCode() ^ block.ph$block().hashCode());
-            int sceneBlockHash = block.ph$stableHash();
+            // BlockState does not define value equality on 1.21.1, so its
+            // identity hash changes when a copied section is rebuilt. The
+            // registry-backed stable state hash is sufficient for both
+            // deduplication and scene-content tracking.
+            int blockHash = block.ph$stableHash();
             int skylight = level == null ? 0 : compileSkylight(level, blockPos);
 
             long packedBlock = (((long) skylight) << 32) | Integer.toUnsignedLong(blockHash);
             sectionHash[0] = sectionHash[0] * 31 + packedBlock;
-            sceneHash[0] = sceneHash[0] * 31 + Integer.toUnsignedLong(sceneBlockHash);
+            sceneHash[0] = sceneHash[0] * 31 + Integer.toUnsignedLong(blockHash);
         });
 
         return new SectionHashes(sectionHash[0], sceneHash[0]);

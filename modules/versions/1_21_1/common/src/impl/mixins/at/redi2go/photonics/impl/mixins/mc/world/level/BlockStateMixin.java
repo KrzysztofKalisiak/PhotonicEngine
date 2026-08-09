@@ -27,13 +27,10 @@ public abstract class BlockStateMixin extends BlockBehaviour.BlockStateBase impl
 
     @Override
     public int ph$stableHash() {
-        int result = ph$block().ph$id().hashCode();
-        for (Property<?> property : getProperties()) {
-            result = 31 * result + property.getName().hashCode();
-            result = 31 * result + String.valueOf(getValue(property)).hashCode();
-        }
-
-        return result;
+        // BlockStateBase inherits identity hashCode/equals. The global state
+        // registry assigns one stable id to each immutable state value.
+        int stateId = Block.BLOCK_STATE_REGISTRY.getId((BlockState) (Object) this);
+        return stateId >= 0 ? stateId : toString().hashCode();
     }
 
     @Override
