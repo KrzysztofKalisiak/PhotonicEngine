@@ -79,11 +79,12 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
 
         forEachBlock((ignored, blockPos, block) -> {
             int blockHash = (block.hashCode() ^ block.ph$block().hashCode());
+            int sceneBlockHash = block.ph$stableHash();
             int skylight = level == null ? 0 : compileSkylight(level, blockPos);
 
             long packedBlock = (((long) skylight) << 32) | Integer.toUnsignedLong(blockHash);
             sectionHash[0] = sectionHash[0] * 31 + packedBlock;
-            sceneHash[0] = sceneHash[0] * 31 + Integer.toUnsignedLong(blockHash);
+            sceneHash[0] = sceneHash[0] * 31 + Integer.toUnsignedLong(sceneBlockHash);
         });
 
         return new SectionHashes(sectionHash[0], sceneHash[0]);
