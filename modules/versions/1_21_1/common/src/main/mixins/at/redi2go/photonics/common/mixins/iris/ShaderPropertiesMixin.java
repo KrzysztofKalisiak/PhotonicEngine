@@ -44,6 +44,9 @@ import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_SOFT_S
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_SPATIAL_REUSE_RADIUS_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.RESTIR_SPATIAL_REUSE_SAMPLES_KEY;
 import static at.redi2go.photonics.api.shaders.PhotonicsProperties.SEPARATE_HANDHELD_RAYS_KEY;
+import static at.redi2go.photonics.api.shaders.PhotonicsProperties.TEMPORAL_UPSCALER_HISTORY_FRAMES_KEY;
+import static at.redi2go.photonics.api.shaders.PhotonicsProperties.TEMPORAL_UPSCALER_KEY;
+import static at.redi2go.photonics.api.shaders.PhotonicsProperties.TEMPORAL_UPSCALER_SOURCE_SCALE_KEY;
 
 @Mixin(ShaderProperties.class)
 public abstract class ShaderPropertiesMixin {
@@ -85,6 +88,19 @@ public abstract class ShaderPropertiesMixin {
         handleBooleanDirective(key, value, ENABLED_KEY, e -> phProperties.enabled = e);
         handleFloatDirective(key, value, RENDER_SCALE_KEY, e -> phProperties.renderScale = e);
         handleFloatDirective(key, value, GI_RENDER_SCALE_KEY, e -> phProperties.giRenderScale = e);
+        handleBooleanDirective(key, value, TEMPORAL_UPSCALER_KEY, e -> phProperties.temporalUpscaler = e);
+        handleFloatDirective(
+                key,
+                value,
+                TEMPORAL_UPSCALER_SOURCE_SCALE_KEY,
+                e -> phProperties.temporalUpscalerSourceScale = e
+        );
+        handleNonZeroDirective(
+                key,
+                value,
+                TEMPORAL_UPSCALER_HISTORY_FRAMES_KEY,
+                e -> phProperties.temporalUpscalerHistoryFrames = e
+        );
 
         handleNonZeroDirective(key, value, MAX_LIGHTS_KEY, e -> phProperties.maxLights = e);
         handleNonZeroDirective(key, value, MAX_GI_BOUNCES_KEY, e -> phProperties.maxGiBounces = e);

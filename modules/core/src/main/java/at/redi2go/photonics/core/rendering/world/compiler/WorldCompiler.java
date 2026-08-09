@@ -79,6 +79,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
     private int mostRecentBlockContainerScale = 0;
     private boolean mostRecentWorldReady = false;
+    private boolean mostRecentWorldSettled = false;
     private boolean mostRecentBlockBoundsFallback = false;
 
     private long compilationRevision = 0;
@@ -134,20 +135,23 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                 long compilationStart = System.nanoTime();
 
                 var unloadedSections = taskQueue.drainUnloadQueue();
-                if (!unloadedSections.isEmpty())
-                    clearUnloadedSections(unloadedSections);
-
-
                 var builtSections = taskQueue.drain(MAX_SECTIONS_PER_RUN);
-                if (!builtSections.isEmpty()) {
-                    recenter();
-
-                    clearPendingSections(builtSections);
-                    insertSections(builtSections);
-                }
-
                 if (!unloadedSections.isEmpty() || !builtSections.isEmpty()) {
+                    // Tree edits release and reuse heap allocations. Block the
+                    // render-thread upload before any edit so an old root can
+                    // never be paired with a partially rewritten heap.
                     stopUpload();
+
+                    if (!unloadedSections.isEmpty())
+                        clearUnloadedSections(unloadedSections);
+
+                    if (!builtSections.isEmpty()) {
+                        recenter();
+
+                        clearPendingSections(builtSections);
+                        insertSections(builtSections);
+                    }
+
                     writeSections();
 
                     compilationRevision++;
@@ -305,7 +309,6 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
             worldAllocator.upload();
             paletteTexture.upload();
-            uniformUpdater.updateAll();
 
             var treeMinBounds = treeManager.minBounds();
             var treeMaxBounds = treeManager.maxBounds();
@@ -336,6 +339,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                 lastObservedCompilationRevision = mostRecentCompilationRevision;
                 lastCompilationChangeNanos = now;
                 settledDiagnosticLogged = false;
+                setWorldSettled(false);
                 if (now >= nextActiveDiagnosticNanos) {
                     nextActiveDiagnosticNanos = now + ACTIVE_DIAGNOSTIC_INTERVAL_NANOS;
                     logWorldTracingDiagnostic(false, depth, worldReady, blockBoundsFallback);
@@ -344,15 +348,30 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     && lastObservedCompilationRevision > 0
                     && now - lastCompilationChangeNanos >= SETTLED_DIAGNOSTIC_DELAY_NANOS) {
                 settledDiagnosticLogged = true;
+                setWorldSettled(worldReady);
                 logWorldTracingDiagnostic(true, depth, worldReady, blockBoundsFallback);
             }
             mostRecentWorldReady = worldReady;
+            if (!worldReady)
+                setWorldSettled(false);
             mostRecentBlockBoundsFallback = blockBoundsFallback;
+
+            // Publish tree-dependent uniforms only after every field reflects
+            // the tree uploaded above. In particular, a new revision must not
+            // receive one frame of environment samples while still "settled".
+            uniformUpdater.updateAll();
 
             uploadDone.signalAll();
         } finally {
             uploadLock.unlock();
         }
+    }
+
+    private void setWorldSettled(boolean settled) {
+        if (mostRecentWorldSettled == settled) return;
+
+        mostRecentWorldSettled = settled;
+        uniformUpdater.updateNextFrame();
     }
 
     private void logWorldTracingDiagnostic(
@@ -425,9 +444,10 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         dynamicUniforms.uniform3f("world_max_block", () -> new Vector3f(mostRecentMaxBlock), uniformUpdater.newNotifier());
 
         dynamicUniforms.uniform1i("ph_world_ready", () -> mostRecentWorldReady ? 1 : 0, uniformUpdater.newNotifier());
+        dynamicUniforms.uniform1i("ph_world_settled", () -> mostRecentWorldSettled ? 1 : 0, uniformUpdater.newNotifier());
         dynamicUniforms.uniform1i(
-                "ph_world_revision",
-                () -> (int) mostRecentCompilationRevision,
+                "ph_world_revision_slot",
+                () -> (int) (mostRecentCompilationRevision & 31L),
                 uniformUpdater.newNotifier()
         );
         dynamicUniforms.uniform3f("world_tree_min", () -> new Vector3f(mostRecentMinBounds), uniformUpdater.newNotifier());

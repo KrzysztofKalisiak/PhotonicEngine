@@ -199,12 +199,19 @@ public class ShaderPatcher {
             Function<IPackPath, @Nullable String> shaderSourceSupplier
     ) {
         if (path.ph$startsWith("/photonics")) return readPhotonicsFile(path, shaderSourceSupplier);
-        if (patch == null) return shaderSourceSupplier.apply(path);
 
-        return patch.applyPatches(
+        @Nullable String source = patch == null
+                ? shaderSourceSupplier.apply(path)
+                : patch.applyPatches(
+                        path,
+                        shaderSourceSupplier,
+                        pack.properties().isPhotonicsEnabled()
+                );
+
+        return PhotonShaderCompatibility.apply(
                 path,
-                shaderSourceSupplier,
-                pack.properties().isPhotonicsEnabled()
+                source,
+                pack.supportsPhotonics()
         );
     }
 

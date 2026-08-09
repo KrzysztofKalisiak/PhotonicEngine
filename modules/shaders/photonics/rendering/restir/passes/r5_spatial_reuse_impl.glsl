@@ -50,9 +50,19 @@ bool ph_spatial_sample_texel_is_valid(
         && !any(greaterThanEqual(sample_texel, texture_size));
 }
 
-bool ph_spatial_current_receiver_can_reuse() {
+int ph_spatial_continuity_lane(ivec2 texture_size) {
+#ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
+    float normalized_x = (float(frag_tex_coord.x) + 0.5f)
+        / float(max(texture_size.x, 1));
+    return clamp(int(floor(normalized_x * 4.0f)), 0, 3);
+#else
+    return 3;
+#endif
+}
+
+bool ph_spatial_current_receiver_can_reuse(bool continuous_spatial) {
     if (frag_is_hand
-            || frag_is_bad_angle
+            || (!continuous_spatial && frag_is_bad_angle)
             || !ph_spatial_is_finite(frag_geo_normal)
             || !ph_spatial_is_finite(frag_player_pos))
         return false;
@@ -71,10 +81,14 @@ bool ph_spatial_current_receiver_can_reuse() {
         && receiver_token == ph_sable_identity_token(receiver_slot);
 }
 
-bool ph_spatial_receiver_matches(FragData sample_frag) {
+bool ph_spatial_receiver_matches(
+    FragData sample_frag,
+    bool continuous_spatial
+) {
+    bool sample_bad_angle = frag_data_is_bad_angle(sample_frag);
     if (!frag_data_is_in_world(sample_frag)
             || frag_data_is_hand(sample_frag)
-            || frag_data_is_bad_angle(sample_frag))
+            || (!continuous_spatial && sample_bad_angle))
         return false;
 
     if (frag_data_sublevel_slot(sample_frag)
@@ -93,14 +107,28 @@ bool ph_spatial_receiver_matches(FragData sample_frag) {
         return false;
 
     vec3 position_delta = sample_position - frag_player_pos;
-    if (dot(position_delta, position_delta) >= ph_spatial_max_receiver_distance_sq)
-        return false;
-
     float plane_distance = max(
         abs(dot(position_delta, frag_geo_normal)),
         abs(dot(position_delta, sample_normal))
     );
-    return plane_distance <= ph_spatial_max_plane_distance;
+    if (!continuous_spatial) {
+        if (dot(position_delta, position_delta)
+                >= ph_spatial_max_receiver_distance_sq)
+            return false;
+
+        return plane_distance <= ph_spatial_max_plane_distance;
+    }
+
+    // A bounded screen-space neighbor can be many blocks away laterally on a
+    // grazing plane. Keep receiver-plane validation, including RGBA16F
+    // position precision, but do not impose the invalid lateral cutoff.
+    return plane_distance <= ph_restir_precision_plane_tolerance(
+        ph_spatial_max_plane_distance,
+        sample_position,
+        frag_player_pos,
+        sample_normal,
+        frag_geo_normal
+    );
 }
 
 #if defined PH_ENABLE_BLOCKLIGHT
@@ -342,16 +370,24 @@ void main() {
         ph_indirect_spatial_validation_budget
     );
     ivec2 spatial_texture_size = textureSize(ph_frag_data0, 0);
-    bool spatial_receiver_can_reuse = ph_spatial_current_receiver_can_reuse();
+    int spatial_continuity_lane = ph_spatial_continuity_lane(
+        spatial_texture_size
+    );
+    bool continuous_direct_spatial = spatial_continuity_lane >= 2;
+#if defined PH_ENABLE_BLOCKLIGHT
+    bool direct_spatial_receiver_can_reuse =
+        ph_spatial_current_receiver_can_reuse(continuous_direct_spatial);
+#endif
 #if defined PH_ENABLE_RESTIR_GI
     bool indirect_spatial_receiver_can_reuse =
-        spatial_receiver_can_reuse
+        ph_spatial_current_receiver_can_reuse(false)
         && frag_data_sublevel_token(_frag_data) == 0u;
 #endif
 
 #if defined PH_ENABLE_BLOCKLIGHT
     for (int i = 0; i < reuse_samples; i++) {
-        if (!spatial_receiver_can_reuse || reuse_radius <= 0.0f) break;
+        if (!direct_spatial_receiver_can_reuse || reuse_radius <= 0.0f)
+            break;
 
         ivec2 sample_texel = ph_spatial_next_sample_texel(
             frag_rnd_state,
@@ -365,7 +401,10 @@ void main() {
 
         FragData sample_frag;
         frag_data_load(sample_frag, sample_texel);
-        if (!ph_spatial_receiver_matches(sample_frag)) continue;
+        if (!ph_spatial_receiver_matches(
+                sample_frag,
+                continuous_direct_spatial
+        )) continue;
 
 #if PH_RESTIR_SPATIAL_REUSE_SAMPLES > 0
         ph_spatial_direct_reservoir_load(temp_direct, sample_texel);
@@ -412,7 +451,7 @@ void main() {
                     continue;
 
                 frag_data_load(sample_frag, sample_texel);
-                if (!ph_spatial_receiver_matches(sample_frag))
+                if (!ph_spatial_receiver_matches(sample_frag, false))
                     continue;
 
                 candidate_found = true;

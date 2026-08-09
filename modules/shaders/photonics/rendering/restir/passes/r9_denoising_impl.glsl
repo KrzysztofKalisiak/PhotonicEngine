@@ -45,16 +45,6 @@ void main() {
     setup_frag_data(0);
     if (!frag_is_in_world) return;
 
-#if defined PH_ENABLE_RESTIR_GI
-    // A denoiser history belongs to the voxel snapshot that produced it.
-    // Reusing it across a world revision creates camera-dependent dark bands
-    // while the new GI reservoirs are still converging.
-    if (!ph_restir_gi_history_epoch_matches(frag_tex_coord)) {
-        denoise_out = vec4(ph_accumulated_lighting(frag_tex_coord), 1.0f);
-        return;
-    }
-#endif
-
     denoise_out = texelFetch(prev_denoise_result, frag_tex_coord, 0);
     if (ph_should_skip_denoise_pass(denoise_out.a)) return;
 

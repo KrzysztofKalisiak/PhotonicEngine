@@ -748,12 +748,15 @@ public class BlockBakeryImpl implements BlockBakery {
         private long redSum;
         private long greenSum;
         private long blueSum;
+        private long alphaSum;
         private int redMin = 255;
         private int greenMin = 255;
         private int blueMin = 255;
         private int redMax;
         private int greenMax;
         private int blueMax;
+        private int alphaMin = 255;
+        private int alphaMax;
         private int minX = Integer.MAX_VALUE;
         private int minY = Integer.MAX_VALUE;
         private int minZ = Integer.MAX_VALUE;
@@ -777,12 +780,15 @@ public class BlockBakeryImpl implements BlockBakery {
             redSum += red;
             greenSum += green;
             blueSum += blue;
+            alphaSum += alpha;
             redMin = Math.min(redMin, red);
             greenMin = Math.min(greenMin, green);
             blueMin = Math.min(blueMin, blue);
             redMax = Math.max(redMax, red);
             greenMax = Math.max(greenMax, green);
             blueMax = Math.max(blueMax, blue);
+            alphaMin = Math.min(alphaMin, alpha);
+            alphaMax = Math.max(alphaMax, alpha);
 
             if (alpha == 0) {
                 alphaZero++;
@@ -830,9 +836,15 @@ public class BlockBakeryImpl implements BlockBakery {
             String rgbRange = samples == 0
                     ? "empty"
                     : "[" + redMin + "-" + redMax + "," + greenMin + "-" + greenMax + "," + blueMin + "-" + blueMax + "]";
+            String alphaMean = samples == 0
+                    ? "empty"
+                    : String.format(Locale.ROOT, "%.1f", (double) alphaSum / samples);
+            String alphaRange = samples == 0
+                    ? "empty"
+                    : alphaMin + "-" + alphaMax;
 
             Photonics.LOGGER.info(
-                    "Photonics voxel diagnostic: state={} vertexHash={} complete={} samples={} alphaZero={} alphaPartial={} alphaOpaque={} rgbMean={} rgbRange={} voxels={} aabb={} parts={}",
+                    "Photonics voxel diagnostic: state={} vertexHash={} complete={} samples={} alphaZero={} alphaPartial={} alphaOpaque={} alphaMean={} alphaRange={} rgbMean={} rgbRange={} voxels={} aabb={} parts={}",
                     label,
                     Long.toUnsignedString(vertexHash, 16),
                     complete,
@@ -840,6 +852,8 @@ public class BlockBakeryImpl implements BlockBakery {
                     alphaZero,
                     alphaPartial,
                     alphaOpaque,
+                    alphaMean,
+                    alphaRange,
                     rgbMean,
                     rgbRange,
                     voxelCount,

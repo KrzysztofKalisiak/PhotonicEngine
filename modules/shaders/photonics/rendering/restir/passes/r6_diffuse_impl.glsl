@@ -22,6 +22,10 @@ layout(location = INDIRECT_RESERVOIR_0) out vec4 gi_reservoir_0;
 layout(location = INDIRECT_RESERVOIR_1) out uvec3 gi_reservoir_1;
 #endif
 
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+layout(location = RESTIR_SOURCE_HISTORY_OUT) out vec3 source_history_lighting;
+#endif
+
 layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting;
 
 void main() {
@@ -30,6 +34,9 @@ void main() {
 #if defined PH_ENABLE_BLOCKLIGHT
     di_history_state = vec2(0.0f);
     external_lighting = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+#endif
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
+    source_history_lighting = vec3(0.0f);
 #endif
 
     setup_frag_data(0);
@@ -43,6 +50,12 @@ void main() {
 
 #ifndef PH_RESTIR_GI_MODIFIER_DISABLED
     modify_restir_gi(lighting.rgb);
+#endif
+
+#if defined PH_RESTIR_GI_TRANSPORT_LANES
+    int gi_transport_lane = min(int(frag_tex_coord.x * 4.0f), 3);
+    if ((gi_transport_lane & 2) != 0)
+        lighting.rgb *= 4.0f;
 #endif
 
     indirect_reservoir_encode(indirect_reservoir, gi_reservoir_0, gi_reservoir_1);
@@ -115,6 +128,17 @@ void main() {
                 receiver_token
             )) direct_reservoir = direct_reservoir_empty();
 
+#if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
+    vec3 direct_unshadowed_lighting = direct_reservoir_get_unshadowed_color(
+        direct_reservoir,
+        frag_rt_pos,
+        frag_geo_normal,
+        frag_tex_normal
+    );
+    float direct_proposal_metadata = direct_sample_encode_proposal_metadata(
+        direct_reservoir.smple
+    );
+#endif
     vec3 direct_lighting = direct_reservoir_get_final_color(
         direct_reservoir,
         frag_rt_pos,
@@ -145,5 +169,29 @@ void main() {
         di_history_state.y = 0.0f;
 #endif
     }
+#if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
+    float unshadowed_luminance = direct_sample_weight(
+        max(direct_unshadowed_lighting, vec3(0.0f))
+    );
+    float visible_luminance = direct_sample_weight(
+        max(direct_lighting, vec3(0.0f))
+    );
+    if (isnan(unshadowed_luminance) || isinf(unshadowed_luminance))
+        unshadowed_luminance = 0.0f;
+    if (isnan(visible_luminance) || isinf(visible_luminance))
+        visible_luminance = 0.0f;
+    source_history_lighting = vec3(
+        log2(1.0f + unshadowed_luminance),
+        log2(1.0f + visible_luminance),
+        direct_proposal_metadata
+    );
+#endif
+#endif
+
+#if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC && !defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
+    source_history_lighting = lighting.rgb;
+#if defined PH_ENABLE_BLOCKLIGHT
+    source_history_lighting += external_lighting.rgb;
+#endif
 #endif
 }

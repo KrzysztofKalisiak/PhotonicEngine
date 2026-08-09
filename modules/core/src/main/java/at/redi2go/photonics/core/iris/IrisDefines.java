@@ -15,6 +15,10 @@ public class IrisDefines {
         defines.floatDefine("PH_RENDER_SCALE", phProperties.getRenderScale());
         defines.floatDefine("PH_GI_RENDER_SCALE", phProperties.getGiRenderScale());
         defines.floatDefine("PH_SHADERPACK_RENDER_SCALE", phProperties.getShaderPackRenderScale());
+        defines.intDefine(
+                "PH_TEMPORAL_UPSCALER_HISTORY_FRAMES",
+                phProperties.getTemporalUpscalerHistoryFrames()
+        );
         defines.intDefine("PH_MAX_LIGHTS", phProperties.getMaxLights());
         defines.intDefine("PH_MAX_GI_BOUNCES", phProperties.getMaxGiBounces());
 
@@ -38,6 +42,17 @@ public class IrisDefines {
         if (phProperties.isHandheldLightEnabled())
             defines.stringDefine("PH_ENABLE_HANDHELD_LIGHT", "");
 
+        if (phProperties.isTemporalUpscalerActive())
+            defines.stringDefine("PH_TEMPORAL_UPSCALER", "");
+
+        if (phProperties.isTemporalUpscalerActive()
+                && TemporalUpscalerDiagnostics.isSplitScreenEnabled())
+            defines.stringDefine("PH_TEMPORAL_UPSCALER_SPLIT_SCREEN", "");
+
+        if (phProperties.isTemporalUpscalerActive()
+                && TemporalUpscalerDiagnostics.isSourceValidationLanesEnabled())
+            defines.stringDefine("PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES", "");
+
         if (phProperties.isLightBinningEnabled() || phProperties.getLightingMode() == LightingMode.BASIC)
             defines.stringDefine("PH_ENABLE_LIGHT_BINNING", "");
 
@@ -60,9 +75,41 @@ public class IrisDefines {
             defines.stringDefine("PH_RESTIR_COMBINED_GI", "");
 
         if (phProperties.getLightingMode() == LightingMode.RESTIR
+                && phProperties.isGiEnabled()
+                && phProperties.useRestirCombinedGi()
+                && RestirDiagnostics.isGiTransportLanesEnabled())
+            defines.stringDefine("PH_RESTIR_GI_TRANSPORT_LANES", "");
+
+        if (phProperties.getLightingMode() == LightingMode.RESTIR
+                && phProperties.isGiEnabled()
+                && phProperties.useRestirCombinedGi()
+                && RestirDiagnostics.isGiSunProposalEnabled())
+            defines.stringDefine("PH_RESTIR_GI_SUN_PROPOSAL", "");
+
+        if (phProperties.getLightingMode() == LightingMode.RESTIR
                 && phProperties.useRestirCombinedGi()
                 && phProperties.getGiRenderScale() < phProperties.getRenderScale() - 0.0001f)
             defines.stringDefine("PH_RESTIR_SPLIT_GI", "");
+
+        boolean sourceHistoryDiagnostic = phProperties.getLightingMode() == LightingMode.RESTIR
+                && phProperties.isBlockLightEnabled()
+                && phProperties.isGiEnabled()
+                && phProperties.useRestirCombinedGi()
+                && phProperties.getGiRenderScale() < phProperties.getRenderScale() - 0.0001f
+                && RestirDiagnostics.isSourceHistoryEnabled();
+        if (sourceHistoryDiagnostic)
+            defines.stringDefine("PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC", "");
+        boolean directEstimatorDiagnostic = sourceHistoryDiagnostic
+                && RestirDiagnostics.isDirectEstimatorEnabled();
+        if (directEstimatorDiagnostic)
+            defines.stringDefine("PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC", "");
+        if (directEstimatorDiagnostic && RestirDiagnostics.isDirectEstimatorRankEnabled())
+            defines.stringDefine("PH_RESTIR_DIRECT_ESTIMATOR_RANK_DIAGNOSTIC", "");
+
+        defines.intDefine(
+                "PH_RESTIR_DIRECT_VISIBILITY_LANES",
+                directEstimatorDiagnostic ? 1 : RestirDiagnostics.getDirectVisibilityLanes()
+        );
 
         defines.intDefine("PH_MAX_SAMPLES",  phProperties.getMaxSamples());
     }

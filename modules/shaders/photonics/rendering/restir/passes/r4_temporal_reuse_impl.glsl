@@ -42,14 +42,13 @@ void main() {
     if (!frag_data_is_in_world(prev_frag)) discard;
     if (frag_data_sublevel_token(prev_frag) != sublevel_token) discard;
 
-    if (!frag_is_bad_angle) {
-        vec3 projected_player_pos = frag_data_player_pos(prev_frag);
-        vec3 d = projected_player_pos - previous_player_pos;
-        if (dot(d, d) >= PH_HISTORY_POSITION_ERROR_SQ) discard;
-    }
-
-    vec3 n = frag_data_geo_normal(prev_frag);
-    if (dot(n, expected_previous_normal) < 0.99f) discard;
+    if (!ph_restir_history_surface_matches(
+            prev_frag,
+            previous_player_pos,
+            expected_previous_normal,
+            ph_restir_use_continuous_history(previous_size),
+            PH_HISTORY_POSITION_ERROR_SQ
+    )) discard;
 
 #if defined PH_ENABLE_BLOCKLIGHT
     // DIRECT TEMPORAL REUSE
@@ -117,10 +116,8 @@ void main() {
     //
     // Once GI can hit Sable geometry, the sample must also carry the hit
     // sublevel identity and local-space point before this remains valid.
-    bool previous_scene_matches = ph_restir_gi_history_epoch_matches(prev_texel);
     if (!frag_is_hand
             && !frag_data_is_hand(prev_frag)
-            && previous_scene_matches
             && indirect_reservoir_load_previous(temp_indirect, prev_texel)
             && indirect_reservoir_has_sample(temp_indirect)) {
         // Previous fragment positions are camera-relative. Convert the source

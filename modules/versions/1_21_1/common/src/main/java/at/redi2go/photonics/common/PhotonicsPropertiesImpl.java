@@ -8,6 +8,11 @@ import at.redi2go.photonics.core.Photonics;
 public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     public static final String RENDER_SCALE_OVERRIDE_PROPERTY = "photonics.renderScaleOverride";
     public static final String GI_RENDER_SCALE_OVERRIDE_PROPERTY = "photonics.giRenderScaleOverride";
+    public static final String TEMPORAL_UPSCALER_OVERRIDE_PROPERTY = "photonics.temporalUpscalerOverride";
+    public static final String TEMPORAL_UPSCALER_SOURCE_SCALE_OVERRIDE_PROPERTY =
+            "photonics.temporalUpscalerSourceScaleOverride";
+    public static final String TEMPORAL_UPSCALER_HISTORY_FRAMES_OVERRIDE_PROPERTY =
+            "photonics.temporalUpscalerHistoryFramesOverride";
     public static final String RESTIR_INITIAL_SAMPLES_OVERRIDE_PROPERTY = "photonics.restirInitialSamplesOverride";
     public static final String RESTIR_DENOISER_PASSES_OVERRIDE_PROPERTY = "photonics.restirDenoiserPassesOverride";
     public static final String RESTIR_GI_DENOISER_PASSES_OVERRIDE_PROPERTY = "photonics.restirGiDenoiserPassesOverride";
@@ -17,6 +22,8 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     private static final float MAX_RENDER_SCALE_OVERRIDE = 1.0f;
     private static final int MIN_RESTIR_INITIAL_SAMPLES = 8;
     private static final int MAX_RESTIR_INITIAL_SAMPLES = 32;
+    private static final int MIN_TEMPORAL_UPSCALER_HISTORY_FRAMES = 2;
+    private static final int MAX_TEMPORAL_UPSCALER_HISTORY_FRAMES = 32;
     private static final int MAX_RESTIR_SPATIAL_REUSE_SAMPLES = 1;
     private static final float MAX_RESTIR_SPATIAL_REUSE_RADIUS = 5.0f;
     private static final int MIN_RESTIR_DENOISER_PASSES = 5;
@@ -31,6 +38,19 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
             GI_RENDER_SCALE_OVERRIDE_PROPERTY,
             MIN_RENDER_SCALE_OVERRIDE,
             MAX_RENDER_SCALE_OVERRIDE
+    );
+    private final Boolean temporalUpscalerOverride = readBooleanOverride(
+            TEMPORAL_UPSCALER_OVERRIDE_PROPERTY
+    );
+    private final Float temporalUpscalerSourceScaleOverride = readFloatOverride(
+            TEMPORAL_UPSCALER_SOURCE_SCALE_OVERRIDE_PROPERTY,
+            MIN_RENDER_SCALE_OVERRIDE,
+            MAX_RENDER_SCALE_OVERRIDE
+    );
+    private final Integer temporalUpscalerHistoryFramesOverride = readIntOverride(
+            TEMPORAL_UPSCALER_HISTORY_FRAMES_OVERRIDE_PROPERTY,
+            MIN_TEMPORAL_UPSCALER_HISTORY_FRAMES,
+            MAX_TEMPORAL_UPSCALER_HISTORY_FRAMES
     );
     private final Integer restirInitialSamplesOverride = readIntOverride(
             RESTIR_INITIAL_SAMPLES_OVERRIDE_PROPERTY,
@@ -51,6 +71,11 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     public boolean enabled = PhotonicsProperties.DEFAULT_ENABLED;
     public float renderScale = PhotonicsProperties.DEFAULT_RENDER_SCALE;
     public float giRenderScale = PhotonicsProperties.DEFAULT_GI_RENDER_SCALE;
+    public boolean temporalUpscaler = PhotonicsProperties.DEFAULT_USE_TEMPORAL_UPSCALER;
+    public float temporalUpscalerSourceScale =
+            PhotonicsProperties.DEFAULT_TEMPORAL_UPSCALER_SOURCE_SCALE;
+    public int temporalUpscalerHistoryFrames =
+            PhotonicsProperties.DEFAULT_TEMPORAL_UPSCALER_HISTORY_FRAMES;
     public int maxLights = PhotonicsProperties.DEFAULT_MAX_LIGHTS;
     public int maxGiBounces = PhotonicsProperties.DEFAULT_MAX_GI_BOUNCES;
     public AlphaMode alphaMode = PhotonicsProperties.DEFAULT_ALPHA_MODE;
@@ -74,9 +99,12 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     public PhotonicsPropertiesImpl() {
         Photonics.LOGGER.info(
-                "Photonics performance overrides v79: renderScale={}, giRenderScale={}, restirInitialSamples={}, restirDenoiserPasses={}, restirGiDenoiserPasses={} (shader-pack means no JVM override)",
+                "Photonics performance overrides: renderScale={}, giRenderScale={}, temporalUpscaler={}, temporalUpscalerSourceScale={}, temporalUpscalerHistoryFrames={}, restirInitialSamples={}, restirDenoiserPasses={}, restirGiDenoiserPasses={} (shader-pack means no JVM override)",
                 overrideLabel(renderScaleOverride),
                 overrideLabel(giRenderScaleOverride),
+                overrideLabel(temporalUpscalerOverride),
+                overrideLabel(temporalUpscalerSourceScaleOverride),
+                overrideLabel(temporalUpscalerHistoryFramesOverride),
                 overrideLabel(restirInitialSamplesOverride),
                 overrideLabel(restirDenoiserPassesOverride),
                 overrideLabel(restirGiDenoiserPassesOverride)
@@ -90,7 +118,14 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
 
     @Override
     public float getRenderScale() {
-        return renderScaleOverride != null ? renderScaleOverride : renderScale;
+        if (renderScaleOverride != null)
+            return renderScaleOverride;
+        if (!useTemporalUpscaler()
+                || getLightingMode() != LightingMode.RESTIR
+                || (!isBlockLightEnabled()
+                    && !(isGiEnabled() && useRestirCombinedGi())))
+            return renderScale;
+        return Math.min(renderScale, getTemporalUpscalerSourceScale());
     }
 
     @Override
@@ -107,6 +142,37 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
     @Override
     public float getShaderPackRenderScale() {
         return renderScale;
+    }
+
+    @Override
+    public boolean useTemporalUpscaler() {
+        return temporalUpscalerOverride != null
+                ? temporalUpscalerOverride
+                : temporalUpscaler;
+    }
+
+    @Override
+    public float getTemporalUpscalerSourceScale() {
+        float effectiveScale = temporalUpscalerSourceScaleOverride != null
+                ? temporalUpscalerSourceScaleOverride
+                : temporalUpscalerSourceScale;
+        if (!Float.isFinite(effectiveScale))
+            effectiveScale = PhotonicsProperties.DEFAULT_TEMPORAL_UPSCALER_SOURCE_SCALE;
+        return Math.max(
+                MIN_RENDER_SCALE_OVERRIDE,
+                Math.min(effectiveScale, MAX_RENDER_SCALE_OVERRIDE)
+        );
+    }
+
+    @Override
+    public int getTemporalUpscalerHistoryFrames() {
+        int effectiveFrames = temporalUpscalerHistoryFramesOverride != null
+                ? temporalUpscalerHistoryFramesOverride
+                : temporalUpscalerHistoryFrames;
+        return Math.max(
+                MIN_TEMPORAL_UPSCALER_HISTORY_FRAMES,
+                Math.min(effectiveFrames, MAX_TEMPORAL_UPSCALER_HISTORY_FRAMES)
+        );
     }
 
     @Override
@@ -278,7 +344,25 @@ public class PhotonicsPropertiesImpl implements PhotonicsProperties {
         return null;
     }
 
-    private static String overrideLabel(Number value) {
+    private static Boolean readBooleanOverride(String key) {
+        String rawValue = System.getProperty(key);
+        if (rawValue == null || rawValue.isBlank())
+            return null;
+
+        if ("true".equalsIgnoreCase(rawValue) || "1".equals(rawValue))
+            return true;
+        if ("false".equalsIgnoreCase(rawValue) || "0".equals(rawValue))
+            return false;
+
+        Photonics.LOGGER.warn(
+                "Ignoring invalid JVM property {}={}; expected true, false, 1, or 0",
+                key,
+                rawValue
+        );
+        return null;
+    }
+
+    private static String overrideLabel(Object value) {
         return value == null ? "shader-pack" : value.toString();
     }
 }

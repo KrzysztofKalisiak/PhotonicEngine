@@ -20,10 +20,6 @@
 //ph_required: uniform sampler2D prev_restir_indirect_reservoirs0;
 //ph_required: uniform usampler2D prev_restir_indirect_reservoirs1;
 
-#if defined PH_ENABLE_RESTIR_GI
-//ph_required: uniform usampler2D prev_restir_gi_history_epoch;
-#endif
-
 const float max_indirect_temporal_samples = 20.0f;
 const float max_indirect_reservoir_samples = 20.0f;
 // Stored hit points are full-precision block coordinates. One tracing voxel

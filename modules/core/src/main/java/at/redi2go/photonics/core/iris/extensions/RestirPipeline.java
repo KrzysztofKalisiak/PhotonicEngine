@@ -5,6 +5,8 @@ import at.redi2go.photonics.api.shaders.PhotonicsProperties;
 import at.redi2go.photonics.core.Photonics;
 import at.redi2go.photonics.core.iris.AbstractPhotonicsExtension;
 import at.redi2go.photonics.core.iris.Pipelines;
+import at.redi2go.photonics.core.iris.RestirDiagnostics;
+import at.redi2go.photonics.core.iris.TemporalUpscalerDiagnostics;
 import at.redi2go.photonics.core.iris.pipeline.rendering.IrisFactory;
 import at.redi2go.photonics.core.iris.pipeline.uniform.IDynamicUniformHolder;
 import at.redi2go.photonics.core.rendering.UniformUpdater;
@@ -37,7 +39,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics feature increment: v65 upstream traversal guard, hand texture-normal evaluation, immature-history edge variance, and variance-guided full SVGF passes; direct-light-v64 proxy ownership retained"
         );
         Photonics.LOGGER.info(
-                "Photonics GI foundation v82: finite full-position indirect reservoirs, corrected primary-ray origin/origin rebasing/explicit sky hits, normal/Jacobian-weighted world-hit temporal reuse for world and Sable receivers, hand temporal isolation, and selected-reservoir visibility validation"
+                "Photonics GI foundation v99: finite full-position indirect reservoirs, corrected primary-ray origin/origin rebasing/explicit sky hits, Jacobian-weighted world-hit temporal reuse for world and Sable receivers, geometric-normal-consistent indirect energy, explicit empty non-world reservoirs, hand temporal isolation, and selected-reservoir visibility validation"
         );
         Photonics.LOGGER.info(
                 "Photonics ReSTIR GI v79: combinedGi={}, splitGi={}, directScale={}, giScale={}, directDenoiserPasses={}, giDenoiserPasses={}, giPipeline=independent-frag-grid+reservoirs+history+svgf, composition=post-estimator-screen-space",
@@ -55,14 +57,99 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI stability v82: world-hit temporal reservoir reuse enabled for rigidly reprojected Sable receivers; hand history remains isolated"
         );
         Photonics.LOGGER.info(
-                "Photonics GI stability v120: scene-revision epoch invalidates indirect temporal reservoirs, lighting accumulation, and GI denoiser history"
+                "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         Photonics.LOGGER.info(
-                "Photonics direct startup v84: unbiased candidate-count-stable half-budget camera-contribution stratum with full-list systematic tail coverage"
+                "Photonics direct visibility v107: requestedLanes={}, effectiveLanes={}, policy=disjoint-proposal-lanes/exact-original-pdf/visibility-before-unbiased-lane-merge",
+                RestirDiagnostics.getRequestedDirectVisibilityLanes(),
+                getDirectVisibilityLanes()
         );
+        if (RestirDiagnostics.isSourceHistoryEnabled()) {
+            if (isSourceHistoryDiagnosticEnabled()) {
+                if (isDirectEstimatorDiagnosticEnabled()) {
+                    Photonics.LOGGER.warn(
+                            "Photonics ReSTIR direct-estimator diagnostic v107 enabled via -D{}=true and -D{}=true; mode={}, directTemporalReuse=bypassed, directSpatialReuse=bypassed, directVisibilityLanes=1, initialVisibility=deferred-to-r6, display=full-screen-same-pixel, causeColors=red-rejected/green-visible/blue-visible-fraction, metadata=proposal-stratum+log-expansion-rgb16f, revisionMarker=ready+5-bit-world-revision, handheld-and-exact-local-lighting=omitted",
+                            RestirDiagnostics.SOURCE_HISTORY_PROPERTY,
+                            RestirDiagnostics.DIRECT_ESTIMATOR_PROPERTY,
+                            isDirectEstimatorRankDiagnosticEnabled()
+                                    ? "proposal-stratum-expansion"
+                                    : "visibility-cause-map"
+                    );
+                } else {
+                    Photonics.LOGGER.warn(
+                            "Photonics ReSTIR source/history diagnostic v107 enabled via -D{}=true; directTemporalReuse={}, directTemporalBypassRequested={}, bypassProperty=-D{}=true, panels=top-left-current-direct/top-right-accumulated-direct/bottom-left-denoised-direct/bottom-right-final-gi, handheld-and-exact-local-lighting=omitted, composition=internal-single-texture, rawSourceStorage=repurposed-restir_local_lighting",
+                            RestirDiagnostics.SOURCE_HISTORY_PROPERTY,
+                            isDirectTemporalReuseEnabled() ? "enabled" : "bypassed",
+                            RestirDiagnostics.isDirectTemporalBypassEnabled(),
+                            RestirDiagnostics.DIRECT_TEMPORAL_BYPASS_PROPERTY
+                    );
+                }
+            } else {
+                Photonics.LOGGER.warn(
+                        "Photonics ReSTIR source/history diagnostic v107 requested via -D{}=true but requires split GI and block lighting; diagnostics and direct-pass bypasses disabled for this pipeline",
+                        RestirDiagnostics.SOURCE_HISTORY_PROPERTY
+                );
+            }
+        }
+        if (RestirDiagnostics.isDirectEstimatorEnabled()
+                && !isDirectEstimatorDiagnosticEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics ReSTIR direct-estimator diagnostic requested via -D{}=true but requires the active -D{}=true split-GI source/history diagnostic; production direct visibility remains enabled",
+                    RestirDiagnostics.DIRECT_ESTIMATOR_PROPERTY,
+                    RestirDiagnostics.SOURCE_HISTORY_PROPERTY
+            );
+        }
+        if (RestirDiagnostics.isDirectEstimatorRankEnabled()
+                && !isDirectEstimatorDiagnosticEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics ReSTIR proposal-rank diagnostic requested via -D{}=true but requires the active direct-estimator diagnostic; rank display disabled",
+                    RestirDiagnostics.DIRECT_ESTIMATOR_RANK_PROPERTY
+            );
+        }
+        if (RestirDiagnostics.getRequestedDirectVisibilityLanes()
+                != RestirDiagnostics.getDirectVisibilityLanes()) {
+            Photonics.LOGGER.warn(
+                    "Photonics direct visibility lane override {} clamped to supported range 1..2",
+                    RestirDiagnostics.getRequestedDirectVisibilityLanes()
+            );
+        }
+        if (isDirectEstimatorDiagnosticEnabled()
+                && RestirDiagnostics.getDirectVisibilityLanes() > 1) {
+            Photonics.LOGGER.warn(
+                    "Photonics direct visibility lane override suspended while the estimator diagnostic is active; the diagnostic requires one unchanged representative before and after visibility"
+            );
+        } else if (getDirectVisibilityLanes() > 1) {
+            Photonics.LOGGER.warn(
+                    "Photonics experimental two-lane direct visibility enabled via -D{}=2; one additional initial visibility ray may reduce performance",
+                    RestirDiagnostics.DIRECT_VISIBILITY_LANES_PROPERTY
+            );
+        }
         Photonics.LOGGER.info(
                 "Photonics ReSTIR GI transport v85+: stochastic tinted-glass traversal and endpoint-first transparent-hit validation"
         );
+        Photonics.LOGGER.info(
+                "Photonics GI environment v115: initialized independently in the indirect pass; native Photon reads direct sun and hemispherical skylight from colortex4; sunProposalDiagnostic={}",
+                RestirDiagnostics.isGiSunProposalEnabled()
+        );
+        Photonics.LOGGER.info(
+                "Photonics GI environment v117: environment proposals remain active during section streaming; the v116 global pause was removed because it created camera-dependent dark fill"
+        );
+        Photonics.LOGGER.info(
+                "Photonics world upload v117: voxel-tree mutation is fenced before allocator reuse; tree-dependent uniforms remain published after the completed upload"
+        );
+        if (RestirDiagnostics.isGiSunProposalEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics GI sun-proposal diagnostic v115 enabled via -D{}=true; selectionProbability=0.25, estimator=sun-cosine/probability+sky/complement-probability, dimensions=overworld-only, opaqueBlockers=zero-contribution termination",
+                    RestirDiagnostics.GI_SUN_PROPOSAL_PROPERTY
+            );
+        }
+        if (RestirDiagnostics.isGiTransportLanesEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics ReSTIR GI transport diagnostic v114 enabled via -D{}=true; left-to-right lanes=configured-bounces/1x, configured-plus-one-bounce/1x, configured-bounces/4x, configured-plus-one-bounce/4x; configuredBounces={}",
+                    RestirDiagnostics.GI_TRANSPORT_LANES_PROPERTY,
+                    properties.getMaxGiBounces()
+            );
+        }
         Photonics.LOGGER.info(
                 "Photonics stability v86: deterministic thin-cutout GI coverage and bounded palette-heap compiler recovery probes"
         );
@@ -76,9 +163,10 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         this.giDenoiserPasses = properties.getRestirGiDenoiserPasses();
 
         Photonics.LOGGER.info(
-                "Photonics ReSTIR configuration v79: directCandidatesPerPixel={}, directTemporalSampleCap={}, directOutputSampleCap=world-128/sable-temporal-cap, spatialCandidates={}, spatialRadiusPixels={}, output=split-direct-and-gi-radiance-plus-exact-sable-local, samplingPolicy=randomized-systematic-luminance-sorted-world-suffix+distinct-priority-prefix/sable-external-reservoir/exact-all-same-token-lights/fail-closed-tri-state-conservative-local-dda/full-precision-motion-grid-receiver/normal-biased-endpoint/preserved-zero-current-batches, spatialPolicy=receiver-matched-current-frame/external-only-sable/current-rejection-accounting/immutable-input/initial-batch-cap+rejected-fallback-cap+background-finalization, historyPolicy=receiver-domain-complete-split-stable-external/direct-only-full-rigid-local-history/camera-relative-double-compose/normal-guided-receiver/soft-local-signature-reset/visibility-transition-reset/representative-scoped-external-reactivity/explicit-emitter-domain/0.15-block-trail/2-frame-floor, lightListPolicy=position-matched-250ms-alias-trail/250ms-after-loss-minecraft-light-proxy-ownership/125ms+2-frame-unmatched-proxy-quarantine/3-cell-alias-radius/render-thread-owned-merge, motionHoldMs=250, denoiserPolicy=post-denoise-exact-local-hard-shadow+representative-gated-world+soft-local-signature-sable, sableSkyLightDiagnostic=transition-log/optional-freeze-getter, directDenoiserPasses={}, giDenoiserPasses={}, softShadows={}, combinedGi={}, splitGi={}",
+                "Photonics ReSTIR configuration v107: directCandidatesPerPixel={}, directTemporalSampleCap={}, directVisibilityLanes={}, directOutputSampleCap=world-128/sable-temporal-cap, spatialCandidates={}, spatialRadiusPixels={}, output=split-direct-and-gi-radiance-plus-exact-sable-local, samplingPolicy=large-list-logarithmic-rank-strata+compact-list-systematic-prefix-tail+distinct-priority-prefix/sable-external-reservoir/exact-all-same-token-lights/fail-closed-tri-state-conservative-local-dda/full-precision-motion-grid-receiver/normal-biased-endpoint/preserved-zero-current-batches, spatialPolicy=receiver-matched-current-frame/external-only-sable/current-rejection-accounting/immutable-input/initial-batch-cap+rejected-fallback-cap+background-finalization, historyPolicy=receiver-domain-complete-split-stable-external/direct-only-full-rigid-local-history/camera-relative-double-compose/normal-guided-receiver/soft-local-signature-reset/visibility-transition-reset/representative-scoped-external-reactivity/explicit-emitter-domain/0.15-block-trail/2-frame-floor, lightListPolicy=position-matched-250ms-alias-trail/250ms-after-loss-minecraft-light-proxy-ownership/125ms+2-frame-unmatched-proxy-quarantine/3-cell-alias-radius/render-thread-owned-merge, motionHoldMs=250, denoiserPolicy=post-denoise-exact-local-hard-shadow+representative-gated-world+soft-local-signature-sable, sableSkyLightDiagnostic=transition-log/optional-freeze-getter, directDenoiserPasses={}, giDenoiserPasses={}, softShadows={}, combinedGi={}, splitGi={}",
                 properties.getRestirInitialSamples(),
                 20 * properties.getRestirInitialSamples(),
+                getDirectVisibilityLanes(),
                 properties.getRestirSpatialReuseSamples(),
                 properties.getRestirSpatialReuseRadius(),
                 denoiserPasses,
@@ -96,7 +184,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         } else {
             buildCombinedPipeline(irisFactory);
         }
+        buildSourceHistoryDiagnosticPipeline(irisFactory);
         buildAuxiliaryLightingPipeline(irisFactory);
+        buildTemporalUpscalerPipeline(irisFactory);
     }
 
     private void buildCombinedPipeline(IrisFactory irisFactory) {
@@ -108,7 +198,6 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgb32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
-                .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .build(this::registerComponent);
 
         var directReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
@@ -134,8 +223,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         var accumulationFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_lighting",
                 "restir_lighting_variance",
-                "restir_external_lighting",
-                "restir_gi_history_epoch"
+                "restir_external_lighting"
         );
 
         var denoiseFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
@@ -198,17 +286,31 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_direct_reservoirs0", ITextureFormat.rgb32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_direct_state", ITextureFormat.rg32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
+                .addAttachment(
+                        "restir_local_lighting",
+                        ITextureFormat.rgb16f(),
+                        CREATE_SAMPLER,
+                        this::isSourceHistoryDiagnosticEnabled
+                )
                 .build(this::registerComponent);
 
         var directReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_direct_reservoirs0"
         );
-        var diffuseFramebuffer = restirFramebuffer.withDrawBuffers(
-                "restir_lighting",
-                "restir_direct_reservoirs0",
-                "restir_direct_state",
-                "restir_external_lighting"
-        );
+        var diffuseFramebuffer = isSourceHistoryDiagnosticEnabled()
+                ? restirFramebuffer.withDrawBuffers(
+                        "restir_lighting",
+                        "restir_direct_reservoirs0",
+                        "restir_direct_state",
+                        "restir_external_lighting",
+                        "restir_local_lighting"
+                )
+                : restirFramebuffer.withDrawBuffers(
+                        "restir_lighting",
+                        "restir_direct_reservoirs0",
+                        "restir_direct_state",
+                        "restir_external_lighting"
+                );
         var accumulationFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_lighting",
                 "restir_lighting_variance",
@@ -230,13 +332,14 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         "/photonics/rendering/restir/passes/r1_initial_direct.fsh",
                         null
                 )
-                .debugGroup("restir direct temporal")
-                .withFramebuffer(directReservoirFramebuffer)
-                .deferredPass(
-                        "temporal reuse",
-                        "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh",
-                        null
-                )
+                .when(this::isDirectTemporalReuseEnabled, b -> b
+                        .debugGroup("restir direct temporal")
+                        .withFramebuffer(directReservoirFramebuffer)
+                        .deferredPass(
+                                "temporal reuse",
+                                "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh",
+                                null
+                        ))
                 .when(this::isDirectSpatialReuseEnabled, b -> b
                         .debugGroup("restir direct spatial copy")
                         .withFramebuffer(spatialInputFramebuffer)
@@ -298,7 +401,6 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_gi_lighting_variance", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_gi_indirect_reservoirs0", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_gi_indirect_reservoirs1", ITextureFormat.rgb32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
-                .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .build(this::registerComponent);
         var giReservoirFramebuffer = giFramebuffer.withDrawBuffers(
                 "restir_gi_indirect_reservoirs0",
@@ -311,8 +413,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         );
         var giAccumulationFramebuffer = giFramebuffer.withDrawBuffers(
                 "restir_gi_lighting",
-                "restir_gi_lighting_variance",
-                "restir_gi_history_epoch"
+                "restir_gi_lighting_variance"
         );
         var giDenoiseFramebuffer = irisFactory.newFramebuffer(properties.getGiRenderScale())
                 .addAttachment("restir_gi_denoise_result", ITextureFormat.rgba16f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isGiDenoisingEnabled)
@@ -391,7 +492,31 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .build(this::registerRenderer);
     }
 
+    private void buildSourceHistoryDiagnosticPipeline(IrisFactory irisFactory) {
+        if (!isSourceHistoryDiagnosticEnabled()) return;
+
+        var diagnosticFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
+                .addAttachment(
+                        "restir_source_history_diagnostic",
+                        ITextureFormat.rgb16f(),
+                        CREATE_SAMPLER
+                )
+                .build(this::registerComponent);
+
+        irisFactory.newPipeline()
+                .debugGroup("restir source/history diagnostic")
+                .withFramebuffer(diagnosticFramebuffer)
+                .deferredPass(
+                        "compose diagnostic panels",
+                        "/photonics/rendering/restir/passes/r10_source_history_diagnostic.fsh",
+                        null
+                )
+                .build(this::registerRenderer);
+    }
+
     private void buildAuxiliaryLightingPipeline(IrisFactory irisFactory) {
+        if (isSourceHistoryDiagnosticEnabled()) return;
+
         var localLightingFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment("restir_local_lighting", ITextureFormat.rgb16f(), CREATE_SAMPLER, this::isBlockLightEnabled)
                 .build(this::registerComponent);
@@ -406,6 +531,90 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .debugGroup("restir handheld")
                 .withFramebuffer(otherFramebuffer)
                 .deferredPass("handheld", "/photonics/rendering/restir/passes/r10_handheld.fsh", null, this::isHandheldLightingEnabled)
+                .build(this::registerRenderer);
+    }
+
+    private void buildTemporalUpscalerPipeline(IrisFactory irisFactory) {
+        if (!properties.isTemporalUpscalerActive()) {
+            if (properties.useTemporalUpscaler()) {
+                Photonics.LOGGER.info(
+                        "Photonics temporal upscaler bypassed: mode={}, reconstructableRestirLighting={}, configuredSourceScale={}, effectiveSourceScale={}, outputScale={}",
+                        properties.getLightingMode(),
+                        isRestirEnabled(),
+                        properties.getTemporalUpscalerSourceScale(),
+                        properties.getRenderScale(),
+                        properties.getShaderPackRenderScale()
+                );
+            }
+            return;
+        }
+
+        var sourceFramebuffer = irisFactory.newFramebuffer(properties.getRenderScale())
+                .addAttachment(
+                        "photonics_temporal_source",
+                        ITextureFormat.rgba16f(),
+                        CREATE_SAMPLER
+                )
+                .build(this::registerComponent);
+        var historyFramebuffer = irisFactory.newFramebuffer(properties.getShaderPackRenderScale())
+                .addAttachment(
+                        "photonics_temporal_lighting",
+                        ITextureFormat.rgba16f(),
+                        FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER
+                )
+                .addAttachment(
+                        "photonics_temporal_surface",
+                        ITextureFormat.rgba16f(),
+                        FLIP | CREATE_PREV_SAMPLER
+                )
+                .addAttachment(
+                        "photonics_temporal_diagnostic",
+                        ITextureFormat.rgba16f(),
+                        FLIP | CREATE_SAMPLER,
+                        TemporalUpscalerDiagnostics::isSplitScreenEnabled
+                )
+                .build(this::registerComponent);
+
+        if (TemporalUpscalerDiagnostics.isSplitScreenEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics temporal-upscaler split-screen diagnostic enabled via -D{}=true; allocating one double-buffered full-resolution RGBA16F attachment",
+                    TemporalUpscalerDiagnostics.SPLIT_SCREEN_PROPERTY
+            );
+        }
+
+        if (TemporalUpscalerDiagnostics.isSourceValidationLanesEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics v113 bad-angle continuity lanes enabled via -D{}=true; lanes=legacy-history+spatial-off|plane-history+spatial-off|legacy-history+direct-spatial|plane-history+direct-spatial; current-source receiver-plane validation is strict in every lane; direct spatial candidates retain receiver-plane and current-visibility validation; indirect spatial policy is unchanged",
+                    TemporalUpscalerDiagnostics.SOURCE_VALIDATION_LANES_PROPERTY
+            );
+        }
+
+        Photonics.LOGGER.info(
+            "Photonics temporal upscaler: enabled=true, configuredSourceScale={}, effectiveSourceScale={}, giScale={}, outputScale={}, historyFrames={}, currentTaps=4+fallback, historyTaps=4, historyBytesPerOutputPixel=32, sourceValidation=screen-neighbor-domain+normal+strict-precision-receiver-plane-v113, sourceValidationLanes={}, historyValidation=screen-ray-receiver-plane-v108+normal+identity, restirHistoryValidation=legacy-or-continuous-precision-plane-v113, historyWorldRevisionPolicy=local-reactive, sparseSupportPolicy=history-stable, composition=private-lighting-texture",
+                properties.getTemporalUpscalerSourceScale(),
+                properties.getRenderScale(),
+                properties.getGiRenderScale(),
+                properties.getShaderPackRenderScale(),
+                properties.getTemporalUpscalerHistoryFrames(),
+                TemporalUpscalerDiagnostics.isSourceValidationLanesEnabled()
+        );
+
+        irisFactory.newPipeline()
+                .debugGroup("photonics temporal source")
+                .withFramebuffer(sourceFramebuffer)
+                .deferredPass(
+                        "compose low-resolution lighting",
+                        "/photonics/rendering/temporal_upscaler/source.fsh",
+                        null
+                )
+                .debugGroup("photonics temporal reconstruction")
+                .thenFlip(historyFramebuffer)
+                .withFramebuffer(historyFramebuffer)
+                .deferredPass(
+                        "reconstruct lighting",
+                        "/photonics/rendering/temporal_upscaler/reconstruct.fsh",
+                        null
+                )
                 .build(this::registerRenderer);
     }
 
@@ -433,6 +642,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 && properties.getGiRenderScale() < properties.getRenderScale() - 0.0001f;
     }
 
+    public boolean isSourceHistoryDiagnosticEnabled() {
+        return RestirDiagnostics.isSourceHistoryEnabled()
+                && isSplitGiEnabled()
+                && isBlockLightEnabled();
+    }
+
     public boolean isRestirEnabled() {
         return isBlockLightEnabled() || isRestirGiEnabled();
     }
@@ -443,7 +658,32 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
     }
 
     public boolean isDirectSpatialReuseEnabled() {
-        return isBlockLightEnabled() && properties.getRestirSpatialReuseSamples() > 0;
+        return isBlockLightEnabled()
+                && properties.getRestirSpatialReuseSamples() > 0
+                && !isDirectEstimatorDiagnosticEnabled();
+    }
+
+    public boolean isDirectTemporalReuseEnabled() {
+        return isBlockLightEnabled()
+                && !isDirectEstimatorDiagnosticEnabled()
+                && !(isSourceHistoryDiagnosticEnabled()
+                && RestirDiagnostics.isDirectTemporalBypassEnabled());
+    }
+
+    public boolean isDirectEstimatorDiagnosticEnabled() {
+        return isSourceHistoryDiagnosticEnabled()
+                && RestirDiagnostics.isDirectEstimatorEnabled();
+    }
+
+    public boolean isDirectEstimatorRankDiagnosticEnabled() {
+        return isDirectEstimatorDiagnosticEnabled()
+                && RestirDiagnostics.isDirectEstimatorRankEnabled();
+    }
+
+    public int getDirectVisibilityLanes() {
+        return isDirectEstimatorDiagnosticEnabled()
+                ? 1
+                : RestirDiagnostics.getDirectVisibilityLanes();
     }
 
     public boolean isIndirectSpatialReuseEnabled() {
