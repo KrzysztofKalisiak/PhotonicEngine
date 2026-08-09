@@ -116,7 +116,12 @@ void main() {
     //
     // Once GI can hit Sable geometry, the sample must also carry the hit
     // sublevel identity and local-space point before this remains valid.
-    bool previous_scene_matches = ph_restir_gi_history_epoch_matches(prev_texel);
+    // The epoch gates accumulated radiance in r7, but it is too coarse for
+    // the ray reservoir: world revisions are also emitted for streamed chunk
+    // batches. Keep an addressable previous reservoir and validate its actual
+    // path below against the current voxel tree.
+    bool previous_scene_matches =
+        ph_restir_gi_history_texel_available(prev_texel);
     if (!frag_is_hand
             && !frag_data_is_hand(prev_frag)
             && previous_scene_matches

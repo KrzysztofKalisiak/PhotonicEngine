@@ -57,7 +57,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI stability v82: world-hit temporal reservoir reuse enabled for rigidly reprojected Sable receivers; hand history remains isolated"
         );
         Photonics.LOGGER.info(
-                "Photonics GI stability v121: unsettled voxel revisions retain validated GI history; settled revisions invalidate indirect reservoirs and lighting accumulation; current-frame SVGF remains active"
+                "Photonics GI stability v122: streamed revisions reset radiance accumulation but retain addressable GI reservoirs for current-voxel path validation; current-frame SVGF remains active"
         );
         Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
