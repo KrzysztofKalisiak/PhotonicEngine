@@ -44,6 +44,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
     private final Queue<Vector3i> unloadQueue;
     private final SectionManager.SectionQueue sectionQueue;
     private final SectionManager.TaskQueue<ChunkCompiler.BuildResult> builtSectionQueue;
+    private final SectionManager sectionManager;
 
     private final WorldRegistry worldRegistry;
 
@@ -64,6 +65,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             SectionManager.TaskQueue<ChunkCompiler.BuildResult> builtSectionQueue,
             WorldRegistry worldRegistry
     ) {
+        this.sectionManager = sectionManager;
         this.unloadQueue = sectionManager.newUnloadQueue();
         this.sectionQueue = sectionManager.newSectionQueue(false);
         this.builtSectionQueue = builtSectionQueue;
@@ -417,11 +419,6 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         return Objects.equals(sectionHashes.get(pos), hash);
     }
 
-    private boolean setSectionHash(Vector3i pos, long hash) {
-        var previousHash = sectionHashes.put(pos, hash);
-        return !Objects.equals(previousHash, hash);
-    }
-
     private void unloadChunks() {
         while (!unloadQueue.isEmpty()) {
             var section = unloadQueue.poll();
@@ -650,8 +647,17 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         }
 
         private boolean submit() throws InterruptedException {
-            if (!setLatestSection(chunkPos, priority) || !setSectionHash(chunkPos, hash))
+            if (!setLatestSection(chunkPos, priority))
                 return false;
+
+            Long previousHash = sectionHashes.put(chunkPos, hash);
+            if (Objects.equals(previousHash, hash))
+                return false;
+
+            // The first accepted hash is initial streaming. Only a changed
+            // hash for an already-known section represents a scene edit.
+            if (previousHash != null)
+                sectionManager.markSceneChanged();
 
             builtSectionQueue.offer(chunkPos, this);
             return true;

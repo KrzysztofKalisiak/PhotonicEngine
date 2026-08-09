@@ -165,11 +165,16 @@ public class SectionManager implements RenderingComponent {
     }
 
     /**
-     * Tracks section-content changes separately from compiler publication and
-     * voxel-tree layout revisions caused by streaming.
+     * Tracks accepted changes to already-known section content separately
+     * from compiler publication and voxel-tree layout revisions caused by
+     * streaming.
      */
     public long sceneRevision() {
         return sceneRevision.get();
+    }
+
+    public void markSceneChanged() {
+        sceneRevision.incrementAndGet();
     }
 
     public <T> TaskQueue<T> newTaskQueue(int maxCapacity, boolean trackUnloads) {
@@ -236,8 +241,6 @@ public class SectionManager implements RenderingComponent {
     public void onSectionChanged(int x, int y, int z) {
         ILevel level = Minecraft.getLevel();
         if (level == null) return;
-
-        sceneRevision.incrementAndGet();
 
         try {
             Vector3i sectionPos = new Vector3i(x, y, z);
