@@ -153,6 +153,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                     properties.getMaxGiBounces()
             );
         }
+        if (RestirDiagnostics.isHistorySplitScreenEnabled()) {
+            Photonics.LOGGER.warn(
+                    "Photonics ReSTIR history split diagnostic enabled via -D{}=true; left half keeps temporal radiance history, right half uses current-frame radiance while retaining current tracing and SVGF passes",
+                    RestirDiagnostics.HISTORY_SPLIT_SCREEN_PROPERTY
+            );
+        }
         Photonics.LOGGER.info(
                 "Photonics stability v86: deterministic thin-cutout GI coverage and bounded palette-heap compiler recovery probes"
         );
