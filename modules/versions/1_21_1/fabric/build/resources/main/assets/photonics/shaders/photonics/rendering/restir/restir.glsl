@@ -92,6 +92,15 @@ bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
 }
 #endif
 
+bool ph_restir_history_split_bypass() {
+#ifdef PH_RESTIR_HISTORY_SPLIT_SCREEN
+    ivec2 history_size = textureSize(prev_restir_lighting, 0);
+    return frag_tex_coord.x >= history_size.x / 2;
+#else
+    return false;
+#endif
+}
+
 int ph_restir_continuity_lane(ivec2 texture_size) {
 #ifdef PH_TEMPORAL_UPSCALER_SOURCE_VALIDATION_LANES
     float normalized_x = (float(frag_tex_coord.x) + 0.5f)

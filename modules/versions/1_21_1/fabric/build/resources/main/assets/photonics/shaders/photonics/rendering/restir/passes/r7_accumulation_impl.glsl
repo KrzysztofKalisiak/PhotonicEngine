@@ -33,7 +33,8 @@ void main() {
 
     SampleHistory accumulator;
 
-    if (ph_restir_gi_history_epoch_matches(frag_tex_coord))
+    if (!ph_restir_history_split_bypass()
+            && ph_restir_gi_history_epoch_matches(frag_tex_coord))
         sample_history_reproject(accumulator);
     else
         accumulator = SampleHistory(vec4(0.0f), vec4(0.0f), vec4(0.0f));
