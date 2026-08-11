@@ -75,6 +75,30 @@ bool ph_restir_gi_history_texel_available(ivec2 texel) {
         && !any(greaterThanEqual(texel, history_size));
 }
 
+const float PH_SCENE_CHANGE_HISTORY_PADDING = 1.5f;
+
+bool ph_restir_scene_change_affects_receiver(vec3 receiver_rt_pos) {
+    if (ph_scene_revision <= 0 || ph_scene_change_revision <= 0)
+        return false;
+
+    // The scene epoch and the bounds are published together by the world
+    // compiler. A missing/mismatched bounds snapshot is unsafe, so retain the
+    // old conservative global invalidation in that case.
+    if (ph_scene_change_revision != ph_scene_revision)
+        return true;
+
+    vec3 receiver_world_pos = receiver_rt_pos + world_offset;
+    vec3 padding = vec3(PH_SCENE_CHANGE_HISTORY_PADDING);
+    return all(greaterThanEqual(
+            receiver_world_pos,
+            ph_scene_change_min - padding
+        ))
+        && all(lessThan(
+            receiver_world_pos,
+            ph_scene_change_max + padding
+        ));
+}
+
 bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
     // Layout revisions are produced while sections stream in and do not
     // necessarily change the geometry seen by this receiver. Do not reject
@@ -83,8 +107,14 @@ bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
     if (!ph_restir_gi_history_texel_available(texel))
         return false;
 
-    return texelFetch(prev_restir_gi_history_epoch, texel, 0).r
-            == uint(ph_scene_revision);
+    if (texelFetch(prev_restir_gi_history_epoch, texel, 0).r
+            == uint(ph_scene_revision))
+        return true;
+
+    // A block edit invalidates radiance only for receivers in the edited
+    // region. Receivers elsewhere still revalidate their stored GI path in
+    // r4/r6 and can keep their accumulated radiance through the scene epoch.
+    return !ph_restir_scene_change_affects_receiver(frag_rt_pos);
 }
 #else
 bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
@@ -373,6 +403,46 @@ bool sample_history_reproject_nearest_texel(out ivec2 texel) {
         ph_restir_use_continuous_history(history_size),
         PH_HISTORY_POSITION_ERROR_SQ
     );
+}
+
+bool sample_history_reproject_nearest_history(out SampleHistory history) {
+    history = SampleHistory(
+        vec4(0.0f),
+        vec4(0.0f),
+        vec4(0.0f)
+    );
+
+    vec3 previous_player_pos;
+    vec3 expected_previous_normal;
+    uint sublevel_token;
+    vec2 uv = ph_reproject_frag_data(
+        _frag_data,
+        frag_tex_coord,
+        frag_is_hand,
+        get_taa_jitter(),
+        previous_player_pos,
+        expected_previous_normal,
+        sublevel_token
+    ).xy;
+
+    if (any(lessThan(uv, vec2(0.0f)))
+            || any(greaterThanEqual(uv, vec2(1.0f))))
+        return false;
+
+    ivec2 history_size = textureSize(prev_restir_lighting, 0);
+    ivec2 texel = ivec2(uv * vec2(history_size));
+    if (any(lessThan(texel, ivec2(0)))
+            || any(greaterThanEqual(texel, history_size)))
+        return false;
+
+    history = sample_history_reproject_single(
+        texel,
+        previous_player_pos,
+        expected_previous_normal,
+        sublevel_token,
+        PH_HISTORY_POSITION_ERROR_SQ
+    );
+    return sample_history_is_valid(history);
 }
 
 const int DIRECT_HISTORY_UNKNOWN = 0;
