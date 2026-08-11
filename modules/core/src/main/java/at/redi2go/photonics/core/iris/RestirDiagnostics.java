@@ -9,6 +9,7 @@ public final class RestirDiagnostics {
     public static final String GI_TRANSPORT_LANES_PROPERTY = "photonics.restirGiTransportDiagnostic";
     public static final String GI_SUN_PROPOSAL_PROPERTY = "photonics.restirGiSunProposalDiagnostic";
     public static final String HISTORY_SPLIT_SCREEN_PROPERTY = "photonics.restirHistorySplitDiagnostic";
+    public static final String HISTORY_SPLIT_MODE_PROPERTY = "photonics.restirHistorySplitMode";
 
     private static final boolean SOURCE_HISTORY_ENABLED = Boolean.getBoolean(SOURCE_HISTORY_PROPERTY);
     private static final boolean DIRECT_TEMPORAL_BYPASS_ENABLED = Boolean.getBoolean(DIRECT_TEMPORAL_BYPASS_PROPERTY);
@@ -16,7 +17,14 @@ public final class RestirDiagnostics {
     private static final boolean DIRECT_ESTIMATOR_RANK_ENABLED = Boolean.getBoolean(DIRECT_ESTIMATOR_RANK_PROPERTY);
     private static final boolean GI_TRANSPORT_LANES_ENABLED = Boolean.getBoolean(GI_TRANSPORT_LANES_PROPERTY);
     private static final boolean GI_SUN_PROPOSAL_ENABLED = Boolean.getBoolean(GI_SUN_PROPOSAL_PROPERTY);
-    private static final boolean HISTORY_SPLIT_SCREEN_ENABLED = Boolean.getBoolean(HISTORY_SPLIT_SCREEN_PROPERTY);
+    private static final int REQUESTED_HISTORY_SPLIT_MODE = Integer.getInteger(
+            HISTORY_SPLIT_MODE_PROPERTY,
+            Boolean.getBoolean(HISTORY_SPLIT_SCREEN_PROPERTY) ? 3 : 0
+    );
+    private static final int HISTORY_SPLIT_MODE = Math.max(
+            0,
+            Math.min(REQUESTED_HISTORY_SPLIT_MODE, 3)
+    );
     private static final int REQUESTED_DIRECT_VISIBILITY_LANES = Integer.getInteger(
             DIRECT_VISIBILITY_LANES_PROPERTY,
             1
@@ -62,6 +70,10 @@ public final class RestirDiagnostics {
     }
 
     public static boolean isHistorySplitScreenEnabled() {
-        return HISTORY_SPLIT_SCREEN_ENABLED;
+        return HISTORY_SPLIT_MODE != 0;
+    }
+
+    public static int getHistorySplitMode() {
+        return HISTORY_SPLIT_MODE;
     }
 }

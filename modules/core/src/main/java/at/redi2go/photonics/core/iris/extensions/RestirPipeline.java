@@ -155,8 +155,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         }
         if (RestirDiagnostics.isHistorySplitScreenEnabled()) {
             Photonics.LOGGER.warn(
-                    "Photonics ReSTIR history split diagnostic enabled via -D{}=true; left half keeps temporal radiance history, right half uses current-frame radiance while retaining current tracing and SVGF passes",
-                    RestirDiagnostics.HISTORY_SPLIT_SCREEN_PROPERTY
+                    "Photonics ReSTIR history split diagnostic enabled: mode={} via -D{} (1=radiance accumulation only, 2=GI reservoir reuse only, 3=both); left half keeps the selected history, right half bypasses it",
+                    RestirDiagnostics.getHistorySplitMode(),
+                    RestirDiagnostics.HISTORY_SPLIT_MODE_PROPERTY
             );
         }
         Photonics.LOGGER.info(

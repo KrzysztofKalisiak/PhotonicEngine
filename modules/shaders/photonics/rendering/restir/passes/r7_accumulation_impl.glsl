@@ -33,7 +33,7 @@ void main() {
 
     SampleHistory accumulator;
 
-    if (!ph_restir_history_split_bypass()
+    if (!ph_restir_history_split_radiance_bypass()
             && ph_restir_gi_history_epoch_matches(frag_tex_coord))
         sample_history_reproject(accumulator);
     else

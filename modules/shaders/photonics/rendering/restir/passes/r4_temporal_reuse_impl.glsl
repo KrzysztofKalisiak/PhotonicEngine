@@ -121,7 +121,7 @@ void main() {
     // batches. Keep an addressable previous reservoir and validate its actual
     // path below against the current voxel tree.
     bool previous_scene_matches =
-        !ph_restir_history_split_bypass()
+        !ph_restir_history_split_reservoir_bypass()
         && ph_restir_gi_history_texel_available(prev_texel);
     if (!frag_is_hand
             && !frag_data_is_hand(prev_frag)

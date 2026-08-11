@@ -92,6 +92,14 @@ public class IrisDefines {
                 && RestirDiagnostics.isHistorySplitScreenEnabled())
             defines.stringDefine("PH_RESTIR_HISTORY_SPLIT_SCREEN", "");
 
+        if (RestirDiagnostics.getHistorySplitMode() == 1
+                || RestirDiagnostics.getHistorySplitMode() == 3)
+            defines.stringDefine("PH_RESTIR_HISTORY_SPLIT_RADIANCE", "");
+
+        if (RestirDiagnostics.getHistorySplitMode() == 2
+                || RestirDiagnostics.getHistorySplitMode() == 3)
+            defines.stringDefine("PH_RESTIR_HISTORY_SPLIT_RESERVOIR", "");
+
         if (phProperties.getLightingMode() == LightingMode.RESTIR
                 && phProperties.useRestirCombinedGi()
                 && phProperties.getGiRenderScale() < phProperties.getRenderScale() - 0.0001f)
