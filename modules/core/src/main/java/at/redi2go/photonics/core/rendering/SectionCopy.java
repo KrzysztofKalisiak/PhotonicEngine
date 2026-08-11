@@ -74,10 +74,19 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
     }
 
     public SectionHashes computeSectionHashes(@Nullable ILevel level) {
+        return computeSectionHashes(level, false);
+    }
+
+    public SectionHashes computeSectionHashes(
+            @Nullable ILevel level,
+            boolean captureSceneBlockHashes
+    ) {
         final long[] sectionHash = {0};
         final long[] sceneHash = {0};
+        final int[] sceneBlockHashes = captureSceneBlockHashes ? new int[16 * 16 * 16] : null;
+        final String[] sceneBlockDescriptions = captureSceneBlockHashes ? new String[16 * 16 * 16] : null;
 
-        forEachBlock((ignored, blockPos, block) -> {
+        forEachBlock((blockOffset, blockPos, block) -> {
             // BlockState does not define value equality on 1.21.1, so its
             // identity hash changes when a copied section is rebuilt. The
             // registry-backed stable state hash is sufficient for both
@@ -88,9 +97,20 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
             long packedBlock = (((long) skylight) << 32) | Integer.toUnsignedLong(blockHash);
             sectionHash[0] = sectionHash[0] * 31 + packedBlock;
             sceneHash[0] = sceneHash[0] * 31 + Integer.toUnsignedLong(blockHash);
+
+            if (sceneBlockHashes != null) {
+                int blockIndex = (blockOffset.x() * 16 + blockOffset.y()) * 16 + blockOffset.z();
+                sceneBlockHashes[blockIndex] = blockHash;
+                sceneBlockDescriptions[blockIndex] = block.toString();
+            }
         });
 
-        return new SectionHashes(sectionHash[0], sceneHash[0]);
+        return new SectionHashes(
+                sectionHash[0],
+                sceneHash[0],
+                sceneBlockHashes,
+                sceneBlockDescriptions
+        );
     }
 
     public long computeSectionHash(@Nullable ILevel level) {
@@ -120,5 +140,10 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
         return result;
     }
 
-    public record SectionHashes(long sectionHash, long sceneHash) {}
+    public record SectionHashes(
+            long sectionHash,
+            long sceneHash,
+            @Nullable int[] sceneBlockHashes,
+            @Nullable String[] sceneBlockDescriptions
+    ) {}
 }

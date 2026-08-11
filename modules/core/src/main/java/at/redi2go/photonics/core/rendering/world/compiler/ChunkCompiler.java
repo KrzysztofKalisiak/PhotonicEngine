@@ -35,6 +35,8 @@ import java.util.concurrent.locks.LockSupport;
 
 public class ChunkCompiler implements Runnable, RenderingComponent {
     private static final int THREAD_COUNT = 2;
+    private static final boolean DEBUG_SCENE_HASH_DIFF =
+            Boolean.getBoolean("photonics.debugSceneHashDiff");
     private static final long HEAP_RECOVERY_RELEASE_BYTES = 8L * 1024L * 1024L;
     private static final long MIN_HEAP_RECOVERY_PROBE_NANOS = 2_000_000_000L;
     private static final long MAX_HEAP_RECOVERY_PROBE_NANOS = 16_000_000_000L;
@@ -56,6 +58,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
      * temporal GI history by itself.
      */
     private final ConcurrentMap<Vector3i, Long> sceneHashes = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Vector3i, SceneHashSnapshot> debugSceneHashes = new ConcurrentHashMap<>();
 
     private final Thread[] threads = new Thread[THREAD_COUNT];
     private final AtomicInteger consecutiveHeapFailures = new AtomicInteger();
@@ -77,6 +80,9 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         this.builtSectionQueue = builtSectionQueue;
 
         this.worldRegistry = worldRegistry;
+
+        if (DEBUG_SCENE_HASH_DIFF)
+            Photonics.LOGGER.info("Photonics scene hash diff diagnostics enabled");
 
         for (int i = 0; i < THREAD_COUNT; i++) {
             var thread = new Thread(this, "Photonic Chunk Compiler #" + i);
@@ -122,14 +128,22 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         if (!isLatestSection(section.pos(), section.priority())) return;
 
         // Computing the hash immediately is cheaper than meshing an entire section just to discard it
-        var hashes = section.computeSectionHashes(level);
+        var hashes = section.computeSectionHashes(level, DEBUG_SCENE_HASH_DIFF);
         long hash = hashes.sectionHash();
         long sceneHash = hashes.sceneHash();
         if (isDuplicateSection(section.pos(), hash)) return;
 
         GpuBufferHeapStats worldHeapBefore = worldRegistry.worldHeapStats();
         GpuBufferHeapStats paletteHeapBefore = worldRegistry.paletteHeapStats();
-        var buildResult = new BuildResult(section.pos(), section.blockPos(), hash, sceneHash, section.priority());
+        var buildResult = new BuildResult(
+                section.pos(),
+                section.blockPos(),
+                hash,
+                sceneHash,
+                hashes.sceneBlockHashes(),
+                hashes.sceneBlockDescriptions(),
+                section.priority()
+        );
         boolean submitted = false;
         try {
             BlockMesher.REGISTRY.setup();
@@ -434,8 +448,85 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
             sectionHashes.remove(section);
             sceneHashes.remove(section);
+            debugSceneHashes.remove(section);
             latestSection.remove(section);
         }
+    }
+
+    private void logSceneHashDiff(
+            Vector3i chunkPos,
+            @Nullable SceneHashSnapshot previous,
+            @Nullable int[] currentHashes,
+            @Nullable String[] currentDescriptions,
+            long previousSceneHash,
+            long sceneHash
+    ) {
+        if (previous == null || currentHashes == null || currentDescriptions == null) {
+            Photonics.LOGGER.info(
+                    "Photonics scene hash diff v131: section={}, previousSceneHash={}, sceneHash={}, diagnosticsUnavailable=true",
+                    chunkPos,
+                    previousSceneHash,
+                    sceneHash
+            );
+            return;
+        }
+
+        int changedBlocks = 0;
+        int firstChangedIndex = -1;
+        int blockCount = Math.min(previous.stableHashes.length, currentHashes.length);
+        for (int i = 0; i < blockCount; i++) {
+            if (previous.stableHashes[i] == currentHashes[i]) continue;
+
+            if (firstChangedIndex == -1)
+                firstChangedIndex = i;
+            changedBlocks++;
+        }
+
+        if (previous.stableHashes.length != currentHashes.length)
+            changedBlocks += Math.abs(previous.stableHashes.length - currentHashes.length);
+
+        if (firstChangedIndex == -1) {
+            Photonics.LOGGER.info(
+                    "Photonics scene hash diff v131: section={}, previousSceneHash={}, sceneHash={}, changedBlocks=0, reason=hash_without_block_difference",
+                    chunkPos,
+                    previousSceneHash,
+                    sceneHash
+            );
+            return;
+        }
+
+        int localX = firstChangedIndex / (16 * 16);
+        int remainder = firstChangedIndex % (16 * 16);
+        int localY = remainder / 16;
+        int localZ = remainder % 16;
+        int worldX = chunkPos.x * 16 + localX;
+        int worldY = chunkPos.y * 16 + localY;
+        int worldZ = chunkPos.z * 16 + localZ;
+
+        String previousDescription = firstChangedIndex < previous.descriptions.length
+                ? previous.descriptions[firstChangedIndex]
+                : "<missing>";
+        String currentDescription = firstChangedIndex < currentDescriptions.length
+                ? currentDescriptions[firstChangedIndex]
+                : "<missing>";
+
+        Photonics.LOGGER.info(
+                "Photonics scene hash diff v131: section={}, previousSceneHash={}, sceneHash={}, changedBlocks={}, firstLocal=({}, {}, {}), firstWorld=({}, {}, {}), oldStableHash={}, newStableHash={}, oldState={}, newState={}",
+                chunkPos,
+                previousSceneHash,
+                sceneHash,
+                changedBlocks,
+                localX,
+                localY,
+                localZ,
+                worldX,
+                worldY,
+                worldZ,
+                previous.stableHashes[firstChangedIndex],
+                currentHashes[firstChangedIndex],
+                previousDescription,
+                currentDescription
+        );
     }
 
     @Override
@@ -518,11 +609,15 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         }
     }
 
+    private record SceneHashSnapshot(int[] stableHashes, String[] descriptions) {}
+
     public class BuildResult implements PrioritizedTask, Disposable {
         private final Vector3i chunkPos;
         private final Vector3i chunkBlockPos;
         private final long hash;
         private final long sceneHash;
+        private final @Nullable int[] sceneBlockHashes;
+        private final @Nullable String[] sceneBlockDescriptions;
         private final long priority;
 
         private final Queue<BlockResult> blocks = new ConcurrentLinkedQueue<>();
@@ -539,12 +634,16 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                 Vector3i chunkBlockPos,
                 long hash,
                 long sceneHash,
+                @Nullable int[] sceneBlockHashes,
+                @Nullable String[] sceneBlockDescriptions,
                 long priority
         ) {
             this.chunkPos = chunkPos;
             this.chunkBlockPos = chunkBlockPos;
             this.hash = hash;
             this.sceneHash = sceneHash;
+            this.sceneBlockHashes = sceneBlockHashes;
+            this.sceneBlockDescriptions = sceneBlockDescriptions;
             this.priority = priority;
         }
 
@@ -671,13 +770,32 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             // block/model hash is a scene edit; skylight-only changes are not.
             if (previousSceneHash != null && !Objects.equals(previousSceneHash, sceneHash)) {
                 Photonics.LOGGER.info(
-                        "Photonics scene content change v127: section={}, previousSceneHash={}, sceneHash={}, fullHash={}",
+                        "Photonics scene content change v127: section={}, previousSceneHash={}, sceneHash={}, fullHash={}, priority={}",
                         chunkPos,
                         previousSceneHash,
                         sceneHash,
-                        hash
+                        hash,
+                        priority
                 );
+                if (DEBUG_SCENE_HASH_DIFF)
+                    logSceneHashDiff(
+                            chunkPos,
+                            debugSceneHashes.get(chunkPos),
+                            sceneBlockHashes,
+                            sceneBlockDescriptions,
+                            previousSceneHash,
+                            sceneHash
+                    );
                 sectionManager.markSceneChanged();
+            }
+
+            if (DEBUG_SCENE_HASH_DIFF
+                    && sceneBlockHashes != null
+                    && sceneBlockDescriptions != null) {
+                debugSceneHashes.put(
+                        new Vector3i(chunkPos),
+                        new SceneHashSnapshot(sceneBlockHashes, sceneBlockDescriptions)
+                );
             }
 
             builtSectionQueue.offer(chunkPos, this);
