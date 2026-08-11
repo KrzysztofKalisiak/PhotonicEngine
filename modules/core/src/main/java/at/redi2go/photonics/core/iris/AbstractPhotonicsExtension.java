@@ -55,7 +55,7 @@ public abstract class AbstractPhotonicsExtension extends AbstractRenderingCompon
                 worldAllocator,
                 paletteTexture,
                 builtSectionQueue,
-                sectionManager::sceneRevision,
+                sectionManager,
                 worldRegistry
         ));
 

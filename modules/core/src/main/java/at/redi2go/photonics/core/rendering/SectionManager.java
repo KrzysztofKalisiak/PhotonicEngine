@@ -40,6 +40,8 @@ public class SectionManager implements RenderingComponent {
     private final IntSupplier renderDistanceSupplier;
     private long remeshCount = 0;
     private final AtomicLong sceneRevision = new AtomicLong();
+    private final Object sceneChangeLock = new Object();
+    private SceneChangeRegion pendingSceneChangeRegion = SceneChangeRegion.empty();
 
     public SectionManager(IntSupplier renderDistanceSupplier) {
         this.renderDistanceSupplier = renderDistanceSupplier;
@@ -173,8 +175,104 @@ public class SectionManager implements RenderingComponent {
         return sceneRevision.get();
     }
 
-    public void markSceneChanged() {
-        sceneRevision.incrementAndGet();
+    /**
+     * Marks the section's block content as changed and keeps the changed
+     * section bounds until the world compiler has published that revision.
+     * Multiple worker results can arrive before one tree upload, so the
+     * pending bounds are unioned instead of allowing a later section to hide
+     * an earlier change.
+     */
+    public void markSceneChanged(Vector3i sectionPos) {
+        int minX = sectionPos.x * 16;
+        int minY = sectionPos.y * 16;
+        int minZ = sectionPos.z * 16;
+        int maxX = minX + 16;
+        int maxY = minY + 16;
+        int maxZ = minZ + 16;
+
+        synchronized (sceneChangeLock) {
+            long revision = sceneRevision.incrementAndGet();
+            if (pendingSceneChangeRegion.isValid()) {
+                pendingSceneChangeRegion = pendingSceneChangeRegion.union(
+                        revision,
+                        minX,
+                        minY,
+                        minZ,
+                        maxX,
+                        maxY,
+                        maxZ
+                );
+            } else {
+                pendingSceneChangeRegion = new SceneChangeRegion(
+                        revision,
+                        minX,
+                        minY,
+                        minZ,
+                        maxX,
+                        maxY,
+                        maxZ
+                );
+            }
+        }
+    }
+
+    public SceneChangeRegion sceneChangeRegion() {
+        synchronized (sceneChangeLock) {
+            return pendingSceneChangeRegion;
+        }
+    }
+
+    /**
+     * Clears only the snapshot that the compiler actually observed. If a
+     * newer scene edit arrived concurrently, its pending union is retained.
+     */
+    public void acknowledgeSceneChangeRegion(long revision) {
+        synchronized (sceneChangeLock) {
+            if (pendingSceneChangeRegion.revision() == revision
+                    && sceneRevision.get() == revision)
+                pendingSceneChangeRegion = SceneChangeRegion.empty();
+        }
+    }
+
+    public record SceneChangeRegion(
+            long revision,
+            int minX,
+            int minY,
+            int minZ,
+            int maxX,
+            int maxY,
+            int maxZ
+    ) {
+        public static SceneChangeRegion empty() {
+            return new SceneChangeRegion(0, 0, 0, 0, 0, 0, 0);
+        }
+
+        public boolean isValid() {
+            return revision > 0
+                    && minX < maxX
+                    && minY < maxY
+                    && minZ < maxZ;
+        }
+
+        private SceneChangeRegion union(
+                long revision,
+                int otherMinX,
+                int otherMinY,
+                int otherMinZ,
+                int otherMaxX,
+                int otherMaxY,
+                int otherMaxZ
+        ) {
+            return new SceneChangeRegion(
+                    revision,
+                    Math.min(minX, otherMinX),
+                    Math.min(minY, otherMinY),
+                    Math.min(minZ, otherMinZ),
+                    Math.max(maxX, otherMaxX),
+                    Math.max(maxY, otherMaxY),
+                    Math.max(maxZ, otherMaxZ)
+            );
+        }
     }
 
     public <T> TaskQueue<T> newTaskQueue(int maxCapacity, boolean trackUnloads) {

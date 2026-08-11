@@ -770,7 +770,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             // block/model hash is a scene edit; skylight-only changes are not.
             if (previousSceneHash != null && !Objects.equals(previousSceneHash, sceneHash)) {
                 Photonics.LOGGER.info(
-                        "Photonics scene content change v127: section={}, previousSceneHash={}, sceneHash={}, fullHash={}, priority={}",
+                        "Photonics scene content change v132: section={}, previousSceneHash={}, sceneHash={}, fullHash={}, priority={}",
                         chunkPos,
                         previousSceneHash,
                         sceneHash,
@@ -786,7 +786,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                             previousSceneHash,
                             sceneHash
                     );
-                sectionManager.markSceneChanged();
+                sectionManager.markSceneChanged(chunkPos);
             }
 
             if (DEBUG_SCENE_HASH_DIFF

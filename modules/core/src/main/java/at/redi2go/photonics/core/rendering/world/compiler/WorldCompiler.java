@@ -36,7 +36,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.LongSupplier;
 
 public class WorldCompiler implements Runnable, RenderingComponent {
     public static final int MAX_SECTIONS_PER_RUN = 48;
@@ -47,7 +46,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     private static final ExecutorService THREAD_POOL;
 
     private final SectionManager.TaskQueue<ChunkCompiler.BuildResult> taskQueue;
-    private final LongSupplier sceneRevisionSupplier;
+    private final SectionManager sectionManager;
 
     private final WorldAllocator worldAllocator;
     private final PaletteTexture paletteTexture;
@@ -87,6 +86,8 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     private long compilationRevision = 0;
     private long mostRecentCompilationRevision = 0;
     private long mostRecentSceneRevision = 0;
+    private SectionManager.SceneChangeRegion mostRecentSceneChangeRegion =
+            SectionManager.SceneChangeRegion.empty();
     private long lastObservedCompilationRevision = -1;
     private long lastCompilationChangeNanos = 0;
     private long nextActiveDiagnosticNanos = 0;
@@ -107,14 +108,14 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             WorldAllocator worldAllocator,
             PaletteTexture paletteTexture,
             SectionManager.TaskQueue<ChunkCompiler.BuildResult> taskQueue,
-            LongSupplier sceneRevisionSupplier,
+            SectionManager sectionManager,
             WorldRegistry worldRegistry
     ) {
         this.worldAllocator = worldAllocator;
         this.paletteTexture = paletteTexture;
 
         this.taskQueue = taskQueue;
-        this.sceneRevisionSupplier = sceneRevisionSupplier;
+        this.sectionManager = sectionManager;
         this.registry = worldRegistry;
 
         this.treeManager = new TreeManager(BlockMergeMode.OVERWRITE, worldAllocator);
@@ -161,7 +162,16 @@ public class WorldCompiler implements Runnable, RenderingComponent {
 
                     compilationRevision++;
                     mostRecentCompilationRevision = compilationRevision;
-                    mostRecentSceneRevision = sceneRevisionSupplier.getAsLong();
+                    var sceneChangeRegion = sectionManager.sceneChangeRegion();
+                    if (sceneChangeRegion.isValid()) {
+                        mostRecentSceneRevision = sceneChangeRegion.revision();
+                        mostRecentSceneChangeRegion = sceneChangeRegion;
+                        sectionManager.acknowledgeSceneChangeRegion(
+                                sceneChangeRegion.revision()
+                        );
+                    } else {
+                        mostRecentSceneRevision = sectionManager.sceneRevision();
+                    }
                     mostRecentCompiledSections = regionIds.size();
                     mostRecentTrackedSections = taskQueue.trackedSectionCount();
                     mostRecentBuiltBatch = builtSections.size();
@@ -387,7 +397,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             boolean blockBoundsFallback
     ) {
         Photonics.LOGGER.info(
-                "Photonics world tracing v127: layoutRevision={}, sceneRevision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, boundsSource={}, compileMs={}",
+                "Photonics world tracing v132: layoutRevision={}, sceneRevision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, sceneChangeBounds={}, boundsSource={}, compileMs={}",
                 mostRecentCompilationRevision,
                 mostRecentSceneRevision,
                 settled,
@@ -404,6 +414,15 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                 mostRecentMinBounds,
                 mostRecentMaxBounds,
                 mostRecentOrigin,
+                mostRecentSceneChangeRegion.isValid()
+                        ? "(" + mostRecentSceneChangeRegion.minX()
+                            + ", " + mostRecentSceneChangeRegion.minY()
+                            + ", " + mostRecentSceneChangeRegion.minZ()
+                            + ")..(" + mostRecentSceneChangeRegion.maxX()
+                            + ", " + mostRecentSceneChangeRegion.maxY()
+                            + ", " + mostRecentSceneChangeRegion.maxZ()
+                            + ")"
+                        : "none",
                 blockBoundsFallback ? "tree" : "compiled",
                 String.format(java.util.Locale.ROOT, "%.3f", mostRecentCompilationMillis)
         );
@@ -465,6 +484,29 @@ public class WorldCompiler implements Runnable, RenderingComponent {
         dynamicUniforms.uniform1i(
                 "ph_scene_revision",
                 () -> (int) mostRecentSceneRevision,
+                uniformUpdater.newNotifier()
+        );
+        dynamicUniforms.uniform1i(
+                "ph_scene_change_revision",
+                () -> (int) mostRecentSceneChangeRegion.revision(),
+                uniformUpdater.newNotifier()
+        );
+        dynamicUniforms.uniform3f(
+                "ph_scene_change_min",
+                () -> new Vector3f(
+                        mostRecentSceneChangeRegion.minX(),
+                        mostRecentSceneChangeRegion.minY(),
+                        mostRecentSceneChangeRegion.minZ()
+                ),
+                uniformUpdater.newNotifier()
+        );
+        dynamicUniforms.uniform3f(
+                "ph_scene_change_max",
+                () -> new Vector3f(
+                        mostRecentSceneChangeRegion.maxX(),
+                        mostRecentSceneChangeRegion.maxY(),
+                        mostRecentSceneChangeRegion.maxZ()
+                ),
                 uniformUpdater.newNotifier()
         );
         dynamicUniforms.uniform3f("world_tree_min", () -> new Vector3f(mostRecentMinBounds), uniformUpdater.newNotifier());
