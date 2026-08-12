@@ -60,7 +60,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI stability v128: radiance history follows stable block-state changes; initial loads, skylight settling, copied-state identity changes, and streamed voxel layout revisions remain path-validation-only; GI history stays eligible while voxel layout is unsettled and changed paths are rejected locally"
         );
         Photonics.LOGGER.info(
-                "Photonics GI stability v132: scene revisions carry world-space changed bounds; radiance history is invalidated regionally, zero-radiance unsettled frames remain retryable, and layout-only churn keeps temporal history eligible"
+                "Photonics GI stability v133: initial all-air population is path-validation-only, real content edits invalidate regional radiance, and geometrically validated zero-radiance history recovery remains eligible after layout settling"
         );
         Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"

@@ -282,7 +282,11 @@ public class SectionManager implements RenderingComponent {
         return queue;
     }
 
-    private Optional<SectionCopy> createCopy(Vector3i sectionPos, ILevel level) {
+    private Optional<SectionCopy> createCopy(
+            Vector3i sectionPos,
+            ILevel level,
+            boolean playerChanged
+    ) {
         var chunk = level.ph$getChunkOrNull(sectionPos.x, sectionPos.z);
         if (chunk == null) return Optional.empty();
 
@@ -295,7 +299,12 @@ public class SectionManager implements RenderingComponent {
         var section = sections[sectionIndex];
         if (section.ph$hasOnlyAir()) return Optional.empty();
 
-        return Optional.of(new SectionCopy(sectionPos, section, remeshCount++));
+        return Optional.of(new SectionCopy(
+                sectionPos,
+                section,
+                remeshCount++,
+                playerChanged
+        ));
     }
 
     @Override
@@ -319,35 +328,56 @@ public class SectionManager implements RenderingComponent {
 
         try {
             refreshSections(level);
-            Vector3i sectionPos = new Vector3i(x, y, z);
-
-            if (!loadedChunks.contains(new Vector2i(x, z))) return;
-            if (notEmptySections.contains(sectionPos)) return;
-
-            var copyResult = createCopy(sectionPos, level);
-            if (copyResult.isEmpty()) return;
-
-            var section = copyResult.get();
-            notEmptySections.add(section.pos());
-            queueSection(section);
+            addSection(new Vector3i(x, y, z), level, false);
         } catch (InterruptedException e) {
             throw new IllegalStateException(e);
         }
     }
 
+    private void addSection(
+            Vector3i sectionPos,
+            ILevel level,
+            boolean playerChanged
+    ) throws InterruptedException {
+        if (!loadedChunks.contains(new Vector2i(sectionPos.x, sectionPos.z))) return;
+        if (notEmptySections.contains(sectionPos)) return;
+
+        var copyResult = createCopy(sectionPos, level, playerChanged);
+        if (copyResult.isEmpty()) return;
+
+        var section = copyResult.get();
+        notEmptySections.add(section.pos());
+        queueSection(section);
+    }
+
     @Override
     public void onSectionChanged(int x, int y, int z) {
+        onSectionChanged(x, y, z, false);
+    }
+
+    @Override
+    public void onSectionChanged(int x, int y, int z, boolean playerChanged) {
         ILevel level = Minecraft.getLevel();
         if (level == null) return;
 
         try {
             Vector3i sectionPos = new Vector3i(x, y, z);
             if (!notEmptySections.contains(sectionPos)) {
-                onSectionAdded(x, y, z);
+                refreshSections(level);
+                if (playerChanged && notEmptySections.contains(sectionPos)) {
+                    // refreshSections may have discovered and queued this
+                    // section using the default streaming provenance. Queue a
+                    // newer copy so the compiler preserves the real edit bit.
+                    var copyResult = createCopy(sectionPos, level, true);
+                    if (copyResult.isPresent())
+                        queueSection(copyResult.get());
+                } else {
+                    addSection(sectionPos, level, playerChanged);
+                }
                 return;
             }
 
-            var copyResult = createCopy(sectionPos, level);
+            var copyResult = createCopy(sectionPos, level, playerChanged);
             if (copyResult.isEmpty()) {
                 if (notEmptySections.remove(sectionPos))
                     queueUnload(sectionPos);

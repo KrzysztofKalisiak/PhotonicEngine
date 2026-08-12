@@ -23,6 +23,6 @@ public abstract class RenderSectionManagerMixin {
         if (SableSectionExclusion.isSubLevelSection(x, z)) return;
 
         IrisUtil.getPhotonics()
-                .ifPresent(photonics -> photonics.onSectionChanged(x, y, z));
+                .ifPresent(photonics -> photonics.onSectionChanged(x, y, z, playerChanged));
     }
 }

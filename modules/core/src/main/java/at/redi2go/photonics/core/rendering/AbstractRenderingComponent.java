@@ -57,6 +57,12 @@ public abstract class AbstractRenderingComponent implements RenderingComponent {
     }
 
     @Override
+    public void onSectionChanged(int x, int y, int z, boolean playerChanged) {
+        for (var component : components)
+            component.onSectionChanged(x, y, z, playerChanged);
+    }
+
+    @Override
     public void registerUniforms(IUniformHolder uniforms) {
         for (var component : components)
             component.registerUniforms(uniforms);

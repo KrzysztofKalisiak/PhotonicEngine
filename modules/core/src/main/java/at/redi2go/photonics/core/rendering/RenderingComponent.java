@@ -13,6 +13,14 @@ public interface RenderingComponent extends Disposable {
 
     default void onSectionChanged(int x, int y, int z) {}
 
+    /**
+     * Receives the renderer's rebuild provenance when the integration can
+     * provide it. The legacy overload remains the fallback for other callers.
+     */
+    default void onSectionChanged(int x, int y, int z, boolean playerChanged) {
+        onSectionChanged(x, y, z);
+    }
+
     default void registerUniforms(IUniformHolder uniforms) {}
 
     default void registerDynamicUniforms(IDynamicUniformHolder dynamicUniforms) {}

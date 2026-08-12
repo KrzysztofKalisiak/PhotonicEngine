@@ -10,19 +10,32 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.RoundingMode;
 import org.joml.Vector3i;
 
+import java.util.Arrays;
+
 public class SectionCopy implements PrioritizedTask, IChunkSection {
     private final Vector3i pos;
     private final IChunkSection copy;
     private final long priority;
+    private final boolean playerChanged;
 
     public SectionCopy(
             Vector3i pos,
             IChunkSection section,
             long priority
     ) {
+        this(pos, section, priority, false);
+    }
+
+    public SectionCopy(
+            Vector3i pos,
+            IChunkSection section,
+            long priority,
+            boolean playerChanged
+    ) {
         this.pos = pos;
         this.copy = section.ph$createCopy();
         this.priority = priority;
+        this.playerChanged = playerChanged;
     }
 
     @Override
@@ -36,6 +49,10 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
 
     public Vector3i blockPos() {
         return pos.mul(16, new Vector3i());
+    }
+
+    public boolean playerChanged() {
+        return playerChanged;
     }
 
     @Override
@@ -83,6 +100,10 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
     ) {
         final long[] sectionHash = {0};
         final long[] sceneHash = {0};
+        // The traversal is in block-index order, so this remains sorted and
+        // can be retained sparsely after the hash pass.
+        final long[] nonAirEntries = new long[16 * 16 * 16];
+        final int[] nonAirCount = {0};
         final int[] sceneBlockHashes = captureSceneBlockHashes ? new int[16 * 16 * 16] : null;
         final String[] sceneBlockDescriptions = captureSceneBlockHashes ? new String[16 * 16 * 16] : null;
 
@@ -93,13 +114,18 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
             // deduplication and scene-content tracking.
             int blockHash = block.ph$stableHash();
             int skylight = level == null ? 0 : compileSkylight(level, blockPos);
+            int blockIndex = (blockOffset.x() * 16 + blockOffset.y()) * 16 + blockOffset.z();
+
+            if (!block.ph$isAir()) {
+                nonAirEntries[nonAirCount[0]++] =
+                        ((long) blockIndex << 32) | Integer.toUnsignedLong(blockHash);
+            }
 
             long packedBlock = (((long) skylight) << 32) | Integer.toUnsignedLong(blockHash);
             sectionHash[0] = sectionHash[0] * 31 + packedBlock;
             sceneHash[0] = sceneHash[0] * 31 + Integer.toUnsignedLong(blockHash);
 
             if (sceneBlockHashes != null) {
-                int blockIndex = (blockOffset.x() * 16 + blockOffset.y()) * 16 + blockOffset.z();
                 sceneBlockHashes[blockIndex] = blockHash;
                 sceneBlockDescriptions[blockIndex] = block.toString();
             }
@@ -108,6 +134,10 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
         return new SectionHashes(
                 sectionHash[0],
                 sceneHash[0],
+                new SceneOccupancy(
+                        Arrays.copyOf(nonAirEntries, nonAirCount[0]),
+                        nonAirCount[0]
+                ),
                 sceneBlockHashes,
                 sceneBlockDescriptions
         );
@@ -143,7 +173,14 @@ public class SectionCopy implements PrioritizedTask, IChunkSection {
     public record SectionHashes(
             long sectionHash,
             long sceneHash,
+            SceneOccupancy sceneOccupancy,
             @Nullable int[] sceneBlockHashes,
             @Nullable String[] sceneBlockDescriptions
+    ) {}
+
+    /** Sparse geometry occupancy used to distinguish streaming population from edits. */
+    public record SceneOccupancy(
+            long[] nonAirEntries,
+            int nonAirCount
     ) {}
 }

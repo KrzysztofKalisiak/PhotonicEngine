@@ -58,6 +58,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
      * temporal GI history by itself.
      */
     private final ConcurrentMap<Vector3i, Long> sceneHashes = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Vector3i, SectionCopy.SceneOccupancy> sceneOccupancies = new ConcurrentHashMap<>();
     private final ConcurrentMap<Vector3i, SceneHashSnapshot> debugSceneHashes = new ConcurrentHashMap<>();
 
     private final Thread[] threads = new Thread[THREAD_COUNT];
@@ -131,6 +132,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         var hashes = section.computeSectionHashes(level, DEBUG_SCENE_HASH_DIFF);
         long hash = hashes.sectionHash();
         long sceneHash = hashes.sceneHash();
+        var sceneOccupancy = hashes.sceneOccupancy();
         if (isDuplicateSection(section.pos(), hash)) return;
 
         GpuBufferHeapStats worldHeapBefore = worldRegistry.worldHeapStats();
@@ -140,8 +142,10 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                 section.blockPos(),
                 hash,
                 sceneHash,
+                sceneOccupancy,
                 hashes.sceneBlockHashes(),
                 hashes.sceneBlockDescriptions(),
+                section.playerChanged(),
                 section.priority()
         );
         boolean submitted = false;
@@ -441,6 +445,56 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         return Objects.equals(sectionHashes.get(pos), hash);
     }
 
+    /**
+     * A section can be accepted once while its chunk is still being populated
+     * by the client. The follow-up build then changes only air cells into
+     * blocks. The voxel tree must receive that build, but treating it as a
+     * world edit would discard GI history for an unrelated region while the
+     * initial scene is still streaming in.
+     *
+     * A compact occupancy snapshot is compared with stable state hashes for
+     * every previously occupied cell. Removals and replacements therefore
+     * retain regional radiance invalidation.
+     */
+    private static boolean isInitialPopulation(
+            @Nullable SectionCopy.SceneOccupancy previous,
+            SectionCopy.SceneOccupancy current,
+            boolean playerChanged
+    ) {
+        if (playerChanged || previous == null)
+            return false;
+
+        if (current.nonAirCount() <= previous.nonAirCount())
+            return false;
+
+        // Entries are sorted by block index and include the stable state hash.
+        // Every previous entry must still be present unchanged; additions are
+        // allowed, while removals and replacements force a real invalidation.
+        long[] previousEntries = previous.nonAirEntries();
+        long[] currentEntries = current.nonAirEntries();
+        int previousIndex = 0;
+        int currentIndex = 0;
+        while (previousIndex < previousEntries.length) {
+            if (currentIndex >= currentEntries.length)
+                return false;
+
+            int previousBlockIndex = (int) (previousEntries[previousIndex] >>> 32);
+            int currentBlockIndex = (int) (currentEntries[currentIndex] >>> 32);
+            if (currentBlockIndex < previousBlockIndex) {
+                currentIndex++;
+                continue;
+            }
+            if (currentBlockIndex > previousBlockIndex
+                    || currentEntries[currentIndex] != previousEntries[previousIndex])
+                return false;
+
+            previousIndex++;
+            currentIndex++;
+        }
+
+        return true;
+    }
+
     private void unloadChunks() {
         while (!unloadQueue.isEmpty()) {
             var section = unloadQueue.poll();
@@ -448,6 +502,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
             sectionHashes.remove(section);
             sceneHashes.remove(section);
+            sceneOccupancies.remove(section);
             debugSceneHashes.remove(section);
             latestSection.remove(section);
         }
@@ -616,8 +671,10 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
         private final Vector3i chunkBlockPos;
         private final long hash;
         private final long sceneHash;
+        private final SectionCopy.SceneOccupancy sceneOccupancy;
         private final @Nullable int[] sceneBlockHashes;
         private final @Nullable String[] sceneBlockDescriptions;
+        private final boolean playerChanged;
         private final long priority;
 
         private final Queue<BlockResult> blocks = new ConcurrentLinkedQueue<>();
@@ -634,16 +691,20 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                 Vector3i chunkBlockPos,
                 long hash,
                 long sceneHash,
+                SectionCopy.SceneOccupancy sceneOccupancy,
                 @Nullable int[] sceneBlockHashes,
                 @Nullable String[] sceneBlockDescriptions,
+                boolean playerChanged,
                 long priority
         ) {
             this.chunkPos = chunkPos;
             this.chunkBlockPos = chunkBlockPos;
             this.hash = hash;
             this.sceneHash = sceneHash;
+            this.sceneOccupancy = sceneOccupancy;
             this.sceneBlockHashes = sceneBlockHashes;
             this.sceneBlockDescriptions = sceneBlockDescriptions;
+            this.playerChanged = playerChanged;
             this.priority = priority;
         }
 
@@ -766,16 +827,29 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                 return false;
 
             Long previousSceneHash = sceneHashes.put(chunkPos, sceneHash);
+            var previousSceneOccupancy = sceneOccupancies.put(chunkPos, sceneOccupancy);
             // The first accepted content hash is initial streaming. A changed
-            // block/model hash is a scene edit; skylight-only changes are not.
+            // block/model hash is normally a scene edit; the one exception is
+            // a non-player rebuild that fills an earlier all-air snapshot.
             if (previousSceneHash != null && !Objects.equals(previousSceneHash, sceneHash)) {
+                boolean initialPopulation = isInitialPopulation(
+                        previousSceneOccupancy,
+                        sceneOccupancy,
+                        playerChanged
+                );
                 Photonics.LOGGER.info(
-                        "Photonics scene content change v132: section={}, previousSceneHash={}, sceneHash={}, fullHash={}, priority={}",
+                        "Photonics scene content change v133: section={}, previousSceneHash={}, sceneHash={}, fullHash={}, previousNonAir={}, currentNonAir={}, priority={}, playerChanged={}, radianceInvalidation={}",
                         chunkPos,
                         previousSceneHash,
                         sceneHash,
                         hash,
-                        priority
+                        previousSceneOccupancy == null
+                                ? -1
+                                : previousSceneOccupancy.nonAirCount(),
+                        sceneOccupancy.nonAirCount(),
+                        priority,
+                        playerChanged,
+                        initialPopulation ? "skipped-initial-population" : "regional"
                 );
                 if (DEBUG_SCENE_HASH_DIFF)
                     logSceneHashDiff(
@@ -786,7 +860,8 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                             previousSceneHash,
                             sceneHash
                     );
-                sectionManager.markSceneChanged(chunkPos);
+                if (!initialPopulation)
+                    sectionManager.markSceneChanged(chunkPos);
             }
 
             if (DEBUG_SCENE_HASH_DIFF
