@@ -77,14 +77,14 @@ bool ph_restir_gi_history_texel_available(ivec2 texel) {
 
 const float PH_SCENE_CHANGE_HISTORY_PADDING = 1.5f;
 
-bool ph_restir_scene_change_affects_receiver(vec3 receiver_rt_pos) {
-    if (ph_scene_revision <= 0 || ph_scene_change_revision <= 0)
-        return false;
+bool ph_restir_scene_change_bounds_are_valid() {
+    return ph_scene_revision > 0
+        && ph_scene_change_revision > 0
+        && all(lessThan(ph_scene_change_min, ph_scene_change_max));
+}
 
-    // The scene epoch and the bounds are published together by the world
-    // compiler. A missing/mismatched bounds snapshot is unsafe, so retain the
-    // old conservative global invalidation in that case.
-    if (ph_scene_change_revision != ph_scene_revision)
+bool ph_restir_scene_change_bounds_affect_receiver(vec3 receiver_rt_pos) {
+    if (!ph_restir_scene_change_bounds_are_valid())
         return true;
 
     vec3 receiver_world_pos = receiver_rt_pos + world_offset;
@@ -99,7 +99,35 @@ bool ph_restir_scene_change_affects_receiver(vec3 receiver_rt_pos) {
         ));
 }
 
-bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
+bool ph_restir_scene_change_affects_receiver(vec3 receiver_rt_pos) {
+    if (ph_scene_revision <= 0 || ph_scene_change_revision <= 0)
+        return false;
+
+    // The scene epoch and the bounds are published together by the world
+    // compiler. A missing/mismatched bounds snapshot is unsafe, so retain the
+    // old conservative global invalidation in that case.
+    if (ph_scene_change_revision != ph_scene_revision)
+        return true;
+
+    return ph_restir_scene_change_bounds_affect_receiver(receiver_rt_pos);
+}
+
+bool ph_restir_scene_change_affects_receiver_for_recovery(vec3 receiver_rt_pos) {
+    // This path is used only when the current sample has no radiance and the
+    // candidate history has already passed surface and sublevel validation.
+    // During asynchronous tree publication, the scene revision and bounds can
+    // be observed one frame apart. Use the last valid bounds for this narrowly
+    // scoped recovery instead of turning every receiver black globally.
+    if (ph_scene_revision <= 0 || ph_scene_change_revision <= 0)
+        return false;
+
+    return ph_restir_scene_change_bounds_affect_receiver(receiver_rt_pos);
+}
+
+bool ph_restir_gi_history_epoch_matches(
+        ivec2 texel,
+        bool allow_scene_revision_mismatch
+) {
     // Layout revisions are produced while sections stream in and do not
     // necessarily change the geometry seen by this receiver. Do not reject
     // the entire screen's GI history merely because the compiler is unsettled;
@@ -114,10 +142,22 @@ bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
     // A block edit invalidates radiance only for receivers in the edited
     // region. Receivers elsewhere still revalidate their stored GI path in
     // r4/r6 and can keep their accumulated radiance through the scene epoch.
+    if (ph_scene_change_revision != ph_scene_revision) {
+        if (!allow_scene_revision_mismatch)
+            return false;
+
+        return !ph_restir_scene_change_affects_receiver_for_recovery(
+            frag_rt_pos
+        );
+    }
+
     return !ph_restir_scene_change_affects_receiver(frag_rt_pos);
 }
 #else
-bool ph_restir_gi_history_epoch_matches(ivec2 texel) {
+bool ph_restir_gi_history_epoch_matches(
+        ivec2 texel,
+        bool allow_scene_revision_mismatch
+) {
     return true;
 }
 #endif
@@ -240,6 +280,54 @@ bool sample_history_is_valid(SampleHistory history) {
     return history.lighting.x != INVALID_SAMPLE_COMPONENT;
 }
 
+const float PH_HISTORY_MAX_RADIANCE = 65504.0f;
+
+void ph_restir_sanitize_history(inout SampleHistory history) {
+    if (!sample_history_is_valid(history))
+        return;
+
+    if (any(isnan(history.lighting)) || any(isinf(history.lighting))
+            || any(isnan(history.external_lighting))
+            || any(isinf(history.external_lighting))
+            || any(isnan(history.variance))
+            || any(isinf(history.variance))) {
+        history = SampleHistory(
+            vec4(0.0f),
+            vec4(0.0f),
+            vec4(0.0f)
+        );
+        return;
+    }
+
+    // These attachments are RGBA16F. Clamp only finite out-of-range values;
+    // retain each RGB channel independently so colored light is not altered.
+    history.lighting.rgb = clamp(
+        history.lighting.rgb,
+        vec3(0.0f),
+        vec3(PH_HISTORY_MAX_RADIANCE)
+    );
+    history.external_lighting.rgb = clamp(
+        history.external_lighting.rgb,
+        vec3(0.0f),
+        vec3(PH_HISTORY_MAX_RADIANCE)
+    );
+    history.lighting.a = clamp(
+        history.lighting.a,
+        0.0f,
+        PH_HISTORY_MAX_RADIANCE
+    );
+    history.external_lighting.a = clamp(
+        history.external_lighting.a,
+        0.0f,
+        PH_HISTORY_MAX_RADIANCE
+    );
+    history.variance = clamp(
+        history.variance,
+        vec4(0.0f),
+        vec4(PH_HISTORY_MAX_RADIANCE)
+    );
+}
+
 void sample_history_load(out SampleHistory smple) {
     smple.lighting = texelFetch(restir_lighting, frag_tex_coord, 0);
 #if defined PH_ENABLE_BLOCKLIGHT
@@ -271,14 +359,18 @@ SampleHistory sample_history_reproject_single(
     vec3 previous_player_pos,
     vec3 expected_previous_normal,
     uint sublevel_token,
-    float distance_factor
+    float distance_factor,
+    bool allow_scene_revision_mismatch
 ) {
     ivec2 history_size = textureSize(prev_restir_lighting, 0);
     if (any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, history_size)))
         return INVALID_HISTORY;
 
 #if defined PH_ENABLE_RESTIR_GI
-    if (!ph_restir_gi_history_epoch_matches(texel))
+    if (!ph_restir_gi_history_epoch_matches(
+            texel,
+            allow_scene_revision_mismatch
+    ))
         return INVALID_HISTORY;
 #endif
 
@@ -312,7 +404,13 @@ SampleHistory sample_history_reproject_single(
     vec4 variance = texelFetch(prev_restir_lighting_variance, ivec2(texel), 0);
     if (any(isnan(variance)) || any(isinf(variance))) return INVALID_HISTORY;
 
-    return SampleHistory(lighting, external_lighting, variance);
+    SampleHistory result = SampleHistory(
+        lighting,
+        external_lighting,
+        variance
+    );
+    ph_restir_sanitize_history(result);
+    return result;
 }
 
 SampleHistory sample_history_reproject_mixed(
@@ -324,10 +422,10 @@ SampleHistory sample_history_reproject_mixed(
 ) {
     ivec2 icenter = ivec2(center);
 
-    SampleHistory c_00 = sample_history_reproject_single(icenter + ivec2(0, 0), previous_player_pos, expected_previous_normal, sublevel_token, distance_factor);
-    SampleHistory c_10 = sample_history_reproject_single(icenter + ivec2(1, 0), previous_player_pos, expected_previous_normal, sublevel_token, distance_factor);
-    SampleHistory c_01 = sample_history_reproject_single(icenter + ivec2(0, 1), previous_player_pos, expected_previous_normal, sublevel_token, distance_factor);
-    SampleHistory c_11 = sample_history_reproject_single(icenter + ivec2(1, 1), previous_player_pos, expected_previous_normal, sublevel_token, distance_factor);
+    SampleHistory c_00 = sample_history_reproject_single(icenter + ivec2(0, 0), previous_player_pos, expected_previous_normal, sublevel_token, distance_factor, false);
+    SampleHistory c_10 = sample_history_reproject_single(icenter + ivec2(1, 0), previous_player_pos, expected_previous_normal, sublevel_token, distance_factor, false);
+    SampleHistory c_01 = sample_history_reproject_single(icenter + ivec2(0, 1), previous_player_pos, expected_previous_normal, sublevel_token, distance_factor, false);
+    SampleHistory c_11 = sample_history_reproject_single(icenter + ivec2(1, 1), previous_player_pos, expected_previous_normal, sublevel_token, distance_factor, false);
 
     SampleHistory result = sample_history_mix(
         sample_history_mix(c_00, c_10, fract(center.x)),
@@ -440,7 +538,8 @@ bool sample_history_reproject_nearest_history(out SampleHistory history) {
         previous_player_pos,
         expected_previous_normal,
         sublevel_token,
-        PH_HISTORY_POSITION_ERROR_SQ
+        PH_HISTORY_POSITION_ERROR_SQ,
+        true
     );
     return sample_history_is_valid(history);
 }

@@ -30,14 +30,16 @@ void main() {
 
     SampleHistory smple;
     sample_history_load(smple);
+    ph_restir_sanitize_history(smple);
 
     SampleHistory accumulator;
 
     if (!ph_restir_history_split_radiance_bypass()
-            && ph_restir_gi_history_epoch_matches(frag_tex_coord))
+            && ph_restir_gi_history_epoch_matches(frag_tex_coord, false))
         sample_history_reproject(accumulator);
     else
         accumulator = SampleHistory(vec4(0.0f), vec4(0.0f), vec4(0.0f));
+    ph_restir_sanitize_history(accumulator);
 
     float current_energy = ph_luminance(
         max(smple.lighting.rgb, vec3(0.0f))
@@ -53,18 +55,22 @@ void main() {
     bool history_retry_required = !has_reprojected_history
         && !has_current_energy;
 
-    // During a layout upload a valid surface can briefly have no current GI
-    // proposal. Recover one geometrically matched previous sample only when
-    // the receiver is outside the changed scene region; the normal temporal
-    // combine then drains it instead of pinning stale radiance forever.
+    // A valid surface can briefly have no current GI proposal while the voxel
+    // layout is uploading or while a newly exposed camera region is filling.
+    // Recover one geometrically matched previous sample whenever the receiver
+    // is outside the changed scene region. The candidate already passed the
+    // surface, sublevel, finite-value, and regional epoch checks; world-settled
+    // only describes tree publication, so it must not disable this recovery.
 #if defined PH_ENABLE_RESTIR_GI
     if (!has_reprojected_history
             && !has_current_energy
-            && ph_world_settled == 0
-            && !ph_restir_scene_change_affects_receiver(frag_rt_pos)) {
+            && !ph_restir_scene_change_affects_receiver_for_recovery(
+                frag_rt_pos
+            )) {
         SampleHistory recovered_history;
         if (sample_history_reproject_nearest_history(recovered_history)) {
             accumulator = recovered_history;
+            ph_restir_sanitize_history(accumulator);
             accumulator.lighting.a = min(accumulator.lighting.a, 1.0f);
             accumulator.external_lighting.a = min(
                 accumulator.external_lighting.a,
@@ -81,6 +87,7 @@ void main() {
 #endif
 
     sample_history_combine_lighting(accumulator, smple);
+    ph_restir_sanitize_history(accumulator);
 
 #if PH_RESTIR_DENOISER_PASSES != 0
     sample_history_combine_moment(accumulator, smple);
