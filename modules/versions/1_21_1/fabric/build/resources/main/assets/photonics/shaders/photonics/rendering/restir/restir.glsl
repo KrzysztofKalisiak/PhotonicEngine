@@ -4,6 +4,7 @@
 #define MINIMUM_RESERVOIR_WEIGHT 0.000001f
 
 #include "/photonics/utility/color.glsl"
+#include "/photonics/utility/radiance.glsl"
 
 #include "/photonics/rendering/restir/direct/reservoir.glsl"
 #include "/photonics/rendering/restir/indirect/reservoir.glsl"
@@ -280,26 +281,6 @@ bool ph_restir_history_surface_matches(
 
 bool sample_history_is_valid(SampleHistory history) {
     return history.lighting.x != INVALID_SAMPLE_COMPONENT;
-}
-
-const float PH_HISTORY_MAX_RADIANCE = 65504.0f;
-
-vec3 ph_restir_sanitize_radiance(vec3 value) {
-    if (any(isnan(value)) || any(isinf(value)))
-        return vec3(0.0f);
-
-    return clamp(
-        value,
-        vec3(0.0f),
-        vec3(PH_HISTORY_MAX_RADIANCE)
-    );
-}
-
-float ph_restir_sanitize_variance(float value) {
-    if (isnan(value) || isinf(value))
-        return 0.0f;
-
-    return clamp(value, 0.0f, PH_HISTORY_MAX_RADIANCE);
 }
 
 void ph_restir_sanitize_history(inout SampleHistory history) {

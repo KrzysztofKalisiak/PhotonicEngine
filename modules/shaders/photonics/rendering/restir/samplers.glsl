@@ -14,6 +14,8 @@ vec3 sample_photonics_handheld(vec2 tex_coord) {
 }
 #else
 
+#include "/photonics/utility/radiance.glsl"
+
 #if !defined PH_RESTIR_SPLIT_GI || defined PH_ENABLE_BLOCKLIGHT
 //ph_required: uniform sampler2D restir_lighting;
 #endif
