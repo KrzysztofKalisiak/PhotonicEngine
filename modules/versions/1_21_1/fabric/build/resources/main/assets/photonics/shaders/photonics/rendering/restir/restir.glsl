@@ -103,12 +103,10 @@ bool ph_restir_scene_change_affects_receiver(vec3 receiver_rt_pos) {
     if (ph_scene_revision <= 0 || ph_scene_change_revision <= 0)
         return false;
 
-    // The scene epoch and the bounds are published together by the world
-    // compiler. A missing/mismatched bounds snapshot is unsafe, so retain the
-    // old conservative global invalidation in that case.
-    if (ph_scene_change_revision != ph_scene_revision)
-        return true;
-
+    // Revisions are global counters, but radiance is spatial. A mismatch can
+    // occur while the tree upload and the uniform snapshot cross a frame
+    // boundary; do not turn that bookkeeping race into a full-screen black
+    // reset when the published bounds are valid.
     return ph_restir_scene_change_bounds_affect_receiver(receiver_rt_pos);
 }
 
@@ -143,12 +141,16 @@ bool ph_restir_gi_history_epoch_matches(
     // region. Receivers elsewhere still revalidate their stored GI path in
     // r4/r6 and can keep their accumulated radiance through the scene epoch.
     if (ph_scene_change_revision != ph_scene_revision) {
-        if (!allow_scene_revision_mismatch)
+        // A missing bounds snapshot is the only case where we cannot prove
+        // that the previous path remains valid. Reject that texel, rather
+        // than accepting stale radiance. With valid bounds, receivers outside
+        // the edited region retain history in both the normal and recovery
+        // paths; the boolean is kept in the signature for the existing call
+        // sites and split-screen diagnostics.
+        if (!ph_restir_scene_change_bounds_are_valid())
             return false;
 
-        return !ph_restir_scene_change_affects_receiver_for_recovery(
-            frag_rt_pos
-        );
+        return !ph_restir_scene_change_bounds_affect_receiver(frag_rt_pos);
     }
 
     return !ph_restir_scene_change_affects_receiver(frag_rt_pos);
@@ -282,6 +284,24 @@ bool sample_history_is_valid(SampleHistory history) {
 
 const float PH_HISTORY_MAX_RADIANCE = 65504.0f;
 
+vec3 ph_restir_sanitize_radiance(vec3 value) {
+    if (any(isnan(value)) || any(isinf(value)))
+        return vec3(0.0f);
+
+    return clamp(
+        value,
+        vec3(0.0f),
+        vec3(PH_HISTORY_MAX_RADIANCE)
+    );
+}
+
+float ph_restir_sanitize_variance(float value) {
+    if (isnan(value) || isinf(value))
+        return 0.0f;
+
+    return clamp(value, 0.0f, PH_HISTORY_MAX_RADIANCE);
+}
+
 void ph_restir_sanitize_history(inout SampleHistory history) {
     if (!sample_history_is_valid(history))
         return;
@@ -299,8 +319,9 @@ void ph_restir_sanitize_history(inout SampleHistory history) {
         return;
     }
 
-    // These attachments are RGBA16F. Clamp only finite out-of-range values;
-    // retain each RGB channel independently so colored light is not altered.
+    // Keep finite history components within the half-float-safe range used by
+    // downstream denoising and composition passes; retain RGB channels
+    // independently so colored light is not altered.
     history.lighting.rgb = clamp(
         history.lighting.rgb,
         vec3(0.0f),

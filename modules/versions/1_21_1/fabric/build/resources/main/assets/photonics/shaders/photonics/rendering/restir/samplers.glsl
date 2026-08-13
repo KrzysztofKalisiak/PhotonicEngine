@@ -108,10 +108,14 @@ bool ph_gi_upsample_matches(
 
 vec3 ph_gi_radiance_at(ivec2 texel) {
 #if PH_RESTIR_GI_DENOISER_PASSES != 0
-    return texelFetch(restir_gi_denoise_result, texel, 0).rgb;
+    return ph_restir_sanitize_radiance(
+        texelFetch(restir_gi_denoise_result, texel, 0).rgb
+    );
 #else
     vec4 lighting = texelFetch(restir_gi_lighting, texel, 0);
-    return lighting.rgb / max(lighting.a, 1.0f);
+    return ph_restir_sanitize_radiance(
+        lighting.rgb / max(ph_restir_sanitize_variance(lighting.a), 1.0f)
+    );
 #endif
 }
 
@@ -367,12 +371,14 @@ bool ph_restir_source_history_is_marker(vec2 tex_coord) {
 vec3 ph_sample_accumulated_direct(vec2 tex_coord) {
     vec3 result = texture(restir_lighting, tex_coord).rgb;
     result += texture(restir_external_lighting, tex_coord).rgb;
-    return result;
+    return ph_restir_sanitize_radiance(result);
 }
 
 vec3 ph_sample_denoised_direct(vec2 tex_coord) {
 #if PH_RESTIR_DENOISER_PASSES != 0
-    return texture(denoise_result, tex_coord).rgb;
+    return ph_restir_sanitize_radiance(
+        texture(denoise_result, tex_coord).rgb
+    );
 #else
     return ph_sample_accumulated_direct(tex_coord);
 #endif
@@ -543,7 +549,7 @@ vec3 sample_photonics_direct(vec2 tex_coord) {
     #if defined PH_ENABLE_BLOCKLIGHT
     result += texture(restir_local_lighting, tex_coord).rgb;
     #endif
-    return result;
+    return ph_restir_sanitize_radiance(result);
 #endif
 }
 

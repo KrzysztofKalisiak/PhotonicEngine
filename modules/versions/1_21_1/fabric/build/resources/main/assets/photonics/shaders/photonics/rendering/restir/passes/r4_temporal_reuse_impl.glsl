@@ -122,7 +122,7 @@ void main() {
     // path below against the current voxel tree.
     bool previous_scene_matches =
         !ph_restir_history_split_reservoir_bypass()
-        && ph_restir_gi_history_texel_available(prev_texel);
+        && ph_restir_gi_history_epoch_matches(prev_texel, true);
     if (!frag_is_hand
             && !frag_data_is_hand(prev_frag)
             && previous_scene_matches

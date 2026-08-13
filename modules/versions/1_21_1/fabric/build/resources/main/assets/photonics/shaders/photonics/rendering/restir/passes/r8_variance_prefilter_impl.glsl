@@ -7,11 +7,15 @@
 layout(location = 0) out vec4 denoise_out;
 
 vec3 ph_accumulated_lighting(ivec2 texel) {
-    vec3 result = texelFetch(restir_lighting, texel, 0).rgb;
+    vec3 result = ph_restir_sanitize_radiance(
+        texelFetch(restir_lighting, texel, 0).rgb
+    );
 #if defined PH_ENABLE_BLOCKLIGHT
-    result += texelFetch(restir_external_lighting, texel, 0).rgb;
+    result += ph_restir_sanitize_radiance(
+        texelFetch(restir_external_lighting, texel, 0).rgb
+    );
 #endif
-    return result;
+    return ph_restir_sanitize_radiance(result);
 }
 
 bool ph_matches_denoise_receiver(
@@ -133,7 +137,9 @@ void main() {
                 center_local_signature
         )) continue;
 
-        float variance = texelFetch(restir_lighting_variance, p, 0).z;
+        float variance = ph_restir_sanitize_variance(
+            texelFetch(restir_lighting_variance, p, 0).z
+        );
         float kernel_weight = kernel[i];
 
         denoise_out.a += variance * kernel_weight;
@@ -141,5 +147,7 @@ void main() {
     }
 
     if (weight_sum > 0.0f)
-        denoise_out.a /= weight_sum;
+        denoise_out.a = ph_restir_sanitize_variance(
+            denoise_out.a / weight_sum
+        );
 }
