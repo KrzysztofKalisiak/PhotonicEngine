@@ -34,6 +34,14 @@ public class SectionManager implements RenderingComponent {
     private Set<Vector2i> loadedChunks = Set.of();
     private final Set<Vector3i> notEmptySections = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Highest snapshot priority observed when a section was queued. The
+     * compiler's accepted-result map is too late for this fence: an older
+     * snapshot may still be meshing when a newer snapshot is already queued.
+     */
+    private final ConcurrentHashMap<Vector3i, Long> latestQueuedSectionPriorities =
+            new ConcurrentHashMap<>();
+
     private final List<Queue<Vector3i>> unloadQueues = new ArrayList<>();
     private final List<TaskQueue<?>> taskQueues = new ArrayList<>();
 
@@ -51,6 +59,15 @@ public class SectionManager implements RenderingComponent {
     private int lastRenderDistance = -1;
 
     private void queueUnload(Vector3i section) {
+        // Fence in-flight builds before removing their accepted-result state.
+        // The next reload receives a priority at least this high, while an
+        // older worker result can no longer repopulate the unloaded section.
+        latestQueuedSectionPriorities.merge(
+                new Vector3i(section),
+                remeshCount,
+                (previous, next) -> Math.max(previous, next)
+        );
+
         for (var unloadQueue : unloadQueues)
             unloadQueue.add(section);
 
@@ -66,6 +83,8 @@ public class SectionManager implements RenderingComponent {
     }
 
     private void queueSection(SectionCopy section) throws InterruptedException {
+        rememberQueuedSection(section);
+
         for (var taskQueue : taskQueues) {
             if (taskQueue instanceof SectionQueue sectionQueue) {
                 try {
@@ -214,6 +233,23 @@ public class SectionManager implements RenderingComponent {
                 );
             }
         }
+    }
+
+    private void rememberQueuedSection(SectionCopy section) {
+        latestQueuedSectionPriorities.merge(
+                new Vector3i(section.pos()),
+                section.priority(),
+                (previous, next) -> Math.max(previous, next)
+        );
+    }
+
+    /**
+     * Returns the newest snapshot priority known before compilation started.
+     * This is intentionally retained across unloads so an in-flight old build
+     * cannot publish after a section is unloaded and later reloaded.
+     */
+    public long latestQueuedSectionPriority(Vector3i section) {
+        return latestQueuedSectionPriorities.getOrDefault(section, Long.MIN_VALUE);
     }
 
     public SceneChangeRegion sceneChangeRegion() {
@@ -592,8 +628,28 @@ public class SectionManager implements RenderingComponent {
                         var sectionCoord = elementPair.left();
                         var element = elementPair.right();
 
-                        var previousValue = sectionValues.put(sectionCoord, element);
-                        if (previousValue != null) continue;
+                        if (element instanceof SectionCopy sectionCopy)
+                            rememberQueuedSection(sectionCopy);
+
+                        var previousValue = sectionValues.get(sectionCoord);
+                        if (previousValue != null) {
+                            long previousPriority = previousValue instanceof PrioritizedTask p1
+                                    ? p1.priority()
+                                    : Long.MIN_VALUE;
+                            long newPriority = element instanceof PrioritizedTask p2
+                                    ? p2.priority()
+                                    : Long.MIN_VALUE;
+
+                            if (previousPriority > newPriority) {
+                                tryClose(element);
+                            } else {
+                                sectionValues.put(sectionCoord, element);
+                                tryClose(previousValue);
+                            }
+                            continue;
+                        }
+
+                        sectionValues.put(sectionCoord, element);
 
                         sectionQueue[size++] = new SectionInfo(sectionCoord);
                         changed = true;

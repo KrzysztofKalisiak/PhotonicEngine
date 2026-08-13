@@ -50,6 +50,8 @@ void main() {
     // but must not bypass the current-frame SVGF chain here; doing so exposes
     // the one-sample GI buffer as raw noise during section streaming.
     denoise_out = texelFetch(prev_denoise_result, frag_tex_coord, 0);
+    denoise_out.rgb = ph_restir_sanitize_radiance(denoise_out.rgb);
+    denoise_out.a = ph_restir_sanitize_variance(denoise_out.a);
     if (ph_should_skip_denoise_pass(denoise_out.a)) return;
 
     int step_width = 1 << atrous_iteration;
@@ -130,6 +132,8 @@ void main() {
 #endif
 
         vec4 sample_data = texelFetch(prev_denoise_result, p, 0);
+        sample_data.rgb = ph_restir_sanitize_radiance(sample_data.rgb);
+        sample_data.a = ph_restir_sanitize_variance(sample_data.a);
         #define Ci sample_data.rgb
         #define Vi sample_data.a
 
@@ -162,7 +166,11 @@ void main() {
             wP = exp(-plane_distance / phi_position);
         }
 
-        float w = any(isnan(Ci)) ? 0.0f : wC * wN * wP * k;
+        bool invalid_sample = any(isnan(Ci))
+            || any(isinf(Ci))
+            || isnan(Vi)
+            || isinf(Vi);
+        float w = invalid_sample ? 0.0f : wC * wN * wP * k;
         W_sum += w;
         C_sum += Ci.xyz * w;
         V_sum += Vi * w * w;
@@ -171,6 +179,8 @@ void main() {
     W_sum = max(0.0001f, W_sum);
     V_sum = max(0.0001f, V_sum);
 
-    denoise_out.rgb = C_sum / W_sum;
-    denoise_out.a = max(V_sum / (W_sum * W_sum), 0.0f);
+    denoise_out.rgb = ph_restir_sanitize_radiance(C_sum / W_sum);
+    denoise_out.a = ph_restir_sanitize_variance(
+        max(V_sum / (W_sum * W_sum), 0.0f)
+    );
 }

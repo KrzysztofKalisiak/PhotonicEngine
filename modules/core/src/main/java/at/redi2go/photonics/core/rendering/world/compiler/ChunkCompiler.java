@@ -429,7 +429,13 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
     }
 
     private boolean isLatestSection(Vector3i pos, long priority) {
-        return priority > latestSection.getOrDefault(pos, Long.MIN_VALUE);
+        long latestQueuedPriority = sectionManager.latestQueuedSectionPriority(pos);
+        long latestPublishedPriority = latestSection.getOrDefault(pos, Long.MIN_VALUE);
+
+        // The queued fence covers builds that are still being meshed. The
+        // published fence alone cannot reject an older worker result when a
+        // newer snapshot has not reached the compiler thread yet.
+        return priority >= latestQueuedPriority && priority > latestPublishedPriority;
     }
 
     private boolean setLatestSection(Vector3i pos, long priority) {
