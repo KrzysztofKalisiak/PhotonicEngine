@@ -48,22 +48,44 @@ void main() {
     bool has_current_energy = !isnan(current_energy)
         && !isinf(current_energy)
         && current_energy > 0.000001f;
+
+    // A GI reservoir can be valid even when its contribution is exactly zero
+    // (for example, a ray terminated on an opaque surface with no emitted
+    // radiance). During tree publication the same zero value can also mean
+    // that the current voxel query has not produced a usable result yet. Do
+    // not commit the latter as black radiance, but once the world is settled a
+    // finite current batch is authoritative and must advance the history
+    // epoch normally.
+    bool has_stable_current_gi_batch = false;
+#if defined PH_ENABLE_RESTIR_GI
+    IndirectReservoir current_indirect = indirect_reservoir_empty();
+    bool current_indirect_loaded = indirect_reservoir_load(
+        current_indirect,
+        frag_tex_coord
+    );
+    has_stable_current_gi_batch = current_indirect_loaded
+        && indirect_reservoir_has_batch(current_indirect)
+        && ph_world_settled != 0;
+#endif
+    bool has_current_transport = has_current_energy
+        || has_stable_current_gi_batch;
     bool has_reprojected_history = max(
             accumulator.lighting.a,
             accumulator.external_lighting.a
         ) > 0.0f;
     bool history_retry_required = !has_reprojected_history
-        && !has_current_energy;
+        && !has_current_transport;
 
     // A valid surface can briefly have no current GI proposal while the voxel
     // layout is uploading or while a newly exposed camera region is filling.
-    // Recover one geometrically matched previous sample whenever the receiver
-    // is outside the changed scene region. The candidate already passed the
-    // surface, sublevel, finite-value, and regional epoch checks; world-settled
-    // only describes tree publication, so it must not disable this recovery.
+    // Recover one geometrically matched previous sample only while the tree is
+    // still publishing. The candidate already passed the surface, sublevel,
+    // finite-value, and regional epoch checks; once the tree is settled, a
+    // missing current batch must remain a retry rather than import stale light.
 #if defined PH_ENABLE_RESTIR_GI
     if (!has_reprojected_history
-            && !has_current_energy
+            && !has_current_transport
+            && ph_world_settled == 0
             && !ph_restir_scene_change_affects_receiver_for_recovery(
                 frag_rt_pos
             )) {
