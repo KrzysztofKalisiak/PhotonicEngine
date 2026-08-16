@@ -730,6 +730,10 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
             return chunkBlockPos;
         }
 
+        public boolean playerChanged() {
+            return playerChanged;
+        }
+
         @Override
         public long priority() {
             return priority;

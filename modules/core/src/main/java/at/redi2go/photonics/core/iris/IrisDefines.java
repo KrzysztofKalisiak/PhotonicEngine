@@ -89,6 +89,13 @@ public class IrisDefines {
         if (phProperties.getLightingMode() == LightingMode.RESTIR
                 && phProperties.isGiEnabled()
                 && phProperties.useRestirCombinedGi()
+                && phProperties.getGiRenderScale() >= phProperties.getRenderScale() - 0.0001f
+                && RestirDiagnostics.isGiValidityEnabled())
+            defines.stringDefine("PH_RESTIR_GI_VALIDITY_DIAGNOSTIC", "");
+
+        if (phProperties.getLightingMode() == LightingMode.RESTIR
+                && phProperties.isGiEnabled()
+                && phProperties.useRestirCombinedGi()
                 && RestirDiagnostics.isHistorySplitScreenEnabled())
             defines.stringDefine("PH_RESTIR_HISTORY_SPLIT_SCREEN", "");
 

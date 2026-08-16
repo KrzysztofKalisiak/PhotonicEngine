@@ -8,6 +8,7 @@ public final class RestirDiagnostics {
     public static final String DIRECT_VISIBILITY_LANES_PROPERTY = "photonics.restirDirectVisibilityLanesOverride";
     public static final String GI_TRANSPORT_LANES_PROPERTY = "photonics.restirGiTransportDiagnostic";
     public static final String GI_SUN_PROPOSAL_PROPERTY = "photonics.restirGiSunProposalDiagnostic";
+    public static final String GI_VALIDITY_PROPERTY = "photonics.restirGiValidityDiagnostic";
     public static final String HISTORY_SPLIT_SCREEN_PROPERTY = "photonics.restirHistorySplitDiagnostic";
     public static final String HISTORY_SPLIT_MODE_PROPERTY = "photonics.restirHistorySplitMode";
 
@@ -17,6 +18,7 @@ public final class RestirDiagnostics {
     private static final boolean DIRECT_ESTIMATOR_RANK_ENABLED = Boolean.getBoolean(DIRECT_ESTIMATOR_RANK_PROPERTY);
     private static final boolean GI_TRANSPORT_LANES_ENABLED = Boolean.getBoolean(GI_TRANSPORT_LANES_PROPERTY);
     private static final boolean GI_SUN_PROPOSAL_ENABLED = Boolean.getBoolean(GI_SUN_PROPOSAL_PROPERTY);
+    private static final boolean GI_VALIDITY_ENABLED = Boolean.getBoolean(GI_VALIDITY_PROPERTY);
     private static final int REQUESTED_HISTORY_SPLIT_MODE = Integer.getInteger(
             HISTORY_SPLIT_MODE_PROPERTY,
             Boolean.getBoolean(HISTORY_SPLIT_SCREEN_PROPERTY) ? 3 : 0
@@ -67,6 +69,10 @@ public final class RestirDiagnostics {
 
     public static boolean isGiSunProposalEnabled() {
         return GI_SUN_PROPOSAL_ENABLED;
+    }
+
+    public static boolean isGiValidityEnabled() {
+        return GI_VALIDITY_ENABLED;
     }
 
     public static boolean isHistorySplitScreenEnabled() {

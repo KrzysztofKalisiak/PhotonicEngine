@@ -100,6 +100,7 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     private int mostRecentPendingBuilds = 0;
     private int mostRecentPendingUnloads = 0;
     private double mostRecentCompilationMillis = 0.0;
+    private String mostRecentLayoutReason = "none";
 
     private final Thread compilerThread;
 
@@ -172,6 +173,11 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     } else {
                         mostRecentSceneRevision = sectionManager.sceneRevision();
                     }
+                    mostRecentLayoutReason = classifyLayoutReason(
+                            builtSections,
+                            unloadedSections,
+                            sceneChangeRegion.isValid()
+                    );
                     mostRecentCompiledSections = regionIds.size();
                     mostRecentTrackedSections = taskQueue.trackedSectionCount();
                     mostRecentBuiltBatch = builtSections.size();
@@ -195,6 +201,41 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     t
             );
         }
+    }
+
+    private String classifyLayoutReason(
+            List<ChunkCompiler.BuildResult> builtSections,
+            List<Vector3i> unloadedSections,
+            boolean sceneChanged
+    ) {
+        boolean playerMarkedBuild = false;
+        boolean unmarkedBuild = false;
+        for (var built : builtSections) {
+            if (built.playerChanged())
+                playerMarkedBuild = true;
+            else
+                unmarkedBuild = true;
+        }
+
+        if (sceneChanged && playerMarkedBuild)
+            return "scene-content-change";
+        if (sceneChanged)
+            return "scene-hash-change-without-player-marker";
+        if (playerMarkedBuild && unmarkedBuild && !unloadedSections.isEmpty())
+            return "player-marked-build+streaming+unload";
+        if (playerMarkedBuild && unmarkedBuild)
+            return "player-marked-build+streaming";
+        if (playerMarkedBuild && !unloadedSections.isEmpty())
+            return "player-marked-build+unload";
+        if (playerMarkedBuild)
+            return "player-marked-build";
+        if (unmarkedBuild && !unloadedSections.isEmpty())
+            return "streaming+unload";
+        if (unmarkedBuild)
+            return "streaming-or-rebuild";
+        if (!unloadedSections.isEmpty())
+            return "section-unload";
+        return "none";
     }
 
 
@@ -400,8 +441,9 @@ public class WorldCompiler implements Runnable, RenderingComponent {
             boolean blockBoundsFallback
     ) {
         Photonics.LOGGER.info(
-                "Photonics world tracing v133: layoutRevision={}, sceneRevision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, sceneChangeBounds={}, boundsSource={}, compileMs={}",
+                "Photonics world tracing v138: layoutRevision={}, layoutReason={}, sceneRevision={}, settled={}, compiledSections={}, trackedSections={}, batchBuilt={}, batchUnloaded={}, pendingBuilds={}, pendingUnloads={}, ready={}, depth={}, blockBounds={}..{}, treeBounds={}..{}, origin={}, sceneChangeBounds={}, boundsSource={}, compileMs={}",
                 mostRecentCompilationRevision,
+                mostRecentLayoutReason,
                 mostRecentSceneRevision,
                 settled,
                 mostRecentCompiledSections,

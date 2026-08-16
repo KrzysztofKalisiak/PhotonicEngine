@@ -283,6 +283,29 @@ bool sample_history_is_valid(SampleHistory history) {
     return history.lighting.x != INVALID_SAMPLE_COMPONENT;
 }
 
+// r7 uses the alpha channel as an accumulation-count/validity marker. A zero
+// count is an intentionally unresolved sample, not black radiance. Keep that
+// distinction available to the denoiser so an unresolved pixel cannot become
+// a black neighbor that contaminates otherwise valid receivers.
+bool ph_restir_accumulation_is_valid(ivec2 texel) {
+    vec4 lighting = texelFetch(restir_lighting, texel, 0);
+    if (any(isnan(lighting)) || any(isinf(lighting)))
+        return false;
+
+    bool valid = lighting.a > 0.0f;
+#if defined PH_ENABLE_BLOCKLIGHT
+    vec4 external_lighting = texelFetch(
+        restir_external_lighting,
+        texel,
+        0
+    );
+    if (any(isnan(external_lighting)) || any(isinf(external_lighting)))
+        return false;
+    valid = valid || external_lighting.a > 0.0f;
+#endif
+    return valid;
+}
+
 void ph_restir_sanitize_history(inout SampleHistory history) {
     if (!sample_history_is_valid(history))
         return;

@@ -63,6 +63,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI stability v133: initial all-air population is path-validation-only, real content edits invalidate regional radiance, and geometrically validated zero-radiance history recovery remains eligible after layout settling"
         );
         Photonics.LOGGER.info(
+                "Photonics GI stability v138: current GI batches require published-tree readiness rather than the settling delay; unresolved r7 samples are invalidated before SVGF spatial filtering"
+        );
+        Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         Photonics.LOGGER.info(
@@ -148,6 +151,19 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                     "Photonics GI sun-proposal diagnostic v115 enabled via -D{}=true; selectionProbability=0.25, estimator=sun-cosine/probability+sky/complement-probability, dimensions=overworld-only, opaqueBlockers=zero-contribution termination",
                     RestirDiagnostics.GI_SUN_PROPOSAL_PROPERTY
             );
+        }
+        if (RestirDiagnostics.isGiValidityEnabled()) {
+            if (isRestirGiEnabled() && !isSplitGiEnabled()) {
+                Photonics.LOGGER.warn(
+                        "Photonics combined-GI validity diagnostic enabled via -D{}=true; RGB bits=history/current/unsettled, denoiser filtering bypassed, production framebuffer layout preserved",
+                        RestirDiagnostics.GI_VALIDITY_PROPERTY
+                );
+            } else {
+                Photonics.LOGGER.warn(
+                        "Photonics GI validity diagnostic requested via -D{}=true but requires combined GI at full render scale; diagnostic disabled for this pipeline",
+                        RestirDiagnostics.GI_VALIDITY_PROPERTY
+                );
+            }
         }
         if (RestirDiagnostics.isGiTransportLanesEnabled()) {
             Photonics.LOGGER.warn(
