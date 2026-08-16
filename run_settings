@@ -24,4 +24,4 @@ last settings used:
 -Dphotonics.restirDirectVisibilityLanesOverride=2
 
 
--Dphotonics.temporalUpscalerSourceValidationLanes=trueE
+-Dphotonics.temporalUpscalerSourceValidationLanes=trueE-Dphotonics.restirGiValidityDiagnostic=true
