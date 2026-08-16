@@ -52,23 +52,29 @@ void main() {
     // A GI reservoir can be valid even when its contribution is exactly zero
     // (for example, a ray terminated on an opaque surface with no emitted
     // radiance). During tree publication the same zero value can also mean
-    // that the current voxel query has not produced a usable result yet. Do
-    // not commit the latter as black radiance, but once the world is settled a
-    // finite current batch is authoritative and must advance the history
-    // epoch normally.
-    bool has_stable_current_gi_batch = false;
+    // that the current voxel query has not produced a usable result yet. The
+    // current batch is eligible once the published tree is ready; the separate
+    // settled bit includes an intentional delay for diagnostics and must not
+    // blank newly exposed receivers during that delay.
+    bool has_current_gi_batch = false;
 #if defined PH_ENABLE_RESTIR_GI
     IndirectReservoir current_indirect = indirect_reservoir_empty();
     bool current_indirect_loaded = indirect_reservoir_load(
         current_indirect,
         frag_tex_coord
     );
-    has_stable_current_gi_batch = current_indirect_loaded
+    has_current_gi_batch = current_indirect_loaded
         && indirect_reservoir_has_batch(current_indirect)
-        && ph_world_settled != 0;
+        && ph_world_ready != 0;
 #endif
     bool has_current_transport = has_current_energy
-        || has_stable_current_gi_batch;
+        || has_current_gi_batch;
+#if !defined PH_ENABLE_RESTIR_GI
+    // Without GI, r6 is the authoritative current direct-light evaluation.
+    // A zero result is still meaningful (for example, a fully occluded light)
+    // and must be allowed to darken history normally.
+    has_current_transport = true;
+#endif
     bool has_reprojected_history = max(
             accumulator.lighting.a,
             accumulator.external_lighting.a
@@ -108,13 +114,21 @@ void main() {
     }
 #endif
 
-    sample_history_combine_lighting(accumulator, smple);
-    ph_restir_sanitize_history(accumulator);
+    // r6 uses alpha=1 as the per-frame sample-count seed. That alpha is not
+    // validity by itself: during an unsettled upload r6 can contain a finite
+    // zero-radiance proposal with no usable transport. Combining it here
+    // would average black into valid history and make the dark patch persist.
+    // Keep the previous history untouched until a current transport sample or
+    // a geometrically recovered history sample is available.
+    if (has_current_transport) {
+        sample_history_combine_lighting(accumulator, smple);
+        ph_restir_sanitize_history(accumulator);
 
 #if PH_RESTIR_DENOISER_PASSES != 0
-    sample_history_combine_moment(accumulator, smple);
-    sample_history_compute_variance(accumulator, smple);
+        sample_history_combine_moment(accumulator, smple);
+        sample_history_compute_variance(accumulator, smple);
 #endif
+    }
 
     lighting_frag_out = accumulator.lighting;
     lighting_variance_frag_out = accumulator.variance;
@@ -127,5 +141,21 @@ void main() {
     // prevent the affected receiver from retrying once the tree is usable.
     if (history_retry_required)
         gi_history_epoch_frag_out = uint(max(ph_scene_revision - 1, 0));
+#endif
+
+#if defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC
+    // Keep this diagnostic in the existing lighting attachment so it does not
+    // change the combined-GI framebuffer layout or alter pass scheduling.
+    // RGB bits: red=history, green=current transport, blue=world unsettled.
+    vec3 validity_color = vec3(
+        has_reprojected_history ? 1.0f : 0.0f,
+        has_current_transport ? 1.0f : 0.0f,
+        ph_world_settled == 0 ? 1.0f : 0.0f
+    );
+    lighting_frag_out = vec4(validity_color, 1.0f);
+    lighting_variance_frag_out = vec4(0.0f);
+#if defined PH_ENABLE_BLOCKLIGHT
+    external_lighting_frag_out = vec4(0.0f);
+#endif
 #endif
 }

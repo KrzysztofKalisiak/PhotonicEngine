@@ -45,6 +45,20 @@ void main() {
     setup_frag_data(0);
     if (!frag_is_in_world) return;
 
+#if defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC
+    // Preserve the flat r7/r8 validity map through every a-trous iteration.
+    denoise_out = texelFetch(prev_denoise_result, frag_tex_coord, 0);
+    return;
+#endif
+
+    if (!ph_restir_accumulation_is_valid(frag_tex_coord)) {
+        // r8 can carry an unresolved zero-radiance marker forward. Do not
+        // resurrect it through an a-trous neighborhood or let it darken the
+        // valid pixels around it.
+        denoise_out = vec4(0.0f);
+        return;
+    }
+
     // r8 immediately seeds this pass from the current frame's accumulated
     // lighting. A world revision invalidates the temporal reservoirs in r4/r7,
     // but must not bypass the current-frame SVGF chain here; doing so exposes
@@ -103,6 +117,9 @@ void main() {
             ivec2(0),
             max_texel
         );
+
+        if (!ph_restir_accumulation_is_valid(p))
+            continue;
 
         FragData sample_frag;
         frag_data_load(sample_frag, p);

@@ -82,6 +82,21 @@ void main() {
     denoise_out = vec4(center, 10.0f);
     if (!frag_is_in_world) return;
 
+#if defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC
+    // The r7 output is already a flat validity map. Do not blur its state
+    // colors through SVGF, otherwise neighboring validity classes become
+    // indistinguishable during the diagnostic run.
+    denoise_out.a = 0.0f;
+    return;
+#endif
+
+    if (!ph_restir_accumulation_is_valid(frag_tex_coord)) {
+        // Do not let an unresolved r7 pixel enter the spatial filter. Its
+        // zero RGB is a retry marker, not a measured black lighting value.
+        denoise_out = vec4(0.0f);
+        return;
+    }
+
     bool center_has_direct_sample = false;
     int center_direct_light = -1;
     bool center_direct_visible = false;
@@ -105,6 +120,8 @@ void main() {
             if (x == 0 && y == 0) continue;
 
             ivec2 pos = clamp(frag_tex_coord + ivec2(x, y), ivec2(0), max_texel);
+            if (!ph_restir_accumulation_is_valid(pos))
+                continue;
             if (!ph_matches_denoise_receiver(
                     pos,
                     center_has_direct_sample,
