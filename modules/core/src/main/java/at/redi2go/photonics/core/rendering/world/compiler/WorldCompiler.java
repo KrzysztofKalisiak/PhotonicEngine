@@ -384,6 +384,9 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     }
 
     private void setWorldSettled(boolean settled) {
+        if (settled)
+            sectionManager.markInitialPopulationComplete();
+
         if (mostRecentWorldSettled == settled) return;
 
         mostRecentWorldSettled = settled;

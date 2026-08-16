@@ -24,6 +24,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -48,6 +49,13 @@ public class SectionManager implements RenderingComponent {
     private final IntSupplier renderDistanceSupplier;
     private long remeshCount = 0;
     private final AtomicLong sceneRevision = new AtomicLong();
+    /**
+     * Set after the first complete world snapshot has remained settled. The
+     * initial-population exception must never be reused for later edits: a
+     * rebuild with playerChanged=false is not proof that the content change
+     * came from chunk streaming.
+     */
+    private final AtomicBoolean initialPopulationComplete = new AtomicBoolean();
     private final Object sceneChangeLock = new Object();
     private SceneChangeRegion pendingSceneChangeRegion = SceneChangeRegion.empty();
 
@@ -192,6 +200,14 @@ public class SectionManager implements RenderingComponent {
      */
     public long sceneRevision() {
         return sceneRevision.get();
+    }
+
+    public boolean isInitialPopulationComplete() {
+        return initialPopulationComplete.get();
+    }
+
+    public void markInitialPopulationComplete() {
+        initialPopulationComplete.set(true);
     }
 
     /**

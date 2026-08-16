@@ -452,21 +452,29 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
     }
 
     /**
-     * A section can be accepted once while its chunk is still being populated
-     * by the client. The follow-up build then changes only air cells into
-     * blocks. The voxel tree must receive that build, but treating it as a
-     * world edit would discard GI history for an unrelated region while the
-     * initial scene is still streaming in.
+     * Before the first complete world snapshot settles, a section can be
+     * accepted while its chunk is still being populated by the client. The
+     * follow-up build then changes only air cells into blocks. The voxel tree
+     * must receive that build, but treating it as a world edit would discard
+     * GI history for an unrelated region while the initial scene is still
+     * streaming in.
      *
      * A compact occupancy snapshot is compared with stable state hashes for
      * every previously occupied cell. Removals and replacements therefore
      * retain regional radiance invalidation.
      */
-    private static boolean isInitialPopulation(
+    private boolean isInitialPopulation(
             @Nullable SectionCopy.SceneOccupancy previous,
             SectionCopy.SceneOccupancy current,
             boolean playerChanged
     ) {
+        // The integration does not reliably preserve playerChanged across
+        // all rebuild paths. Once the initial world has settled, every real
+        // content hash change must invalidate regional radiance regardless of
+        // that flag.
+        if (sectionManager.isInitialPopulationComplete())
+            return false;
+
         if (playerChanged || previous == null)
             return false;
 
@@ -834,9 +842,11 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
 
             Long previousSceneHash = sceneHashes.put(chunkPos, sceneHash);
             var previousSceneOccupancy = sceneOccupancies.put(chunkPos, sceneOccupancy);
-            // The first accepted content hash is initial streaming. A changed
-            // block/model hash is normally a scene edit; the one exception is
-            // a non-player rebuild that fills an earlier all-air snapshot.
+            // The first accepted content hash is initial streaming. Before the
+            // world settles, a non-player rebuild may fill an earlier snapshot
+            // without requiring a radiance reset. After that point the
+            // SectionManager latch makes this a real edit even when the
+            // integration reports playerChanged=false.
             if (previousSceneHash != null && !Objects.equals(previousSceneHash, sceneHash)) {
                 boolean initialPopulation = isInitialPopulation(
                         previousSceneOccupancy,
@@ -844,7 +854,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                         playerChanged
                 );
                 Photonics.LOGGER.info(
-                        "Photonics scene content change v133: section={}, previousSceneHash={}, sceneHash={}, fullHash={}, previousNonAir={}, currentNonAir={}, priority={}, playerChanged={}, radianceInvalidation={}",
+                        "Photonics scene content change v137: section={}, previousSceneHash={}, sceneHash={}, fullHash={}, previousNonAir={}, currentNonAir={}, priority={}, playerChanged={}, initialPopulationComplete={}, radianceInvalidation={}",
                         chunkPos,
                         previousSceneHash,
                         sceneHash,
@@ -855,6 +865,7 @@ public class ChunkCompiler implements Runnable, RenderingComponent {
                         sceneOccupancy.nonAirCount(),
                         priority,
                         playerChanged,
+                        sectionManager.isInitialPopulationComplete(),
                         initialPopulation ? "skipped-initial-population" : "regional"
                 );
                 if (DEBUG_SCENE_HASH_DIFF)
