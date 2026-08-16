@@ -31,6 +31,11 @@ layout(location = RESTIR_LIGHTING_OUT) out vec4 lighting;
 void main() {
     lighting = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+    bool ph_debug_current_direct = false;
+    bool ph_debug_current_gi = false;
+#endif
+
 #if defined PH_ENABLE_BLOCKLIGHT
     di_history_state = vec2(0.0f);
     external_lighting = vec4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -45,6 +50,11 @@ void main() {
 #if defined PH_ENABLE_RESTIR_GI
     IndirectReservoir indirect_reservoir = indirect_reservoir_empty();
     indirect_reservoir_load(indirect_reservoir, frag_tex_coord);
+
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+    ph_debug_current_gi = indirect_reservoir_has_batch(indirect_reservoir)
+        && ph_world_ready != 0;
+#endif
 
     lighting.rgb = indirect_reservoir_get_final_color(indirect_reservoir);
 
@@ -112,6 +122,9 @@ void main() {
             }
             if (sample_visible) {
                 local_direct_lighting += local_sample_color;
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+                ph_debug_current_direct = true;
+#endif
                 local_visible_light_count++;
             }
         }
@@ -127,6 +140,14 @@ void main() {
                 direct_reservoir.smple,
                 receiver_token
             )) direct_reservoir = direct_reservoir_empty();
+
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+    // Keep candidate availability separate from radiance. A visible sample
+    // can evaluate to zero after visibility, but it was still a current
+    // direct proposal and must not be confused with an absent evaluation.
+    ph_debug_current_direct = ph_debug_current_direct
+        || direct_reservoir_has_sample(direct_reservoir);
+#endif
 
 #if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
     vec3 direct_unshadowed_lighting = direct_reservoir_get_unshadowed_color(
@@ -169,6 +190,13 @@ void main() {
         di_history_state.y = 0.0f;
 #endif
     }
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+    // r7 carries these two current-frame bits through the otherwise unused
+    // fractional part of alpha. The production alpha contract remains 1.0.
+    int ph_debug_current_flags = (ph_debug_current_direct ? 1 : 0)
+        | (ph_debug_current_gi ? 2 : 0);
+    lighting.a = 1.0f + float(ph_debug_current_flags) / 16.0f;
+#endif
 #if defined PH_RESTIR_DIRECT_ESTIMATOR_DIAGNOSTIC
     float unshadowed_luminance = direct_sample_weight(
         max(direct_unshadowed_lighting, vec3(0.0f))

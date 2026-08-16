@@ -13,6 +13,41 @@ layout(location = RESTIR_EXTERNAL_LIGHTING_OUT) out vec4 external_lighting_frag_
 layout(location = RESTIR_GI_HISTORY_EPOCH_OUT) out uint gi_history_epoch_frag_out;
 #endif
 
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+vec3 ph_restir_validity_channel_color(
+        bool has_history,
+        bool has_current_direct,
+        bool has_current_gi,
+        bool world_unsettled
+) {
+    int transport_flags = (has_history ? 1 : 0)
+        | (has_current_direct ? 2 : 0)
+        | (has_current_gi ? 4 : 0);
+
+    if (!world_unsettled) {
+        if (transport_flags == 0) return vec3(0.0f);
+        if (transport_flags == 1) return vec3(1.0f, 0.0f, 0.0f);
+        if (transport_flags == 2) return vec3(0.0f, 1.0f, 0.0f);
+        if (transport_flags == 3) return vec3(1.0f, 1.0f, 0.0f);
+        if (transport_flags == 4) return vec3(0.0f, 0.0f, 1.0f);
+        if (transport_flags == 5) return vec3(1.0f, 0.0f, 1.0f);
+        if (transport_flags == 6) return vec3(0.0f, 1.0f, 1.0f);
+        return vec3(1.0f);
+    }
+
+    // Unsettled states use pastel variants so the fourth bit remains visible
+    // without overloading alpha in the final shader-pack composition.
+    if (transport_flags == 0) return vec3(0.25f);
+    if (transport_flags == 1) return vec3(1.0f, 0.5f, 0.0f);
+    if (transport_flags == 2) return vec3(0.5f, 1.0f, 0.0f);
+    if (transport_flags == 3) return vec3(1.0f, 1.0f, 0.5f);
+    if (transport_flags == 4) return vec3(0.5f, 0.5f, 1.0f);
+    if (transport_flags == 5) return vec3(1.0f, 0.5f, 1.0f);
+    if (transport_flags == 6) return vec3(0.5f, 1.0f, 1.0f);
+    return vec3(1.0f);
+}
+#endif
+
 void main() {
     lighting_frag_out = vec4(0.0f);
     lighting_variance_frag_out = vec4(0.0f);
@@ -31,6 +66,16 @@ void main() {
     SampleHistory smple;
     sample_history_load(smple);
     ph_restir_sanitize_history(smple);
+
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+    int ph_debug_current_flags = clamp(
+        int(round((smple.lighting.a - 1.0f) * 16.0f)),
+        0,
+        3
+    );
+    bool ph_debug_current_direct = (ph_debug_current_flags & 1) != 0;
+    bool ph_debug_current_gi = (ph_debug_current_flags & 2) != 0;
+#endif
 
     SampleHistory accumulator;
 
@@ -143,7 +188,19 @@ void main() {
         gi_history_epoch_frag_out = uint(max(ph_scene_revision - 1, 0));
 #endif
 
-#if defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+    vec3 validity_color = ph_restir_validity_channel_color(
+        has_reprojected_history,
+        ph_debug_current_direct,
+        ph_debug_current_gi,
+        ph_world_settled == 0
+    );
+    lighting_frag_out = vec4(validity_color, 1.0f);
+    lighting_variance_frag_out = vec4(0.0f);
+#if defined PH_ENABLE_BLOCKLIGHT
+    external_lighting_frag_out = vec4(0.0f);
+#endif
+#elif defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC
     // Keep this diagnostic in the existing lighting attachment so it does not
     // change the combined-GI framebuffer layout or alter pass scheduling.
     // RGB bits: red=history, green=current transport, blue=world unsettled.

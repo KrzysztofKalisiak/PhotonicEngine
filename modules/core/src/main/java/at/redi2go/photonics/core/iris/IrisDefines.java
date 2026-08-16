@@ -90,6 +90,13 @@ public class IrisDefines {
                 && phProperties.isGiEnabled()
                 && phProperties.useRestirCombinedGi()
                 && phProperties.getGiRenderScale() >= phProperties.getRenderScale() - 0.0001f
+                && RestirDiagnostics.isGiValidityChannelsEnabled())
+            defines.stringDefine("PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC", "");
+
+        if (phProperties.getLightingMode() == LightingMode.RESTIR
+                && phProperties.isGiEnabled()
+                && phProperties.useRestirCombinedGi()
+                && phProperties.getGiRenderScale() >= phProperties.getRenderScale() - 0.0001f
                 && RestirDiagnostics.isGiValidityEnabled())
             defines.stringDefine("PH_RESTIR_GI_VALIDITY_DIAGNOSTIC", "");
 

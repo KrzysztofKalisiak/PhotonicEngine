@@ -152,6 +152,19 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                     RestirDiagnostics.GI_SUN_PROPOSAL_PROPERTY
             );
         }
+        if (RestirDiagnostics.isGiValidityChannelsEnabled()) {
+            if (isRestirGiEnabled() && !isSplitGiEnabled()) {
+                Photonics.LOGGER.warn(
+                        "Photonics combined-GI validity channel diagnostic enabled via -D{}=true; palette bits=red-history/green-direct/blue-GI, unsettled states use pastel variants, current direct/GI bits are carried from r6, denoiser filtering bypassed, production framebuffer layout preserved",
+                        RestirDiagnostics.GI_VALIDITY_CHANNELS_PROPERTY
+                );
+            } else {
+                Photonics.LOGGER.warn(
+                        "Photonics GI validity channel diagnostic requested via -D{}=true but requires combined GI at full render scale; diagnostic disabled for this pipeline",
+                        RestirDiagnostics.GI_VALIDITY_CHANNELS_PROPERTY
+                );
+            }
+        }
         if (RestirDiagnostics.isGiValidityEnabled()) {
             if (isRestirGiEnabled() && !isSplitGiEnabled()) {
                 Photonics.LOGGER.warn(

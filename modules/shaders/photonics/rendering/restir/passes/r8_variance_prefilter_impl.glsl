@@ -82,7 +82,7 @@ void main() {
     denoise_out = vec4(center, 10.0f);
     if (!frag_is_in_world) return;
 
-#if defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC
+#if defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC || defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
     // The r7 output is already a flat validity map. Do not blur its state
     // colors through SVGF, otherwise neighboring validity classes become
     // indistinguishable during the diagnostic run.

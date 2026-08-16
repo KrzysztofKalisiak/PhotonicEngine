@@ -26,6 +26,11 @@ The current patch makes these changes:
   full-resolution diagnostic. Red means reprojected history, green means
   current transport, and blue means `ph_world_settled == 0`. The diagnostic
   bypasses denoising while preserving the existing framebuffer layout.
+- `-Dphotonics.restirGiValidityChannelsDiagnostic=true` enables a clearer
+  combined-GI channel diagnostic. It uses a palette for four independent
+  states: history, current direct, current GI batch, and unsettled world.
+  The direct/GI bits are captured in r6 and carried to r7 instead of being
+  inferred from final radiance.
 - The world compiler now logs `layoutReason` as `scene-content-change`,
   `scene-hash-change-without-player-marker`, `streaming-or-rebuild`,
   `section-unload`, or a combined reason. This is provenance only; it does
@@ -57,6 +62,43 @@ receiver is unchanged, the remaining failure is later than the r7 validity
 decision or is caused by a separate framebuffer/presentation path. If they
 appear only with blue, the settling/layout path remains implicated. Capture
 the corresponding `layoutReason` entries from the log as well.
+
+For the clearer second diagnostic, launch with:
+
+```text
+-Dphotonics.restirGiValidityChannelsDiagnostic=true
+```
+
+The stable-state palette is:
+
+| Color | Meaning |
+| --- | --- |
+| black | no history, no current direct, no current GI |
+| red | history only |
+| green | current direct proposal/evaluation only |
+| yellow | history + current direct |
+| blue | current GI batch only |
+| magenta | history + current GI |
+| cyan | current direct + current GI |
+| white | history + current direct + current GI |
+
+When `ph_world_settled == 0`, the same combinations use pastel variants:
+gray means no transport, orange/lime/light-yellow represent history/direct
+variants, and violet/pink/light-cyan represent GI variants. This makes the
+unsettled bit visible without putting it in the lighting alpha channel.
+
+The current-direct bit means that r6 had a usable direct proposal or exact
+local direct evaluation. It is deliberately independent of radiance: a
+visibility-rejected direct proposal can therefore still be marked green. The
+current-GI bit means that r6 had a finite indirect batch and the published
+world tree was ready, including zero-radiance GI batches.
+
+The diagnostic is still composed through the shader pack's lighting hook, so
+the final recording can be affected by albedo, exposure, and tone mapping.
+Read the dominant tint rather than treating a pale white surface as an exact
+RGB value. A later shader-pack-specific overlay can make the colors pixel-
+exact, but this mode is sufficient to identify whether a dark region lacks
+history, direct transport, GI transport, or only waits for world settling.
 
 `git diff --check` and focused source assertions pass in this worktree. A full
 Gradle build was attempted with Java 21, but Fabric Loom could not download the
