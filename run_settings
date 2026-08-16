@@ -25,3 +25,6 @@ last settings used:
 
 
 -Dphotonics.temporalUpscalerSourceValidationLanes=trueE-Dphotonics.restirGiValidityDiagnostic=true
+
+
+-Dphotonics.restirGiValidityChannelsDiagnostic=true
