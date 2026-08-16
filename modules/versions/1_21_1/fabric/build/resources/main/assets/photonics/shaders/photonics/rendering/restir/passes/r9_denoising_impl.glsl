@@ -45,7 +45,7 @@ void main() {
     setup_frag_data(0);
     if (!frag_is_in_world) return;
 
-#if defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC
+#if defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC || defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
     // Preserve the flat r7/r8 validity map through every a-trous iteration.
     denoise_out = texelFetch(prev_denoise_result, frag_tex_coord, 0);
     return;
