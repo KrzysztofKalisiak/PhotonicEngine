@@ -155,7 +155,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         if (RestirDiagnostics.isGiValidityChannelsEnabled()) {
             if (isRestirGiEnabled() && !isSplitGiEnabled()) {
                 Photonics.LOGGER.warn(
-                        "Photonics combined-GI validity channel diagnostic enabled via -D{}=true; palette bits=red-history/green-direct/blue-GI, unsettled states use pastel variants, current direct/GI bits are carried from r6, denoiser filtering bypassed, production framebuffer layout preserved",
+                        "Photonics combined-GI validity channel diagnostic v140 enabled via -D{}=true; palette bits=red-history/green-direct/blue-GI, current direct/GI state is captured in private current/final attachments after r6/r7, lighting alpha remains the real temporal sample count, denoiser filtering bypassed",
                         RestirDiagnostics.GI_VALIDITY_CHANNELS_PROPERTY
                 );
             } else {
@@ -280,6 +280,27 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_indirect_spatial_input1", ITextureFormat.rgb32ui(), CREATE_SAMPLER, this::isIndirectSpatialReuseEnabled)
                 .build(this::registerComponent);
 
+        var giValidityFramebuffer = isGiValidityChannelsDiagnosticEnabled()
+                ? irisFactory.newFramebuffer(properties.getRenderScale())
+                .addAttachment(
+                        "restir_gi_validity_current",
+                        ITextureFormat.rgba16f(),
+                        CREATE_SAMPLER
+                )
+                .addAttachment(
+                        "restir_gi_validity_final",
+                        ITextureFormat.rgba16f(),
+                        CREATE_SAMPLER
+                )
+                .build(this::registerComponent)
+                : null;
+        var giValidityCurrentFramebuffer = giValidityFramebuffer == null
+                ? null
+                : giValidityFramebuffer.withDrawBuffers("restir_gi_validity_current");
+        var giValidityFinalFramebuffer = giValidityFramebuffer == null
+                ? null
+                : giValidityFramebuffer.withDrawBuffers("restir_gi_validity_final");
+
         irisFactory.newPipeline()
                 .thenFlip(restirFramebuffer)
                 .debugGroup("restir direct")
@@ -302,10 +323,26 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .debugGroup("restir diffuse")
                 .withFramebuffer(diffuseFramebuffer)
                 .deferredPass("diffuse", "/photonics/rendering/restir/passes/r6_diffuse.fsh", null, this::isRestirEnabled)
+                .when(this::isGiValidityChannelsDiagnosticEnabled, b0 -> b0
+                        .debugGroup("restir GI validity current")
+                        .withFramebuffer(giValidityCurrentFramebuffer)
+                        .deferredPass(
+                                "capture current direct/GI validity",
+                                "/photonics/rendering/restir/passes/r7_validity_current.fsh",
+                                null
+                        ))
                 .debugGroup("restir accumulation")
                 .withFramebuffer(accumulationFramebuffer)
                 .deferredPass("accumulation", "/photonics/rendering/restir/passes/r7_accumulation.fsh", null, this::isRestirEnabled)
-                .when(this::isDenoisingEnabled, b0 -> {
+                .when(this::isGiValidityChannelsDiagnosticEnabled, b0 -> b0
+                        .debugGroup("restir GI validity final")
+                        .withFramebuffer(giValidityFinalFramebuffer)
+                        .deferredPass(
+                                "capture post-accumulation history state",
+                                "/photonics/rendering/restir/passes/r7_validity_final.fsh",
+                                null
+                        ))
+                 .when(this::isDenoisingEnabled, b0 -> {
                     b0.withFramebuffer(denoiseFramebuffer);
                     b0.debugGroup("svgf variance");
                     b0.thenRun(() -> atrousIteration = denoiserPasses);
@@ -683,6 +720,13 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
 
     public boolean isRestirGiEnabled() {
         return properties.isGiEnabled() && properties.useRestirCombinedGi();
+    }
+
+    public boolean isGiValidityChannelsDiagnosticEnabled() {
+        return isRestirGiEnabled()
+                && !isSplitGiEnabled()
+                && properties.getGiRenderScale() >= properties.getRenderScale() - 0.0001f
+                && RestirDiagnostics.isGiValidityChannelsEnabled();
     }
 
     public boolean isSplitGiEnabled() {

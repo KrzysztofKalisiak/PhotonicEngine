@@ -14,6 +14,13 @@ layout(location = RESTIR_GI_HISTORY_EPOCH_OUT) out uint gi_history_epoch_frag_ou
 #endif
 
 #if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
+// Diagnostic state is captured in a private framebuffer after r6. Keeping it
+// out of lighting alpha is important: alpha is the temporal sample-count
+// contract consumed by the next frame's history validation.
+//ph_required: uniform sampler2D restir_gi_validity_current;
+#endif
+
+#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
 vec3 ph_restir_validity_channel_color(
         bool has_history,
         bool has_current_direct,
@@ -35,8 +42,8 @@ vec3 ph_restir_validity_channel_color(
         return vec3(1.0f);
     }
 
-    // Unsettled states use pastel variants so the fourth bit remains visible
-    // without overloading alpha in the final shader-pack composition.
+    // Unsettled states use pastel variants so the compiler/layout state remains
+    // visible without overloading alpha in the final shader-pack composition.
     if (transport_flags == 0) return vec3(0.25f);
     if (transport_flags == 1) return vec3(1.0f, 0.5f, 0.0f);
     if (transport_flags == 2) return vec3(0.5f, 1.0f, 0.0f);
@@ -68,13 +75,13 @@ void main() {
     ph_restir_sanitize_history(smple);
 
 #if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
-    int ph_debug_current_flags = clamp(
-        int(round((smple.lighting.a - 1.0f) * 16.0f)),
-        0,
-        3
+    vec4 ph_debug_current_validity = texelFetch(
+        restir_gi_validity_current,
+        frag_tex_coord,
+        0
     );
-    bool ph_debug_current_direct = (ph_debug_current_flags & 1) != 0;
-    bool ph_debug_current_gi = (ph_debug_current_flags & 2) != 0;
+    bool ph_debug_current_direct = ph_debug_current_validity.r > 0.5f;
+    bool ph_debug_current_gi = ph_debug_current_validity.g > 0.5f;
 #endif
 
     SampleHistory accumulator;
@@ -195,7 +202,10 @@ void main() {
         ph_debug_current_gi,
         ph_world_settled == 0
     );
-    lighting_frag_out = vec4(validity_color, 1.0f);
+    // Keep the real accumulated count in alpha. The RGB diagnostic is
+    // intentionally visual-only; it must not manufacture a fractional count
+    // that can alter the next temporal pass.
+    lighting_frag_out = vec4(validity_color, max(accumulator.lighting.a, 0.0f));
     lighting_variance_frag_out = vec4(0.0f);
 #if defined PH_ENABLE_BLOCKLIGHT
     external_lighting_frag_out = vec4(0.0f);
@@ -209,7 +219,7 @@ void main() {
         has_current_transport ? 1.0f : 0.0f,
         ph_world_settled == 0 ? 1.0f : 0.0f
     );
-    lighting_frag_out = vec4(validity_color, 1.0f);
+    lighting_frag_out = vec4(validity_color, max(accumulator.lighting.a, 0.0f));
     lighting_variance_frag_out = vec4(0.0f);
 #if defined PH_ENABLE_BLOCKLIGHT
     external_lighting_frag_out = vec4(0.0f);
