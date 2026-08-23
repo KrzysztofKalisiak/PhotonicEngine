@@ -65,6 +65,414 @@ post-r6/post-r7 boundary inspectable without using `lighting.a` as a metadata
 channel. Alpha in the production lighting attachment remains the real
 temporal sample count.
 
+## v140 diagnostic run review (archived recordings)
+
+Evidence reviewed:
+
+- `logs/v140/latest.log`
+- `logs/v140/debug.log`
+- `logs/v140/launcher_log.txt`
+- `screenshotd/v140/Screencast From 2026-08-17 12-19-32.mp4`
+- `screenshotd/v140/Screencast From 2026-08-17 12-20-39.mp4`
+- `screenshotd/v140/Screencast From 2026-08-17 12-21-55.mp4`
+
+### Artifact correlation audit
+
+The current v140 folder does not contain one correlatable run. The current
+`latest.log`, `debug.log`, and `launcher_log.txt` start at approximately
+`22:50:15` and end at approximately `23:03:04`. The three MP4 files contain
+creation timestamps `12:19:32`, `12:20:39`, and `12:21:55`. They therefore
+predate the current logs by roughly ten hours. The recordings can be reviewed
+visually, but their phases cannot be assigned to the current
+`sceneRevision`/`layoutRevision` records.
+
+For the current log, the pipeline reports the normal production configuration:
+
+```text
+restirCombinedGi=true
+renderScale=1.0
+giRenderScale=1.0
+temporalUpscalerRequested=false
+restirSpatial=0
+```
+
+The current log has no combined-GI validity-channel enable message and no
+validity-capture timing records. This is consistent with the diagnostic being
+disabled. `run_settings` nevertheless contains older `true` entries followed
+by `false` entries and a malformed `trueE` token, so it is not authoritative
+evidence of the actual JVM arguments. The log is the source of truth for the
+current process; the next run should use a fresh settings file or an
+explicitly empty argument field.
+
+### Final v140 classification
+
+- **High confidence:** the current process launched Photonics successfully
+  with GI enabled, spatial reuse disabled, and the temporal upscaler disabled.
+- **High confidence:** the current log is not a clean no-edit run. It records
+  48 content transitions from `22:50:56.831` through `23:02:57.643`, reaching
+  `sceneRevision=28` and at least `layoutRevision=136`.
+- **High confidence:** 33 `#endif without #if` errors occur across three
+  pipeline initialization/reload periods. They do not stop the pack from
+  loading, but they remain a real shader-compilation risk.
+- **Medium confidence:** the current diagnostic is disabled. There is no
+  validity enable message or validity timing record, but `run_settings` is
+  contaminated by contradictory historical arguments.
+- **Low confidence:** the three MP4s describe the current log. Their embedded
+  times are `12:19:32`, `12:20:39`, and `12:21:55`, while the current log is
+  `22:50:15`-`23:03:04`.
+
+The black GI/direct-light states after edits are compatible with regional
+invalidation followed by layout/section publication, but this run cannot
+distinguish that from a later framebuffer/history or shaderpack composite
+failure. The recordings cannot establish the ordering.
+
+### Exact next test
+
+1. Move the three existing MP4s aside and start a fresh `v141` folder. Clear
+   `run_settings` of all Photonics arguments; launch with an empty JVM argument
+   field and keep the build unchanged.
+2. Record one video whose filename timestamp is generated during that exact
+   process. Save the matching `latest.log`, `debug.log`, and launcher log in
+   the same folder. Do not reuse files from another session.
+3. Enter the fixed test world and wait until `ready=true`, `settled=true`, and
+   `pendingBuilds=0` appear in three consecutive world-trace records. Then do
+   20 seconds stationary, 20 seconds slow horizontal camera movement, and 20
+   seconds slow vertical movement. Do not edit blocks, reload shaders, resize,
+   or change worlds.
+4. If the stable camera phase is clean, perform exactly one block removal,
+   record the timestamp, keep the camera fixed for 10 seconds, then rejoin the
+   world and record another 20 seconds after the same settled condition.
+5. Report whether blackening begins before or after the edit/rejoin and give
+   the matching log timestamp. Only after this correlated baseline should we
+   enable the opaque validity overlay to distinguish r6/r7 from r8/r9 and the
+   final composite.
+
+### Run configuration caveat
+
+The current log is consistent with a production/no-diagnostic run. The v140
+log reports:
+
+```text
+restirCombinedGi=true
+renderScale=1.0
+giRenderScale=1.0
+temporalUpscalerRequested=false
+restirSpatial=0
+```
+
+The current log does not report:
+
+```text
+(no combined-GI validity-channel enable line)
+```
+
+The repository `run_settings` file contains contradictory historical values,
+including both `true` and `false`. Therefore the log, not that file, determines
+the current process state. The MP4s also do not match this log's timestamps;
+their diagnostic-looking colors may belong to an earlier v140 run and cannot
+be used to classify the current run.
+
+### What the recordings actually show
+
+The three recordings show broad cyan, green, magenta, pink, blue, or pastel
+regions across ordinary terrain, menus, and the bunker. This is consistent
+with the r7 validity palette being written into the lighting attachment and
+then processed by the shaderpack. It is not evidence that the scene radiance
+itself changed to those colors.
+
+Because the MP4 timestamps do not match the current log, the following are
+visual observations only; they must not be used as phase-by-phase evidence
+for the current v140 process.
+
+- The `12-19-32` recording starts with pink/magenta faces and cyan edges, then
+  moves through mostly cyan/pastel outdoor and wall views. The tint covers
+  large areas and changes with the diagnostic state, not with a plausible light
+  source.
+- The `12-20-39` recording is already cyan in the menu and remains cyan while
+  viewing the bunker, the wall, and the outdoor test structure. This confirms
+that an earlier diagnostic state was active across scene transitions; it is
+not evidence of a single bad voxel or light source in the current run.
+- The `12-21-55` recording includes inventory screens, outdoor views, the
+  handheld object, and the bunker. Cyan, blue, and purple states appear in all
+  of them. The palette is therefore reaching the displayed lighting path, but
+  the recording does not isolate the private validity attachments.
+
+The expected v140 palette is bit-combined, not a continuous quality scale:
+
+```text
+red   = accepted reprojected history
+green = current direct evidence
+blue  = current GI batch
+pastel variants = the same combinations while ph_world_settled == 0
+```
+
+For example, cyan means current direct plus current GI, magenta means history
+plus current GI, and white means all three state bits. The shaderpack can alter
+the exact appearance through albedo, exposure, bloom, and tone mapping. A
+cyan or magenta screen is expected while this diagnostic is active; a normal
+white-world visual comparison cannot be made from these recordings.
+
+### What the log proves
+
+The v140 pipeline initialized successfully. There is no Photonics shaderpack
+load failure, shader exception, or out-of-memory error in the reviewed log.
+Both new private passes executed repeatedly:
+
+- 75 `restir GI validity current` timing records, beginning at
+  `12:16:58.378` and ending at `12:23:08.614`.
+- 75 `restir GI validity final` timing records, beginning at
+  `12:16:58.410` and ending at `12:23:08.667`.
+- At the approximately 0.892 megapixel diagnostic viewport, current capture
+  timing is roughly 0.07-0.15 ms GPU and final capture roughly 0.02-0.04 ms
+  GPU. The diagnostic passes are therefore not a plausible explanation for a
+  multi-frame visual blackout by themselves.
+
+The world trace was not stable during the test:
+
+- 115 world-tracing records were emitted.
+- `layoutRevision` advanced from 0 to 350.
+- `sceneRevision` advanced from 0 to 192.
+- 79 records were unsettled and 36 were settled.
+- 192 scene-content hash records were emitted; 12 had
+  `playerChanged=true` and 180 had `playerChanged=false`.
+- The most common layout reasons were
+  `scene-hash-change-without-player-marker` (46), `section-unload` (25),
+  `streaming-or-rebuild` (32), and `scene-content-change` (10).
+
+`playerChanged=false` does not mean that no block changed. The associated
+non-air counts and hash transitions show real section changes. It means that
+the compiler did not receive the player-change marker for that transition.
+The v140 run therefore contains many actual regional invalidations and cannot
+serve as the no-edit camera-sweep test requested below.
+
+There is one additional unresolved warning: v140 emits 26 occurrences of
+`#endif without #if`, compared with 22 in the v139 log. The pipeline still
+renders and the new timing records appear, so this is not a complete load
+failure, but it must not be dismissed. The extra occurrences may come from the
+new validity program compilation or from another shader reload path. A clean
+diagnostic-off run and a per-program preprocessor log are needed before
+calling this harmless.
+
+### Expected timeline and correspondence to earlier glitches
+
+The following is the expected behavior for the v140 diagnostic and the
+production behavior that should be expected after the diagnostic is disabled.
+
+1. **World join and first compilation**
+   - Expected log: `sceneRevision=0`, layout revisions rise, `ready` becomes
+     true, and `settled` is initially false before later becoming true.
+   - Expected diagnostic: gray or pastel combinations can appear while the
+     world is unsettled; normal lighting may take time to converge.
+   - Not expected in production: a permanent full-screen black state once the
+     tree is ready.
+   - Relation to earlier glitches: the old black bunker and black wall can be
+     reproduced if a first-frame or uncleared attachment is presented during
+     this transition, but the v140 tint alone is not that bug.
+
+2. **Layout-only streaming or section unload**
+   - Expected log: `layoutRevision` changes while `sceneRevision` stays fixed;
+     `settled=false`, `batchUnloaded` or `pendingBuilds` may be non-zero.
+   - Expected diagnostic: the pastel form of the current palette may change;
+     current GI can be absent for a receiver whose path or section is not yet
+     resident.
+   - Not expected in production: unrelated, already-resident walls losing
+     accumulated light or developing screen-following black formations.
+   - Relation to earlier glitches: this is the strongest match for formations
+     appearing on newly exposed left/right wall regions and for vertical-motion
+     sensitivity. It is a layout/history contract problem, not a physical
+     shadow.
+
+3. **Stable no-edit camera sweep**
+   - Expected log: no new scene-content records, stable `sceneRevision`, and
+     eventually `settled=true`; camera motion alone may change visibility but
+     must not change physical radiance validity for unchanged resident blocks.
+   - Expected diagnostic: the mask may change at genuinely different receiver
+     pixels, but a fixed wall should not progressively change state while the
+     camera only exposes it.
+   - Relation to earlier glitches: a changing mask here would implicate
+     reprojection, receiver validity, layout publication, or ping-pong state;
+     a stable mask with a changing image would move the problem after r7 into
+     r8/r9 or the shaderpack composite.
+
+4. **One block placement or removal**
+   - Expected log: one regional content transition, `sceneRevision` increments,
+     the changed bounds are logged, and a short unsettled interval follows.
+   - Expected diagnostic: pixels in or near the changed bounds can lose history
+     and show replacement colors; unrelated regions should retain history.
+   - Not expected: a full-scene green flash, a black wall far outside the
+     changed bounds, or a long-lived blackout after the tree becomes ready.
+   - Relation to earlier glitches: the one-second post-edit corruption and
+     green frame are consistent with an invalidation/clear/swap boundary, but
+     v140's 192 revisions prevent this run from proving which boundary is at
+     fault.
+
+5. **No current sample for one receiver**
+   - Expected diagnostic: black means no accepted history, no current direct
+     evidence, and no current GI batch for that pixel. This can be legitimate
+     briefly at an unloaded or newly invalidated receiver.
+   - Expected production behavior: retain valid history where possible or use
+     a conservative low-confidence fallback; do not turn a whole visible wall
+     black just because one frame had no sample.
+   - Relation to earlier glitches: this is the direct diagnostic equivalent of
+     the pitch-black bunker and black sides of sun-shadowed blocks. It tells us
+     what the pixel state was, not why the state was missing.
+
+6. **Shader reload, resize, or world re-entry**
+   - Expected log: the pipeline and private attachments are recreated and the
+     first few frames can be transitional.
+   - Expected production behavior: attachments are cleared, bound, and flipped
+     atomically; the final composite must never display an uninitialized
+     attachment.
+   - Relation to earlier glitches: the green full-screen frame, horizon line,
+     and black formations after resize/rejoin remain lifecycle candidates. They
+     cannot be explained by GI sampling alone.
+
+### V140 conclusion for the independent review
+
+The archived build run proves that the r6/r7 boundary capture is wired and
+inexpensive. It does not prove whether the private validity state changes when
+the old black formations appear, because the private attachments are not
+displayed or read back. The recordings mainly prove that the diagnostic
+presentation path is active. The timestamp-correlated no-arguments follow-up
+below is the current production evidence; changing ReSTIR sample counts or
+blaming Veil remains premature until the one-edit test is isolated.
+
+## v140 no-arguments follow-up
+
+This is the later three-part run requested after the archived diagnostic
+recordings. The current files are timestamp-correlated and must be analyzed
+separately from the earlier `12:xx` recordings:
+
+- `logs/v140/latest.log`
+- `logs/v140/debug.log`
+- `logs/v140/launcher_log.txt`
+- `screenshotd/v140/no arguments/Screencast From 2026-08-17 23-00-09.mp4`
+- `screenshotd/v140/no arguments/Screencast From 2026-08-17 23-01-12.mp4`
+- `screenshotd/v140/no arguments/Screencast From 2026-08-17 23-02-19.mp4`
+
+The three recordings are approximately 53.67 s, 59.17 s, and 42.67 s. Their
+filename times fall inside the `22:50:15`-`23:03:04` log session. The earlier
+`12:19`, `12:20`, and `12:21` files belong to the archived diagnostic run and
+are not used for this correlation.
+
+### Configuration and log facts
+
+- GI is enabled, `restirSpatial=0`, and the temporal upscaler is disabled.
+- The current log contains no combined-GI validity-diagnostic enable line and
+  no validity-capture timing records. This is consistent with diagnostic-off
+  production lighting; the log is authoritative despite stale `run_settings`.
+- The current log records 48 scene-content transitions from
+  `22:50:56.831` through `23:02:57.643`, reaching `sceneRevision=28` and at
+  least `layoutRevision=136`.
+- There are 33 `#endif without #if` messages across three pipeline
+  initialization/reload periods. They do not prevent the pack from rendering,
+  but they remain a shader-preprocessor risk and must be traced separately.
+- No shaderpack-load failure or out-of-memory failure appears in the log.
+
+### Three-part timeline
+
+1. **Part 1: `23-00-09` recording**
+   - The first reported block removal is approximately 9 seconds into the
+     recording and matches the content change at `23:00:18.655`.
+   - `sceneRevision` then advances through 7, 8, 9, 10, 11, 12, 13, 15,
+     16, 19, and 20. The log therefore shows repeated regional changes, not
+     one isolated edit.
+   - Section unloads and layout publication follow from `23:00:46.514` to
+     `23:00:56.802`, with the world repeatedly becoming unsettled.
+   - The nearly black GI shadows, and apparent loss of direct illumination,
+     are not expected after one regional edit. The direct-plus-GI failure
+     points to a shared history/output/composite path, although the recording
+     alone cannot identify which stage owns it.
+
+2. **Part 2: `23-01-12` recording**
+   - A pipeline destruction/recreation and full history clear occur at
+     `23:01:10.453`-`23:01:11.535`, immediately before the recording begins.
+   - The new session starts at `sceneRevision=0`; initial layout reaches
+     `settled=true` at approximately `23:01:17.313`.
+   - This partial recovery after rejoin is evidence that lifecycle reset clears
+     stale or poisoned state. It is not evidence that the underlying
+     invalidation bug is fixed.
+   - Section unloads occur from approximately `23:01:31` through `23:01:57`.
+     Further content/hash transitions begin around `23:02:05`, so this part
+     also stops being a no-edit baseline before it ends.
+
+3. **Part 3: `23-02-19` recording**
+   - Content/hash transitions begin around `23:02:20.592` and continue
+     through the recording, including several changes in the small test
+     structure.
+   - The world reaches settled states between some revisions, but later edits
+     create new regional invalidations. The later globally dark shadows are
+     therefore compatible with repeated invalidation plus history/output
+     poisoning, not with ordinary sampling noise alone.
+
+### What is expected versus what occurred
+
+- **Expected after one removal:** one regional content change, one scene
+  revision increment, temporary local noise, and recovery after the tree is
+  ready and settled.
+- **Observed:** repeated scene revisions and layout churn, followed by black
+  GI shadows and apparently dark direct lighting. This is a broader failure
+  than a GI-only reservoir temporarily having too few samples.
+- **Expected after rejoin:** history and attachments clear, a short noisy
+  rebuild, then stable lighting.
+- **Observed:** partial recovery after rejoin, followed by new darkening once
+  more revisions and section activity occurred. This implicates lifecycle or
+  regional-history handling, but does not prove the exact buffer.
+- **Expected during camera-only movement:** unchanged resident walls may have
+  short reprojection noise, but must not progressively darken or turn black.
+- **Observed in the broader history:** formations appear as walls are exposed,
+  and stationary surfaces can darken. This remains a temporal/layout or final
+  presentation artifact, not a physical shadow.
+
+The current run rules out spatial reuse and the upscaler as necessary causes,
+because both were disabled. It does not distinguish among current GI
+sampling, r7 history acceptance, r8/r9 filtering, ping-pong framebuffer state,
+or the shaderpack composite. The simultaneous darkening of direct and GI
+output makes the shared output/history/composite branches higher priority than
+changing GI sample counts.
+
+### Exact next test: one edit, no confounding changes
+
+Use a fresh `v141` directory for both logs and recordings. Do not reuse the
+current v140 log or place the new recordings in the old `no arguments` folder.
+
+1. Remove every Photonics diagnostic argument from `run_settings`, including
+   stale contradictory entries. Keep the build and the current settings
+   otherwise unchanged; confirm the process log has no validity-diagnostic
+   warning.
+2. Start the existing small test world. Do not place or remove blocks, resize,
+   reload shaders, rejoin, or move the camera until the log has three
+   consecutive world-trace records with `ready=true`, `settled=true`, and
+   `pendingBuilds=0`.
+3. Record 15 seconds with the camera fixed on the test wall and bunker.
+4. Record 15 seconds of slow horizontal movement, then 15 seconds of slow
+   vertical movement. Do not edit anything during these phases.
+5. Remove exactly one known block. Note the recording timestamp at the edit.
+6. Keep the camera fixed for 30 seconds. Do not perform another edit. Note the
+   first timestamp at which direct light, GI, or both become black.
+7. Wait until the log reports a settled state again, then record 15 seconds of
+   slow camera movement. Rejoin once, wait for the same settled condition, and
+   record 15 seconds without edits.
+
+Interpret the result as follows:
+
+- Blackening during the fixed no-edit phase with stable `sceneRevision` points
+  to r6/r7 validity, framebuffer history, denoising, or final composite.
+- Blackening only after one `sceneRevision` increment and only inside the
+  changed bounds points to regional invalidation/replacement history.
+- Blackening outside the bounds while `layoutRevision` or section unloads
+  change points to layout publication being treated as global radiance loss.
+- Simultaneous direct and GI blackening points to shared lighting history,
+  ping-pong/clear state, or the final composite rather than GI sampling alone.
+- Recovery only after rejoin points to lifecycle reset or stale history; it is
+  not an acceptable production recovery mechanism.
+
+Only after this correlated run should the opaque v141 validity overlay be
+enabled. That overlay must display current direct evidence, current GI
+evidence, accepted history, and final composite state without shaderpack
+exposure or bloom. The existing private v140 attachments cannot answer that
+question by themselves.
+
 ## v139 follow-up findings
 
 Evidence reviewed:
@@ -188,7 +596,11 @@ snapshots as an opaque overlay.
 
 ## Verification
 
-Launch the combined-GI, full-resolution test build with:
+The older v137-v139 diagnostic and the v140 diagnostic are different test
+paths. Use the older property only when reproducing the earlier palette; use
+the v140 channel property when checking the r6/r7 captures.
+
+For the legacy combined-GI, full-resolution palette, launch with:
 
 ```text
 -Dphotonics.restirGiValidityDiagnostic=true
@@ -208,7 +620,13 @@ decision or is caused by a separate framebuffer/presentation path. If they
 appear only with blue, the settling/layout path remains implicated. Capture
 the corresponding `layoutReason` entries from the log as well.
 
-For the clearer second diagnostic, launch with:
+For the reviewed v140 run, this diagnostic was active despite the report that
+no custom arguments were entered. Treat the log line
+'combined-GI validity channel diagnostic v140 enabled' as the source of truth.
+Do not interpret the v140 recordings as a no-argument production comparison
+until that line is absent.
+
+For v140's clearer channel diagnostic, launch with:
 
 ```text
 -Dphotonics.restirGiValidityChannelsDiagnostic=true
@@ -266,20 +684,59 @@ an exact RGB value. A later shader-pack-specific overlay or readback is still
 needed to make the private captures pixel-exact; v140 is sufficient to verify
 that the new snapshots exist without modifying production lighting alpha.
 
-`git diff --check` and focused source assertions pass in this worktree. A full
-Gradle build was attempted with Java 21, but Fabric Loom could not download the
-Minecraft 1.21.1 artifact after three attempts. The compiled jar therefore
-still needs to be produced on the Linux machine with its populated Gradle
-cache, or after network access to the required Maven/Piston endpoints is
-available.
+### v140 reviewer checklist
+
+Use the following distinctions when reviewing the three recordings:
+
+- A cyan, magenta, pink, green, or pastel region is expected while the v140
+  diagnostic warning is present. It identifies bit combinations after shaderpack
+  processing; it is not a production-light color and is not itself a failure.
+- A color change during world join, shader reload, or section publication is
+  expected while `settled=false`, but it should converge after the published
+  tree becomes ready and settled.
+- A color change during a clean camera-only sweep is not expected for an
+  unchanged, resident wall. If the opaque mask changes, investigate validity,
+  reprojection, or framebuffer state before investigating lighting energy.
+- A short local change after one block edit is expected inside the changed
+  bounds. A full-scene green flash, a distant black wall, or persistent dark
+  history after the scene settles is not expected.
+- A black diagnostic pixel means that neither accepted history nor current
+  direct/GI evidence was recorded for that pixel. It does not identify whether
+  r6, r7, layout publication, or the later composite caused the absence.
+- The v140 recordings cannot answer the last question because the private
+  captures are not displayed directly and the run contains 192 scene-content
+  revisions. Treat them as a wiring and provenance check, not as the decisive
+  no-edit reproducer.
+
+git diff --check and focused source assertions pass in this worktree. The
+user-provided v140 build is confirmed by the log to contain and execute both
+new validity passes. A full local Gradle build remains network-blocked by the
+Minecraft 1.21.1 artifact download, so the Linux-built jar is the artifact
+under test here.
 
 ## Evidence files
 
 - `logs/v137/latest.log`
 - `logs/v137/debug.log`
 - `screenshotd/v137/Screencast From 2026-08-16 19-26-21.mp4`
+- `logs/v140/latest.log`
+- `logs/v140/debug.log`
+- `logs/v140/launcher_log.txt`
+- `screenshotd/v140/Screencast From 2026-08-17 12-19-32.mp4`
+- `screenshotd/v140/Screencast From 2026-08-17 12-20-39.mp4`
+- `screenshotd/v140/Screencast From 2026-08-17 12-21-55.mp4`
+- `screenshotd/v140/no arguments/Screencast From 2026-08-17 23-00-09.mp4`
+- `screenshotd/v140/no arguments/Screencast From 2026-08-17 23-01-12.mp4`
+- `screenshotd/v140/no arguments/Screencast From 2026-08-17 23-02-19.mp4`
 
 The recording is approximately 85.06 seconds at 862x526 and 59.94 FPS. The late bunker portion contains the clearest green, black, and unstable GI frames.
+The v140 recordings are approximately 63.85 seconds, 63.60 seconds, and
+73.52 seconds at about 1333x725, 1333x725, and 1349x730 respectively. Their
+dominant cyan/pink/pastel appearance is expected because the v140 channel
+diagnostic was enabled.
+The timestamp-correlated no-arguments recordings are approximately 53.67,
+59.17, and 42.67 seconds at 1482x676. They are production-lighting evidence,
+not validity-palette recordings.
 
 ## User-reported evidence
 
@@ -448,7 +905,8 @@ heuristics.
 
 ### Goal 2: identify why layout revisions happen (reason logging present)
 
-Add a reason field to the compiler diagnostic for each `layoutRevision`:
+The current branch already emits a reason field for each `layoutRevision`.
+The intended categories are:
 
 - section build
 - section unload
@@ -533,3 +991,229 @@ For every run, record the exact log timestamp, `layoutRevision`, `sceneRevision`
 7. Can the fix preserve history for layout-only revisions without allowing stale history across actual block edits?
 
 The second-pass result should include exact source locations, a minimal patch order, and a statement of which diagnostic result would falsify the leading hypothesis.
+
+## v141 follow-up: radiance collapse after a regional edit
+
+This section records the three v141 recordings and the matching `latest.log`.
+The recordings were started at different times, so the video-to-log mapping is
+approximate by a few tenths of a second. The state transitions themselves are
+unambiguous.
+
+### Evidence files
+
+- `logs/v141/latest.log`
+- `logs/v141/debug.log`
+- `logs/v141/launcher_log.txt`
+- `screenshotd/v141/Screencast From 2026-08-18 07-53-29.mp4`
+- `screenshotd/v141/Screencast From 2026-08-18 07-54-58.mp4`
+- `screenshotd/v141/Screencast From 2026-08-18 07-56-43.mp4`
+
+The run used full-resolution GI, no temporal upscaler, and
+`restirSpatial=0`. Therefore the final collapse is not explained by spatial
+reuse or by the upscaler being enabled.
+
+### Independent visual review
+
+The darkest state is not a literal display or framebuffer blackout. The HUD,
+selection outlines, sky openings, exterior terrain, and some directly visible
+surfaces remain rendered. The failure is a large radiance collapse in the
+Photonics lighting result, mainly on interior and shadowed surfaces.
+
+The recordings contain five distinct symptoms:
+
+1. Soft temporal noise during movement. This is expected to a limited degree.
+2. Camera-exposure-dependent dark formations on vertical walls. These are not
+   stable world-space shadows and are not expected.
+3. A green/gray transition around the froglight and bunker. Persistent green
+   contamination is not ordinary Monte Carlo noise.
+4. Large interior regions becoming nearly black while sky and UI remain valid.
+5. The dark state persisting after the compiler reports that the revised scene
+   has settled. This is not a normal one- or two-frame accumulation delay.
+
+### Timeline correlation
+
+| Video | Approximate log interval | Correlated state | Interpretation |
+|---|---|---|---|
+| `07-53-29` | `07:53:29` to `07:54:41.8` | Mostly settled outdoor test, frequent layout-only streaming changes, edit at `07:54:20.017` | Explains moving wall formations and one regional invalidation, but not a full collapse. |
+| `07-54-58` | `07:54:58` to `07:56:11.7` | Edit at `07:54:54.268`; green/dark phase follows a streaming transition around `07:55:20`; edits at `07:55:31.527` and `07:55:41.010`; unload churn increases at `07:55:59` to `07:56:09` | Matches green contamination, noisy bunker lighting, and unstable wall history. |
+| `07-56-43` | `07:56:43` to about `07:57:15` | Dark wall formations at roughly `07:56:57` to `07:57:01`; edit at `07:57:01.162`; `sceneRevision=7`, `layoutRevision=129`, `ready=true`, `settled=false`; second edit at `07:57:08.915` advances `sceneRevision=8` | Strongest reproducer of the radiance collapse. The collapse starts at the first real edit and persists after the scene becomes settled at `07:57:03.212`. |
+
+At `07:57:01.211`, the tree reports `ready=true` and `pendingBuilds=0`, but
+the published state is still `settled=false`. This means "the tree has a
+usable shape and bounds" is not equivalent to "the current indirect proposal
+and the previous history belong to the same scene snapshot."
+
+### What the log rules out
+
+- No Photonics history reset occurs at the final collapse. The only resets are
+  pipeline-created/destroyed events during startup and the initial attachment
+  clears around `07:52:34` to `07:52:44`.
+- No shaderpack failure, render-thread exception, out-of-memory error, or GL
+  failure occurs near the collapse.
+- Startup `#endif without #if` messages and the DH/Iris warnings occur several
+  minutes before the visual failure. They remain a separate compatibility risk,
+  but they are not a sufficient explanation for this event.
+- The final event is not caused by spatial reuse: the v141 run has zero spatial
+  reuse samples.
+
+## v141 code-level findings
+
+### Primary candidate: zero indirect radiance is classified as current transport
+
+The current `r7_accumulation_impl.glsl` path computes
+`has_current_gi_batch` from:
+
+```glsl
+indirect_reservoir_loaded
+    && indirect_reservoir_has_batch(current_indirect)
+    && ph_world_ready != 0;
+```
+
+`indirect_reservoir_has_batch` in
+`modules/shaders/photonics/rendering/restir/indirect/reservoir.glsl` only
+requires a finite reservoir and `total_samples > 0`. It does not require a
+positive final weight or a usable sample. `indirect_reservoir_reject` sets the
+weight and sample color to zero while retaining the sample count. The
+serialized reservoir can therefore describe "a processed batch with zero
+contribution" and still satisfy `has_batch`.
+
+That distinction is valid for an estimator denominator, but it is not valid
+for the r7 history decision. In r7, a true `has_current_gi_batch` makes
+`has_current_transport` true even when the GI color is zero. The zero current
+sample can then enter `sample_history_combine_lighting` instead of taking the
+retry path. Repeated frames can progressively darken a previously valid wall,
+which matches the stationary darkening and the persistent black interiors more
+closely than a sample-count explanation does.
+
+This is the first concrete source-level explanation for the apparent "it
+accumulates into black" behavior. It is still a hypothesis until a diagnostic
+run shows `current GI batch = true` while current GI radiance/weight is zero.
+
+### Secondary candidate: published-tree readiness is weaker than snapshot validity
+
+`WorldCompiler.onFrameBegin` computes `worldReady` from tree depth and bounds,
+then publishes `ph_world_ready` independently of `ph_world_settled`.
+Compilation revisions set `ph_world_settled=0` for layout publication, section
+streaming, and unloads. Thus `ready=true, settled=false` is an intentional
+state, and it appears in the v141 log immediately after the edit.
+
+The current indirect reservoir encoding stores hit point, weight, color, sample
+count, and normal, but no explicit layout/tree revision. r4 validates the
+stored path geometrically, which is useful, but r7's current-batch test does
+not prove that the current reservoir was produced from the tree snapshot now
+bound to the shader. A current batch from the previous tree can therefore be
+accepted during a publication boundary if its data remains finite.
+
+This likely explains the earlier camera-dependent wall formations: streaming
+changes the set of available receiver/reservoir data while the camera exposes
+new pixels. It is less likely to be the sole cause of the abrupt final collapse
+because that collapse follows a real scene revision.
+
+### Tertiary candidate: unresolved zero output is intentionally preserved as
+black through the denoiser chain
+
+The r7/r8/r9 safety changes correctly avoid spatially spreading an unresolved
+zero sample. However, when a receiver has neither valid history nor current
+transport, r7 outputs a zero-count/zero-radiance retry marker. r8 and r9 then
+output zero for that pixel and skip filtering. This prevents contamination of
+neighbors, but it also produces a black pixel until a later frame supplies a
+valid sample. If the current-batch predicate above incorrectly accepts a
+zero-weight batch, the retry marker is not reliable and black can be committed
+as history instead.
+
+### Green contamination remains a separate boundary problem
+
+The v141 log does not report the v140 validity diagnostic as enabled. The green
+phase therefore cannot be treated as the intentional diagnostic palette. It is
+more consistent with a transient or mismatched attachment/composite state,
+but the current evidence does not identify whether that state is r6/r7 output,
+the denoiser chain, or the shaderpack lighting hook. It needs a raw opaque
+attachment capture; increasing GI samples will not diagnose it.
+
+## Revised fix order
+
+1. **Instrument the indirect decision.** Capture, per frame and in aggregate,
+   `current_indirect_loaded`, `total_samples`, `weight`,
+   `indirect_reservoir_has_sample`, final GI luminance, `ph_world_ready`,
+   `ph_world_settled`, `ph_scene_revision`, and whether r7 combined the sample.
+   The key counter is `has_batch && !has_sample` and the key pixel mask is
+   `has_current_gi_batch && final_gi_luminance <= epsilon`.
+2. **Fix the classification boundary.** Keep a zero-contribution reservoir in
+   the estimator denominator, but do not call it current radiance transport
+   for r7 history accumulation. A receiver with zero usable radiance should
+   either retain valid history or remain an explicit retry. This patch should
+   be isolated before changing denoiser weights.
+3. **Add a tree-snapshot token.** Carry a compact published layout/tree epoch
+   with indirect reservoirs, or reject current reservoirs whose producer epoch
+   does not match the current published tree. Do not use `sceneRevision` alone:
+   layout publication and physical scene content are different domains.
+4. **Make the retry fallback visible but non-black.** For a receiver with no
+   valid current sample and no valid history, preserve the last valid radiance
+   when the path and scene-change bounds allow it; otherwise use an explicitly
+   marked low-confidence fallback. Never give an unresolved marker a positive
+   history count.
+5. **Capture the green path separately.** Add an opaque debug presentation or
+   controlled readback for current transport, r7 accumulation, r8 prefilter,
+   each r9 iteration, and final lighting-hook input. Do this after step 2 so a
+   zero-radiance history bug does not obscure the attachment result.
+6. **Fix the shader preprocessor errors independently.** The repeated
+   `#endif without #if` messages occur during startup and are not proven to
+   cause v141, but a PR should not ship with shader variants rejected during
+   pipeline creation.
+
+## Exact v142 test run
+
+Use a fresh world/session and record exact wall-clock timestamps in the video
+or type visible chat markers before each action. Keep render scale, GI, Veil,
+Sable, DH, and resolution unchanged from v141.
+
+### Run A: no edit baseline
+
+1. Start with the production build and no diagnostic properties.
+2. Wait until the log reports `ready=true, settled=true`.
+3. Hold the camera still on the white vertical wall for 30 seconds.
+4. Sweep left/right for 20 seconds, then move vertically for 20 seconds.
+5. Expected result: at most short noise during movement; no monotonic wall
+   darkening and no camera-following formations.
+
+### Run B: one controlled edit
+
+1. Return to the same wall/bunker view and wait for settled=true.
+2. Place exactly one opaque block, type a chat marker, and do not move the
+   camera for 10 seconds.
+3. Remove that same block, type a second marker, and wait 10 seconds.
+4. Do not perform any other block, time, window, or shader changes.
+5. Expected result: a local temporary change near the edited bounds, with
+   unaffected wall regions retaining valid lighting. No full-screen green
+   frame, no full-wall blackening, and no persistent black after settled=true.
+
+### Run C: classification diagnostic
+
+Repeat Run B with:
+
+```text
+-Dphotonics.restirGiValidityChannelsDiagnostic=true
+```
+
+The build must log that the v140 combined-GI validity channel diagnostic is
+enabled. The channel meaning is red=history accepted, green=current direct,
+blue=current GI, with pastel variants while unsettled. This diagnostic is not
+the production look. At the failure point, report whether the affected wall
+pixels show current GI present, current GI absent, or history accepted with
+zero current radiance.
+
+### Run D: no-GI control
+
+Repeat the same edit and camera path with GI disabled but direct lighting left
+on. If the black formations disappear, the defect is in the GI transport,
+history, or GI denoiser path rather than the base shaderpack composition.
+
+## v141 conclusion
+
+The evidence is now sufficient to stop treating the issue as generic temporal
+noise. The final v141 collapse is most strongly associated with a regional
+scene revision and an incorrect zero-radiance/current-transport decision. The
+earlier moving formations are associated with layout/streaming churn. The next
+efficient step is one narrow reservoir-validity instrumentation and test, then
+the smallest classification fix if the counter is observed. A broad rewrite of
+spatial reuse, Sable occlusion, or GI sample counts is not justified by v141.
