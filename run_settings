@@ -30,5 +30,4 @@ last settings used:
 -Dphotonics.restirGiValidityChannelsDiagnostic=true
 
 
--Dphotonics.restirGiValidityDiagnostic=false
--Dphotonics.restirGiValidityChannelsDiagnostic=false
+-Dphotonics.restirGiValidityDiagnostic=false -Dphotonics.restirGiValidityChannelsDiagnostic=false
