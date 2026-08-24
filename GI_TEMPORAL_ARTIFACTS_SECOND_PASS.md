@@ -1217,3 +1217,275 @@ earlier moving formations are associated with layout/streaming churn. The next
 efficient step is one narrow reservoir-validity instrumentation and test, then
 the smallest classification fix if the counter is observed. A broad rewrite of
 spatial reuse, Sable occlusion, or GI sample counts is not justified by v141.
+
+## v142 validity-channel diagnostic review
+
+### Run identity
+
+This review covers the three recordings under `screenshotd/v142` and
+`logs/v142/latest.log`. The JVM property
+`-Dphotonics.restirGiValidityChannelsDiagnostic=true` was applied successfully;
+the log confirms it at `18:50:26.388`. The run also had combined GI enabled,
+spatial reuse set to zero, the temporal upscaler disabled, and the denoiser
+diagnostic path active. The validity passes ran repeatedly, so this was a
+useful classification run, but it was not a production-visual run.
+
+### Important diagnostic limitation
+
+The current v140 channel diagnostic does not only populate the private validity
+attachment. In `r7_accumulation_impl.glsl`, it replaces the RGB of
+`lighting_frag_out` and zeros variance/external-lighting output before later
+passes. `r7_validity_final.fsh` then reads that modified lighting attachment.
+Therefore the cyan, blue, pastel, and any apparent dark regions in these
+recordings are not a direct picture of normal Photonics lighting. The test can
+classify validity states, but it cannot be used to judge final brightness,
+shadow quality, or whether a normal-production pixel has become black.
+
+### What the recordings actually show
+
+The frame review found the following reliable states:
+
+| Recording | Relative interval | Observation |
+| --- | ---: | --- |
+| `18-50-39` | roughly 10-60 s | Large cyan regions persist over terrain and structures. This means no accepted history with current direct and current-GI evidence. |
+| `18-51-46` | roughly 10-65 s | Cyan dominates bunker walls, floor, and objects. The first frame is a menu and is not evidence. |
+| `18-52-56` | roughly 15-35 s and 50-55 s | Clear blue regions appear beside cyan regions. Blue means current GI batch without current-direct evidence and without accepted history. |
+| all three | changing viewpoints | Pastel cyan/blue states occur during unsettled publication periods. White and gray are ambiguous because concrete, sky, and froglights have those colors. |
+
+No clip provides a reliable diagnostic-green or diagnostic-yellow region, and
+no clip proves a diagnostic-black mask. Black outlines, held items, ordinary
+shadowed geometry, cacti, and UI elements must not be counted as validity
+colors. The dominant evidence is therefore **missing history**, not proven
+missing GI.
+
+### Log correlation
+
+The log confirms that validity changes occurred while the world compiler was
+actively publishing and invalidating data:
+
+- Layout-only streaming/unload revisions repeatedly changed `layoutRevision`
+  while `sceneRevision` stayed unchanged, including around `18:50:43.984`,
+  `18:51:12.796`, `18:52:29.763`, and `18:53:55.055`.
+- These revisions repeatedly produced `ready=true, settled=false`. Pastel
+  channel colors are expected in that state, but a pixel that remains without
+  history after the world settles is not expected.
+- Real scene-content hash changes are also present: section non-air changes at
+  `18:50:45.737`, `18:51:00.229`, `18:51:56.549`, `18:52:02.835`,
+  `18:52:05.187`, `18:52:10.789`, and again from `18:53:08.150` through
+  `18:53:47.451`. Some are marked as player changes and some are not.
+- No Photonics shader reload or pipeline failure occurs during the recordings;
+  the reloads precede them. The Veil and Distant Horizons messages do not
+  provide a direct failure correlation.
+
+### Hypothesis audit
+
+| Hypothesis | Result from v142 | Interpretation |
+| --- | --- | --- |
+| Spatial reuse causes the result | Not supported | Spatial reuse was set to zero. It is not the source of this run's cyan/blue states. |
+| Layout streaming/rebuild exposes invalid regions | Strongly supported | Streaming changes the published tree and marks the world unsettled even when scene content is unchanged. |
+| A nonzero scene revision means the player edited a block | Rejected | The run contains real content changes, but also hash changes without the player marker. A scene revision is not an edit audit trail. |
+| `worldReady` guarantees a valid stable snapshot | Rejected | `ready` and `settled` are independent. The log shows `ready=true, settled=false`. |
+| Zero-weight or zero-radiance GI is treated as valid | Strong source-level bug candidate | `indirect_reservoir_has_batch` checks finite values and `total_samples > 0`, while rejected reservoirs can retain sample count after weight/color are zeroed. r7 can therefore classify a non-usable batch as current GI and skip retry. |
+| Temporal history rejection/reprojection is involved | Plausible contributor | Scene epochs, camera reprojection, path validation, and changed bounds can reject history. The current diagnostic does not identify which rejection happened. |
+| Veil or Distant Horizons directly causes the black output | Unproven | They may cause asynchronous section changes, but v142 has no direct Photonics error or causal log event. |
+| Shader reload causes the later failures | Not supported | Reloads happen before the recordings. |
+| The diagnostic output itself is contaminating the visual result | Confirmed | The diagnostic writes into the production lighting attachment and bypasses normal denoiser behavior. |
+
+### Conclusions
+
+1. The run confirms substantial history loss and GI-only classifications. That
+   is valuable evidence for the temporal path, but it does not prove that GI
+   radiance is absent or that the production image is black.
+2. Layout churn and real section-content changes overlap the observations. The
+   test does not isolate camera motion from compiler publication.
+3. The strongest code-level defect remains the distinction between a batch that
+   has a positive sample and a batch that merely has a positive sample count.
+   A rejected/zero-radiance batch must not count as current transport for r7
+   history decisions.
+4. Increasing samples, re-enabling spatial reuse, or changing Veil occlusion
+   is not justified yet. The diagnostic needs to be made non-invasive first.
+
+### Required next patch
+
+The next implementation should be narrow and diagnostic-only:
+
+1. Keep `lighting_frag_out`, variance, and external lighting untouched when the
+   validity diagnostic is enabled. Present the palette through a dedicated
+   diagnostic output or attachment instead.
+2. Add separate validity bits for `has_batch`, `has_sample` (positive weight
+   and positive finite radiance), accepted path, blocked path, stale path,
+   history epoch match, `worldReady`, and `worldSettled`.
+3. Change r7's `has_current_transport` decision to use usable GI sample state,
+   not `total_samples > 0`. Preserve a zero-contribution sample for estimator
+   accounting, but do not use it to commit or darken temporal lighting.
+4. Add a published layout/tree epoch to the indirect reservoir or reject a
+   reservoir produced from an older tree snapshot. `sceneRevision` alone is
+   insufficient because layout publication and physical scene content are
+   separate domains.
+5. Keep `-Dphotonics.debugSceneHashDiff=true` for the next controlled run. It
+   is implemented in `ChunkCompiler` and will identify the exact scene block
+   hash/state transition instead of only reporting a revision number.
+
+### Controlled rerun after the patch
+
+Run the same scene in four short phases, with a visible chat marker before each
+phase and no other block/time/window/shader changes:
+
+1. Production, diagnostic off: wait for `ready=true, settled=true`, hold on a
+   white vertical wall for 30 seconds, then pan and move vertically. No
+   monotonic darkening or camera-following formations should remain.
+2. Production, diagnostic off: place one block, wait 10 seconds, remove the
+   same block, wait 10 seconds. Only the edited region may temporarily change;
+   unaffected wall regions must not become black.
+3. Diagnostic on, plus `-Dphotonics.debugSceneHashDiff=true`: repeat phase 2.
+   At the failure moment, report the channel color and whether the log shows
+   `has_batch` without `has_sample`, history mismatch, blocked/stale path, or
+   unsettled layout.
+4. GI disabled with direct lighting still enabled: repeat the same camera path.
+   If the formations disappear, the remaining defect is in GI transport/history
+   rather than the base shaderpack composite.
+
+## v143 scene-hash diagnostic review
+
+### Run identity
+
+The three recordings under `screenshotd/v143` were run with both
+`-Dphotonics.debugSceneHashDiff=true` and
+`-Dphotonics.restirGiValidityChannelsDiagnostic=true`. The log confirms both
+properties. Spatial reuse was zero and the temporal upscaler was disabled.
+
+### Hash instrumentation result
+
+The scene-hash diagnostic worked. Every reported transition had exactly one
+changed block and an old/new state. The important transitions were:
+
+| Time | World position | Transition |
+| --- | --- | --- |
+| 20:59:46.293 | `(-22, 3, 53)` | air -> white concrete |
+| 20:59:54.440 | `(-23, 3, 53)` | air -> white concrete |
+| 20:59:54.540 | `(-23, 2, 53)` | air -> white concrete |
+| 20:59:55.192 | `(-23, 2, 53)` | white concrete -> air |
+| 20:59:56.341 | `(-22, 2, 53)` | air -> white concrete |
+| 21:00:10.447 | `(-22, 1, 53)` | white concrete -> air |
+| 21:00:10.898 | `(-22, 2, 53)` | white concrete -> air |
+| 21:00:47.715 | `(-2, 2, 0)` | air -> white concrete |
+| 21:00:58.003 | `(-3, 1, 1)` | air -> red stained glass |
+| 21:01:01.054 | `(-3, 1, 1)` | red stained glass -> air |
+| 21:01:04.306 | `(-2, 2, 0)` | white concrete -> air |
+| 21:01:31.552 | `(-2, 11, 26)` | air -> white concrete |
+| 21:01:39.806 | `(-2, 11, 26)` | white concrete -> air |
+| 21:01:55.762 | `(73, 2, 136)` | air -> cactus |
+
+This rules out the hypothesis that the scene revisions were only camera noise.
+Several changes have `playerChanged=false`, but that only means the Photonics
+player-edit marker was absent. It does not mean that the hash transition was
+imaginary or that the camera caused it.
+
+The render thread also coalesced revisions: scene revisions advanced from 2 to
+5 while several compiler events arrived between render-thread publications.
+That is possible with the current asynchronous compiler, but it makes history
+invalidation order-dependent and should be treated as a separate stability
+risk.
+
+### Recording correlation
+
+- Recording 1 starts during initial streaming, then shows the first concrete
+  placement at approximately `+24 s` and rapid concrete edits around `+32-34 s`.
+  Cyan, blue, and magenta diagnostic regions change around those edits. The
+  later removals occur around `+48 s`.
+- Recording 2 starts from the menu. The red stained-glass placement/removal is
+  around `+19-25 s`; the later white-concrete placement/removal is around
+  `+52 s` and `+61 s`. The surrounding diagnostic colors change after those
+  transitions.
+- Recording 3 contains no new block transition in the log during the clip.
+  It still shows large magenta/cyan regions because earlier scene revisions,
+  history invalidation, and layout churn remain active.
+
+The diagnostic palette means cyan = current direct plus current GI with no
+accepted history, blue = current GI without current direct or history, and
+magenta = accepted history plus GI without current direct. Pastel variants mean
+the world is unsettled. The recordings are therefore dominated by history
+replacement/rejection states, not ordinary Photonics colors.
+
+### Updated hypothesis ranking
+
+1. **Diagnostic contamination remains critical.** The validity shader still
+   writes palette RGB into `lighting_frag_out`, zeros external-lighting output,
+   and bypasses normal denoising. v143 cannot prove that a production surface
+   became black.
+2. **Streaming churn is confirmed.** Layouts repeatedly enter `settled=false`
+   during section unload/rebuild, including a long sequence around layouts
+   63-107. `ready=true` while `settled=false` and compiled/tracked sections
+   differ. This can expose temporary missing-current-GI regions.
+3. **The zero-radiance batch classification remains a high-confidence source
+   bug candidate.** `indirect_reservoir_has_batch` uses finite values and
+   `total_samples > 0`, while rejected reservoirs can retain sample count after
+   their weight and color are cleared. r7 can then suppress retry/recovery for
+   a batch that contributes no usable GI.
+4. **History invalidation is a real contributor.** Each content revision changes
+   the GI epoch and uses regional scene-change bounds. This explains transient
+   changes after edits, but not every persistent wall formation by itself.
+5. **Unmarked-change provenance is unresolved.** The hash diff proves real
+   transitions but does not identify whether the source was Sable, Veil,
+   asynchronous world state, natural block behavior, or a delayed compiler
+   snapshot.
+6. Spatial reuse, temporal upscaling, shader reload during gameplay, and a
+   direct Photonics pipeline exception are not supported by this run.
+
+### Next step
+
+Do not use another palette recording to judge final black lighting yet. First
+make the diagnostic non-invasive and add independent bits for batch presence,
+positive weight/radiance, accepted/blocked/stale path, history epoch match,
+scene-bound rejection, `worldReady`, and `worldSettled`. Then repeat the same
+test with one intentional placement/removal and a no-edit camera phase.
+
+Expected hash behavior after that change:
+
+- no scene-hash diff during the no-edit phase;
+- one diff for each intentional placement/removal;
+- no persistent invalid state outside the reported scene-change bounds after
+  `ready=true, settled=true`;
+- any remaining unmarked diff must be investigated as an actual block-state
+  source, not dismissed as a revision counter artifact.
+
+## v144 diagnostic isolation and usable-GI gate
+
+The v144 source patch makes the validity-channel diagnostic non-invasive. The
+`-Dphotonics.restirGiValidityChannelsDiagnostic=true` flag no longer replaces
+the production r7 lighting, variance, or external-lighting outputs, and the
+normal SVGF passes remain enabled. The private validity attachments now use:
+
+- current `R`: direct-light evidence;
+- current `G`: a finite GI batch with positive sample count;
+- current `B`: a usable GI sample with positive weight and positive finite
+  radiance;
+- current `A`: bit flags for world readiness, settled layout, matching history
+  epoch, scene-change bounds, reservoir load, batch/sample presence, and
+  positive current energy;
+- final `R/G/B`: post-r7 history acceptance, current direct evidence, and
+  usable GI sample;
+- final `A`: the current flags plus finite-history and accepted-history bits.
+
+The production r7 gate now uses the usable-sample state rather than
+`total_samples > 0`. A rejected or zero-radiance reservoir can still retain
+its proposal count for estimator accounting, but it cannot be committed as a
+black current GI sample or suppress retry/recovery.
+
+### v144 test interpretation
+
+Run the ordinary scene test with the validity-channel property and
+`-Dphotonics.debugSceneHashDiff=true` still enabled. The screen should now show
+normal lighting, including denoising; green/magenta palette frames are no
+longer expected. Compare the result against the same run with both diagnostic
+properties disabled:
+
+- matching visuals means the previous palette/no-denoiser path was contaminating
+  the evidence;
+- remaining black formations in both runs are production GI/history defects;
+- a private current `G=1, B=0` state identifies the old zero-radiance batch case;
+- a private `B=0` with `ready=1, settled=1`, no scene-change bit, and no valid
+  history identifies a real missing current GI sample rather than streaming
+  delay;
+- persistent darkening after `ready=1, settled=1` and no hash diff points to
+  history/reprojection or denoiser handling, not a block edit.

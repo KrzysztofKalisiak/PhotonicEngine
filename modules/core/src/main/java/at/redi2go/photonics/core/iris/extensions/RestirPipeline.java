@@ -155,7 +155,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         if (RestirDiagnostics.isGiValidityChannelsEnabled()) {
             if (isRestirGiEnabled() && !isSplitGiEnabled()) {
                 Photonics.LOGGER.warn(
-                        "Photonics combined-GI validity channel diagnostic v140 enabled via -D{}=true; palette bits=red-history/green-direct/blue-GI, current direct/GI state is captured in private current/final attachments after r6/r7, lighting alpha remains the real temporal sample count, denoiser filtering bypassed",
+                        "Photonics combined-GI validity channel diagnostic v144 enabled via -D{}=true; production lighting/variance/external outputs and denoising remain active, private current/final attachments separate GI batch presence from usable positive-radiance samples and store readiness/settled/history/scene-state bits",
                         RestirDiagnostics.GI_VALIDITY_CHANNELS_PROPERTY
                 );
             } else {

@@ -13,48 +13,6 @@ layout(location = RESTIR_EXTERNAL_LIGHTING_OUT) out vec4 external_lighting_frag_
 layout(location = RESTIR_GI_HISTORY_EPOCH_OUT) out uint gi_history_epoch_frag_out;
 #endif
 
-#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
-// Diagnostic state is captured in a private framebuffer after r6. Keeping it
-// out of lighting alpha is important: alpha is the temporal sample-count
-// contract consumed by the next frame's history validation.
-//ph_required: uniform sampler2D restir_gi_validity_current;
-#endif
-
-#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
-vec3 ph_restir_validity_channel_color(
-        bool has_history,
-        bool has_current_direct,
-        bool has_current_gi,
-        bool world_unsettled
-) {
-    int transport_flags = (has_history ? 1 : 0)
-        | (has_current_direct ? 2 : 0)
-        | (has_current_gi ? 4 : 0);
-
-    if (!world_unsettled) {
-        if (transport_flags == 0) return vec3(0.0f);
-        if (transport_flags == 1) return vec3(1.0f, 0.0f, 0.0f);
-        if (transport_flags == 2) return vec3(0.0f, 1.0f, 0.0f);
-        if (transport_flags == 3) return vec3(1.0f, 1.0f, 0.0f);
-        if (transport_flags == 4) return vec3(0.0f, 0.0f, 1.0f);
-        if (transport_flags == 5) return vec3(1.0f, 0.0f, 1.0f);
-        if (transport_flags == 6) return vec3(0.0f, 1.0f, 1.0f);
-        return vec3(1.0f);
-    }
-
-    // Unsettled states use pastel variants so the compiler/layout state remains
-    // visible without overloading alpha in the final shader-pack composition.
-    if (transport_flags == 0) return vec3(0.25f);
-    if (transport_flags == 1) return vec3(1.0f, 0.5f, 0.0f);
-    if (transport_flags == 2) return vec3(0.5f, 1.0f, 0.0f);
-    if (transport_flags == 3) return vec3(1.0f, 1.0f, 0.5f);
-    if (transport_flags == 4) return vec3(0.5f, 0.5f, 1.0f);
-    if (transport_flags == 5) return vec3(1.0f, 0.5f, 1.0f);
-    if (transport_flags == 6) return vec3(0.5f, 1.0f, 1.0f);
-    return vec3(1.0f);
-}
-#endif
-
 void main() {
     lighting_frag_out = vec4(0.0f);
     lighting_variance_frag_out = vec4(0.0f);
@@ -73,16 +31,6 @@ void main() {
     SampleHistory smple;
     sample_history_load(smple);
     ph_restir_sanitize_history(smple);
-
-#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
-    vec4 ph_debug_current_validity = texelFetch(
-        restir_gi_validity_current,
-        frag_tex_coord,
-        0
-    );
-    bool ph_debug_current_direct = ph_debug_current_validity.r > 0.5f;
-    bool ph_debug_current_gi = ph_debug_current_validity.g > 0.5f;
-#endif
 
     SampleHistory accumulator;
 
@@ -108,19 +56,19 @@ void main() {
     // current batch is eligible once the published tree is ready; the separate
     // settled bit includes an intentional delay for diagnostics and must not
     // blank newly exposed receivers during that delay.
-    bool has_current_gi_batch = false;
+    bool has_current_gi_sample = false;
 #if defined PH_ENABLE_RESTIR_GI
     IndirectReservoir current_indirect = indirect_reservoir_empty();
     bool current_indirect_loaded = indirect_reservoir_load(
         current_indirect,
         frag_tex_coord
     );
-    has_current_gi_batch = current_indirect_loaded
-        && indirect_reservoir_has_batch(current_indirect)
+    has_current_gi_sample = current_indirect_loaded
+        && indirect_reservoir_has_usable_sample(current_indirect)
         && ph_world_ready != 0;
 #endif
     bool has_current_transport = has_current_energy
-        || has_current_gi_batch;
+        || has_current_gi_sample;
 #if !defined PH_ENABLE_RESTIR_GI
     // Without GI, r6 is the authoritative current direct-light evaluation.
     // A zero result is still meaningful (for example, a fully occluded light)
@@ -195,34 +143,8 @@ void main() {
         gi_history_epoch_frag_out = uint(max(ph_scene_revision - 1, 0));
 #endif
 
-#if defined PH_RESTIR_GI_VALIDITY_CHANNELS_DIAGNOSTIC
-    vec3 validity_color = ph_restir_validity_channel_color(
-        has_reprojected_history,
-        ph_debug_current_direct,
-        ph_debug_current_gi,
-        ph_world_settled == 0
-    );
-    // Keep the real accumulated count in alpha. The RGB diagnostic is
-    // intentionally visual-only; it must not manufacture a fractional count
-    // that can alter the next temporal pass.
-    lighting_frag_out = vec4(validity_color, max(accumulator.lighting.a, 0.0f));
-    lighting_variance_frag_out = vec4(0.0f);
-#if defined PH_ENABLE_BLOCKLIGHT
-    external_lighting_frag_out = vec4(0.0f);
-#endif
-#elif defined PH_RESTIR_GI_VALIDITY_DIAGNOSTIC
-    // Keep this diagnostic in the existing lighting attachment so it does not
-    // change the combined-GI framebuffer layout or alter pass scheduling.
-    // RGB bits: red=history, green=current transport, blue=world unsettled.
-    vec3 validity_color = vec3(
-        has_reprojected_history ? 1.0f : 0.0f,
-        has_current_transport ? 1.0f : 0.0f,
-        ph_world_settled == 0 ? 1.0f : 0.0f
-    );
-    lighting_frag_out = vec4(validity_color, max(accumulator.lighting.a, 0.0f));
-    lighting_variance_frag_out = vec4(0.0f);
-#if defined PH_ENABLE_BLOCKLIGHT
-    external_lighting_frag_out = vec4(0.0f);
-#endif
-#endif
+    // Validity diagnostics are captured in the private framebuffer by the
+    // adjacent r7 validity passes. Never replace production lighting here:
+    // doing so makes the diagnostic palette itself look like a GI failure and
+    // also changes the denoiser input.
 }

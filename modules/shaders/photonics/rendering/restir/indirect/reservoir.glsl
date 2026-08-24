@@ -70,10 +70,17 @@ bool indirect_reservoir_has_batch(IndirectReservoir reservoir) {
         && reservoir.total_samples > 0.0f;
 }
 
-bool indirect_reservoir_has_sample(IndirectReservoir reservoir) {
+// A batch can retain total_samples after a visibility rejection so the
+// estimator still accounts for the proposal. That accounting state is not a
+// usable radiance sample and must not make r7 commit or reuse black lighting.
+bool indirect_reservoir_has_usable_sample(IndirectReservoir reservoir) {
     return indirect_reservoir_has_batch(reservoir)
         && reservoir.weight > 0.0f
         && ph_luminance(reservoir.smple.color) > 0.0f;
+}
+
+bool indirect_reservoir_has_sample(IndirectReservoir reservoir) {
+    return indirect_reservoir_has_usable_sample(reservoir);
 }
 
 bool indirect_reservoir_add_batch_samples(
