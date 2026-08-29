@@ -138,6 +138,15 @@ bool ph_restir_gi_history_epoch_matches(
             == uint(ph_scene_revision))
         return true;
 
+    // The indirect reservoir caller performs dependency validation against
+    // the current voxel tree. Let that validation decide whether a previous
+    // path survived a scene edit instead of rejecting every reservoir in the
+    // edited section from the global epoch alone. This is the same continuity
+    // model used by upstream Photonics: rebuild the section atomically, then
+    // validate the actual reused path.
+    if (allow_scene_revision_mismatch)
+        return true;
+
     // A block edit invalidates radiance only for receivers in the edited
     // region. Receivers elsewhere still revalidate their stored GI path in
     // r4/r6 and can keep their accumulated radiance through the scene epoch.

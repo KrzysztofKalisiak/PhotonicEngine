@@ -66,6 +66,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI stability v138: current GI batches require published-tree readiness rather than the settling delay; unresolved r7 samples are invalidated before SVGF spatial filtering"
         );
         Photonics.LOGGER.info(
+                "Photonics GI continuity v146: scene-epoch mismatches are resolved by current-tree path validation; validated previous radiance remains presentation-only until fresh transport arrives"
+        );
+        Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         Photonics.LOGGER.info(
