@@ -31,3 +31,8 @@ last settings used:
 
 
 -Dphotonics.restirGiValidityDiagnostic=false -Dphotonics.restirGiValidityChannelsDiagnostic=false
+
+
+-Dphotonics.restirGiValidityChannelsDiagnostic=true
+-Dphotonics.debugSceneHashDiff=true
+-Dphotonics.restirGiDenoiserPassesOverride=0
