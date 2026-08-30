@@ -84,32 +84,54 @@ void main() {
 
     // A valid surface can briefly have no current GI proposal while the voxel
     // layout is uploading or while a newly exposed camera region is filling.
-    // Recover one geometrically matched previous sample only while the tree is
-    // still publishing. The candidate already passed the surface, sublevel,
-    // finite-value, and regional epoch checks; once the tree is settled, a
-    // missing current batch must remain a retry rather than import stale light.
+    // Recover one previous sample only after its stored GI path has been
+    // validated against the current tree. When the tree is unavailable, keep
+    // the old conservative outside-the-edit-region fallback for the short
+    // publication window. In either case this is presentation continuity:
+    // history_retry_required stays true, so the recovered sample is not
+    // promoted to the current scene epoch until fresh transport arrives.
 #if defined PH_ENABLE_RESTIR_GI
     if (!has_reprojected_history
-            && !has_current_transport
-            && ph_world_settled == 0
-            && !ph_restir_scene_change_affects_receiver_for_recovery(
-                frag_rt_pos
-            )) {
-        SampleHistory recovered_history;
-        if (sample_history_reproject_nearest_history(recovered_history)) {
-            accumulator = recovered_history;
-            ph_restir_sanitize_history(accumulator);
-            accumulator.lighting.a = min(accumulator.lighting.a, 1.0f);
-            accumulator.external_lighting.a = min(
-                accumulator.external_lighting.a,
-                1.0f
-            );
-            accumulator.variance.w = min(accumulator.variance.w, 1.0f);
-            has_reprojected_history = max(
-                    accumulator.lighting.a,
-                    accumulator.external_lighting.a
-                ) > 0.0f;
-            history_retry_required = false;
+            && !has_current_transport) {
+        bool can_recover_history = false;
+        ivec2 previous_texel;
+        if (sample_history_reproject_nearest_texel(previous_texel)) {
+            if (ph_world_ready != 0) {
+                IndirectReservoir previous_indirect = indirect_reservoir_empty();
+                can_recover_history =
+                    indirect_reservoir_load_previous(
+                        previous_indirect,
+                        previous_texel
+                    )
+                    && indirect_reservoir_has_sample(previous_indirect)
+                    && indirect_reservoir_classify_reused_path(
+                        previous_indirect,
+                        frag_rt_pos
+                    ) == indirect_path_validation_valid;
+            } else {
+                can_recover_history = ph_world_settled == 0
+                    && !ph_restir_scene_change_affects_receiver_for_recovery(
+                        frag_rt_pos
+                    );
+            }
+        }
+
+        if (can_recover_history) {
+            SampleHistory recovered_history;
+            if (sample_history_reproject_nearest_history(recovered_history)) {
+                accumulator = recovered_history;
+                ph_restir_sanitize_history(accumulator);
+                accumulator.lighting.a = min(accumulator.lighting.a, 1.0f);
+                accumulator.external_lighting.a = min(
+                    accumulator.external_lighting.a,
+                    1.0f
+                );
+                accumulator.variance.w = min(accumulator.variance.w, 1.0f);
+                has_reprojected_history = max(
+                        accumulator.lighting.a,
+                        accumulator.external_lighting.a
+                    ) > 0.0f;
+            }
         }
     }
 #endif
