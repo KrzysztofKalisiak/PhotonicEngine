@@ -248,3 +248,112 @@ of texture normals for initial GI/sky samples. Upstream's shadow-weight and
 fast-history ideas may address temporal response, while the fork's existing
 regional/path/finite-value protections are specifically aimed at preventing the
 black-history failure and should remain in place.
+
+## Why a direct upstream GI replacement is not viable
+
+"Impossible" here means impossible as a direct copy or cherry-pick. A full
+port is possible, but it would be a renderer migration rather than a GI bug
+fix. The upstream implementation and this fork no longer share the same
+pass, resource, or history contracts.
+
+### Hard integration blockers
+
+1. **Different pipeline shape.** Upstream uses standalone `gi0`/`gi1`/`gi2`/
+   `gi3` passes followed by a standalone SVGF pass. The fork uses a combined
+   r3-r9 pipeline where GI, direct lighting, scene-history policy, and the
+   denoiser share the ReSTIR framebuffer. Copying one upstream pass would leave
+   its inputs or outputs unbound.
+
+2. **Different framebuffer contracts.** Upstream writes `gi_output` and its
+   own indirect reservoir attachments. The fork writes combined `lighting`,
+   `external_lighting`, path metadata, scene epochs, direct state, and private
+   validity attachments. The Java pipeline also flips and reuses the same
+   attachments across r3-r7, then ping-pongs r8/r9. Upstream's draw-buffer
+   ordering cannot be substituted without changing `RestirPipeline` and every
+   dependent shader.
+
+3. **Different reservoir meaning.** The fork's indirect reservoir contains
+   current/reused sample accounting, packed hit metadata, path information,
+   finite-value checks, and tri-state validation for valid, blocked, and stale
+   paths. Upstream's reservoir merge/reuse functions do not carry the fork's
+   scene-epoch or path-validation contract. Directly importing them would either
+   fail to compile or silently discard the protections added for stale GI.
+
+4. **Different history model.** Upstream SVGF stores direct plus GI output in
+   its own history format, with optional visibility and fast-history buffers.
+   The fork's r7 history has split stable/external lighting, accumulation-count
+   retry markers, scene epochs, Sable provenance, and r8/r9 validity rejection.
+   Replacing it with upstream history would remove the fork's invalidation and
+   retry semantics and could reintroduce the old black-history failure.
+
+5. **Different world-publication assumptions.** Upstream traces its own voxel
+   tree without the fork's `ph_world_ready`, `ph_world_settled`, layout
+   revision, scene revision, and changed-region uniforms. The fork needs to
+   distinguish a query against the published tree from a missing query during
+   section publication. Upstream code has no direct place for that state.
+
+6. **Sable and receiver-domain behavior.** The fork's r4-r6 path handles Sable
+   sublevel tokens, receiver domains, camera-relative positions, exact local
+   hard shadows, and external-light history. Upstream GI assumes the older
+   world-only receiver contract. A direct replacement would ignore or violate
+   those checks, producing cross-domain reuse or incorrect local lighting.
+
+7. **Different shader include and macro environment.** The upstream files use
+   names such as `gi_output`, `PH_RESTIR_SPLIT_GI`, and upstream SVGF history
+   declarations. The fork's shader preprocessor injects different uniforms,
+   pass modes, framebuffer locations, and combined-GI defines. A source copy is
+   therefore not a self-contained shader change.
+
+8. **Different platform and pipeline APIs.** The upstream branch also contains
+   Iris/property/framebuffer changes that do not match the fork's 1.21.1, Sable,
+   and diagnostic integration. Cherry-picking the surrounding Java commits
+   would be a broad API migration with unrelated failure modes.
+
+### Costs even if a full port is attempted
+
+- **It destroys diagnostic isolation.** A large pipeline replacement changes
+  sampling, history, attachment flips, denoising, and world timing at once. A
+  better recording would not prove which change fixed the black edges.
+- **It can regress edit correctness.** Upstream does not have the fork's
+  scene-revision/path invalidation. Old GI paths may survive a block edit and
+  produce stale illumination instead of a visible blackout.
+- **It can regress Sable compatibility.** The upstream GI passes do not know the
+  fork's external-light and receiver-domain ownership rules. Reusing them would
+  require reimplementing those rules around every temporal and spatial merge.
+- **It increases resource and bandwidth pressure.** A separate GI output,
+  standalone history, visibility history, and optional fast history require
+  additional attachments and passes. This changes memory use, GPU cost, and
+  synchronization behavior before correctness is established.
+- **It changes the visual estimator globally.** The upstream RNG, direction
+  sampling, texture-normal input, Jacobian limits, and history response change
+  direct and indirect noise everywhere. Those may improve quality, but they are
+  not a focused explanation for camera-edge black pixels.
+- **It increases maintenance divergence.** Future upstream fixes would need to
+  be reconciled with the fork's combined pipeline, scene epochs, Sable support,
+  and diagnostics again. A wholesale port would create two competing renderer
+  architectures.
+
+### What can be ported safely
+
+The useful upstream behavior should be adapted one item at a time behind the
+fork's existing contracts:
+
+1. Port the complete RNG state transition as an isolated experiment.
+2. Test texture normals for the first GI ray and sky endpoint while retaining
+   the fork's hit-point and path metadata.
+3. Compare the upstream normal-aware Jacobian factor without widening the
+   fork's current reuse limits or removing path validation.
+4. Consider visibility history only after current-batch and history-validity
+   failures are fixed, with a fork-compatible GI provenance attachment.
+5. Consider fast history only after the renderer no longer produces invalid
+   black states and the remaining issue is confirmed to be temporal response.
+
+### If a wholesale port is ever required
+
+It should be treated as a separate experimental renderer mode, not as the next
+patch. It would need an adapter for `FragData` and world tracing, a new GI/SVGF
+framebuffer and flip schedule, explicit combined/direct/Sable integration,
+scene-edit invalidation, diagnostic attachments, and a full no-edit/one-edit/
+rejoin A/B test. Until those contracts are reproduced, direct upstream usage
+has a higher regression and debugging cost than fixing the identified r7/r8/r9
+state semantics in the current pipeline.

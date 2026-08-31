@@ -26,9 +26,17 @@ void main() {
 #if defined PH_RESTIR_VALIDITY_FINAL_PASS
     vec4 current = texelFetch(restir_gi_validity_current, frag_tex_coord, 0);
     vec4 accumulated = texelFetch(restir_lighting, frag_tex_coord, 0);
-    bool finite_history = !any(isnan(accumulated))
-        && !any(isinf(accumulated));
-    bool history_accepted = finite_history && accumulated.a > 0.0f;
+    bool finite_history = sample_history_value_is_finite(accumulated);
+#if defined PH_ENABLE_BLOCKLIGHT
+    vec4 accumulated_external = texelFetch(
+        restir_external_lighting,
+        frag_tex_coord,
+        0
+    );
+    finite_history = finite_history
+        && sample_history_value_is_finite(accumulated_external);
+#endif
+    bool history_accepted = ph_restir_accumulation_is_valid(frag_tex_coord);
 
     uint validity_flags = uint(max(current.a, 0.0f) + 0.5f);
     if (history_accepted) validity_flags |= 256u;
@@ -60,19 +68,30 @@ void main() {
     bool has_current_direct = has_current_energy;
     bool has_current_gi_batch = false;
     bool has_current_gi_sample = false;
+    bool current_gi_finite = false;
 
 #if defined PH_ENABLE_RESTIR_GI
+    vec4 current_gi_state = texelFetch(
+        restir_gi_current_state,
+        frag_tex_coord,
+        0
+    );
+    bool current_gi_state_finite = !any(isnan(current_gi_state))
+        && !any(isinf(current_gi_state));
+    bool current_gi_evaluated = current_gi_state_finite
+        && current_gi_state.r >= 0.5f;
+    current_gi_finite = current_gi_state_finite
+        && current_gi_state.g >= 0.5f;
+    bool current_gi_positive = current_gi_state_finite
+        && current_gi_state.b >= 0.5f;
+
     IndirectReservoir indirect_reservoir = indirect_reservoir_empty();
     bool indirect_loaded = indirect_reservoir_load(
         indirect_reservoir,
         frag_tex_coord
     );
-    has_current_gi_batch = indirect_loaded
-        && indirect_reservoir_has_batch(indirect_reservoir)
-        && ph_world_ready != 0;
-    has_current_gi_sample = indirect_loaded
-        && indirect_reservoir_has_usable_sample(indirect_reservoir)
-        && ph_world_ready != 0;
+    has_current_gi_batch = current_gi_evaluated;
+    has_current_gi_sample = current_gi_positive;
 
     // Remove the current GI estimate before deciding whether the remaining
     // energy is direct. This intentionally reports transport evidence rather
@@ -118,11 +137,13 @@ void main() {
     if (has_current_gi_batch) validity_flags |= 32u;
     if (has_current_gi_sample) validity_flags |= 64u;
     if (has_current_energy) validity_flags |= 128u;
+    if (current_gi_finite) validity_flags |= 1024u;
 
-    // R=current direct evidence, G=GI batch presence, B=usable GI sample,
-    // A=state bits (ready, settled, matching history epoch, affected by the
-    // current scene change, reservoir loaded, batch/sample present, and
-    // positive current energy). These values are private diagnostics only.
+    // R=current direct evidence, G=GI evaluation completed, B=positive GI
+    // contribution, A=state bits (ready, settled, matching history epoch,
+    // affected by the current scene change, reservoir loaded, GI
+    // evaluation/finite/positive state, positive current energy, and finite
+    // GI batch bit 1024). These values are private diagnostics only.
     validity_current_out = vec4(
         has_current_direct ? 1.0f : 0.0f,
         has_current_gi_batch ? 1.0f : 0.0f,

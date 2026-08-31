@@ -69,6 +69,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI continuity v146: scene-epoch mismatches are resolved by current-tree path validation; validated previous radiance remains presentation-only until fresh transport arrives"
         );
         Photonics.LOGGER.info(
+                "Photonics GI state v147: current r3 evaluation and finite-batch state are captured before temporal/spatial reuse; r7 commits only complete current GI frames, preserves presentation-only history epochs, and uses stream-aware positive-count history validity"
+        );
+        Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         Photonics.LOGGER.info(
@@ -253,6 +256,20 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "restir_indirect_reservoirs0",
                 "restir_indirect_reservoirs1"
         );
+        var giCurrentStateFramebuffer = isRestirGiEnabled()
+                ? irisFactory.newFramebuffer(properties.getRenderScale())
+                .addAttachment(
+                        "restir_gi_current_state",
+                        ITextureFormat.rgba16f(),
+                        CREATE_SAMPLER
+                )
+                .build(this::registerComponent)
+                : null;
+        var giCurrentStatePassFramebuffer = giCurrentStateFramebuffer == null
+                ? null
+                : giCurrentStateFramebuffer.withDrawBuffers(
+                        "restir_gi_current_state"
+                );
         var reusedReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_direct_reservoirs0",
                 "restir_indirect_reservoirs0",
@@ -312,6 +329,14 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .debugGroup("restir gi initial")
                 .withFramebuffer(indirectReservoirFramebuffer)
                 .deferredPass("initial indirect", "/photonics/rendering/restir/passes/r3_initial_indirect.fsh", null, this::isRestirGiEnabled)
+                .when(this::isRestirGiEnabled, b0 -> b0
+                        .debugGroup("restir gi current state")
+                        .withFramebuffer(giCurrentStatePassFramebuffer)
+                        .deferredPass(
+                                "capture current GI evaluation state",
+                                "/photonics/rendering/restir/passes/r3_gi_current_state.fsh",
+                                null
+                        ))
                 .debugGroup("restir temporal")
                 .withFramebuffer(reusedReservoirFramebuffer)
                 .deferredPass("temporal reuse + tri-state GI classification", "/photonics/rendering/restir/passes/r4_temporal_reuse.fsh", null, this::isRestirEnabled)
@@ -489,6 +514,16 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_gi_indirect_reservoirs1", ITextureFormat.rgb32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .build(this::registerComponent);
+        var giCurrentStateFramebuffer = irisFactory.newFramebuffer(properties.getGiRenderScale())
+                .addAttachment(
+                        "restir_gi_current_state",
+                        ITextureFormat.rgba16f(),
+                        CREATE_SAMPLER
+                )
+                .build(this::registerComponent);
+        var giCurrentStatePassFramebuffer = giCurrentStateFramebuffer.withDrawBuffers(
+                "restir_gi_current_state"
+        );
         var giReservoirFramebuffer = giFramebuffer.withDrawBuffers(
                 "restir_gi_indirect_reservoirs0",
                 "restir_gi_indirect_reservoirs1"
@@ -518,6 +553,13 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .deferredPass(
                         "initial indirect",
                         "/photonics/rendering/restir/passes/r3_initial_indirect.fsh",
+                        null
+                )
+                .debugGroup("restir gi current state")
+                .withFramebuffer(giCurrentStatePassFramebuffer)
+                .deferredPass(
+                        "capture current GI evaluation state",
+                        "/photonics/rendering/restir/passes/r3_gi_current_state.fsh",
                         null
                 )
                 .debugGroup("restir gi temporal")
