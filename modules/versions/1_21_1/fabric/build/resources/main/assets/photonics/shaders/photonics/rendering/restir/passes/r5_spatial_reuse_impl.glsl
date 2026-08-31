@@ -380,7 +380,8 @@ void main() {
 #endif
 #if defined PH_ENABLE_RESTIR_GI
     bool indirect_spatial_receiver_can_reuse =
-        ph_spatial_current_receiver_can_reuse(false)
+        ph_world_settled != 0
+        && ph_spatial_current_receiver_can_reuse(false)
         && frag_data_sublevel_token(_frag_data) == 0u;
 #endif
 

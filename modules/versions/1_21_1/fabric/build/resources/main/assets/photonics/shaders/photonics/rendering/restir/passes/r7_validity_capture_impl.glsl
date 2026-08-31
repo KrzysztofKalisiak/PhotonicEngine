@@ -24,7 +24,12 @@ void main() {
     if (!frag_is_in_world) return;
 
 #if defined PH_RESTIR_VALIDITY_FINAL_PASS
-    vec4 current = texelFetch(restir_gi_validity_current, frag_tex_coord, 0);
+    vec4 current = texelFetch(restir_gi_final_state, frag_tex_coord, 0);
+    vec4 current_validity = texelFetch(
+        restir_gi_validity_current,
+        frag_tex_coord,
+        0
+    );
     vec4 accumulated = texelFetch(restir_lighting, frag_tex_coord, 0);
     bool finite_history = sample_history_value_is_finite(accumulated);
 #if defined PH_ENABLE_BLOCKLIGHT
@@ -42,12 +47,12 @@ void main() {
     if (history_accepted) validity_flags |= 256u;
     if (finite_history) validity_flags |= 512u;
 
-    // R=post-r7 history accepted, G=current direct evidence,
-    // B=usable current GI sample, A=current state bits plus post-r7 history
-    // acceptance and finite-history bits.
+    // R=post-r7 history accepted, G=current direct evidence from the earlier
+    // diagnostic pass, B=post-reuse positive GI, A=GI state bits plus post-r7
+    // history acceptance and finite-history bits.
     validity_final_out = vec4(
         history_accepted ? 1.0f : 0.0f,
-        current.r,
+        current_validity.r,
         current.b,
         float(validity_flags)
     );

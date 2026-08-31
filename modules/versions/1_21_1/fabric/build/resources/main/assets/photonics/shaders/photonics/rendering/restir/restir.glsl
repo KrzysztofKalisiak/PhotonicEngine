@@ -56,6 +56,21 @@
 //ph_required: uniform sampler2D restir_gi_current_state;
 #endif
 
+#if defined PH_ENABLE_RESTIR_GI && !defined PH_RESTIR_GI_STATE_CAPTURE_PASS && !defined PH_RESTIR_GI_FINAL_STATE_CAPTURE_PASS
+//ph_required: uniform sampler2D restir_gi_final_state;
+#endif
+
+#if defined PH_ENABLE_RESTIR_GI
+// State bits are written by the standalone r3/r7 capture passes. The state is
+// intentionally separate from reservoir contents so r7 can reject a finite
+// reservoir produced while the world tree was still being published.
+const int PH_RESTIR_GI_STATE_EVALUATED = 1;
+const int PH_RESTIR_GI_STATE_CURRENT_FINITE = 2;
+const int PH_RESTIR_GI_STATE_PUBLISHED = 4;
+const int PH_RESTIR_GI_STATE_FINAL_FINITE = 8;
+const int PH_RESTIR_GI_STATE_FINAL_POSITIVE = 16;
+#endif
+
 struct SampleHistory {
     vec4 lighting;
     vec4 external_lighting;
