@@ -52,6 +52,10 @@
 //ph_required: uniform sampler2D prev_restir_external_lighting;
 #endif
 
+#if defined PH_ENABLE_RESTIR_GI && !defined PH_RESTIR_GI_STATE_CAPTURE_PASS
+//ph_required: uniform sampler2D restir_gi_current_state;
+#endif
+
 struct SampleHistory {
     vec4 lighting;
     vec4 external_lighting;
@@ -288,8 +292,36 @@ bool ph_restir_history_surface_matches(
     );
 }
 
+bool sample_history_value_is_finite(vec4 value) {
+    return value.x != INVALID_SAMPLE_COMPONENT
+        && !any(isnan(value))
+        && !any(isinf(value));
+}
+
+bool sample_history_value_is_numeric(vec4 value) {
+    return !any(isnan(value))
+        && !any(isinf(value));
+}
+
+bool sample_history_lighting_is_valid(SampleHistory history) {
+    return sample_history_value_is_finite(history.lighting)
+        && history.lighting.a > 0.0f;
+}
+
+#if defined PH_ENABLE_BLOCKLIGHT
+bool sample_history_external_is_valid(SampleHistory history) {
+    return sample_history_value_is_finite(history.external_lighting)
+        && history.external_lighting.a > 0.0f;
+}
+#else
+bool sample_history_external_is_valid(SampleHistory history) {
+    return sample_history_lighting_is_valid(history);
+}
+#endif
+
 bool sample_history_is_valid(SampleHistory history) {
-    return history.lighting.x != INVALID_SAMPLE_COMPONENT;
+    return sample_history_lighting_is_valid(history)
+        || sample_history_external_is_valid(history);
 }
 
 // r7 uses the alpha channel as an accumulation-count/validity marker. A zero
@@ -298,7 +330,7 @@ bool sample_history_is_valid(SampleHistory history) {
 // a black neighbor that contaminates otherwise valid receivers.
 bool ph_restir_accumulation_is_valid(ivec2 texel) {
     vec4 lighting = texelFetch(restir_lighting, texel, 0);
-    if (any(isnan(lighting)) || any(isinf(lighting)))
+    if (!sample_history_value_is_finite(lighting))
         return false;
 
     bool valid = lighting.a > 0.0f;
@@ -308,7 +340,7 @@ bool ph_restir_accumulation_is_valid(ivec2 texel) {
         texel,
         0
     );
-    if (any(isnan(external_lighting)) || any(isinf(external_lighting)))
+    if (!sample_history_value_is_finite(external_lighting))
         return false;
     valid = valid || external_lighting.a > 0.0f;
 #endif
@@ -331,6 +363,16 @@ void ph_restir_sanitize_history(inout SampleHistory history) {
         );
         return;
     }
+
+    // Keep stable and external streams independent. An invalid stream must
+    // not contribute its zero/sentinel value merely because the other stream
+    // is valid.
+    if (!sample_history_lighting_is_valid(history))
+        history.lighting = vec4(0.0f);
+#if defined PH_ENABLE_BLOCKLIGHT
+    if (!sample_history_external_is_valid(history))
+        history.external_lighting = vec4(0.0f);
+#endif
 
     // Keep finite history components within the half-float-safe range used by
     // downstream denoising and composition passes; retain RGB channels
@@ -373,18 +415,50 @@ void sample_history_load(out SampleHistory smple) {
 }
 
 SampleHistory sample_history_mix(SampleHistory s1, SampleHistory s2, float a) {
-    if (!sample_history_is_valid(s1)) {
-        a = 1f;
-    } else if (!sample_history_is_valid(s2)) {
-        a = 0f;
-    } else if (!sample_history_is_valid(s1) && !sample_history_is_valid(s2)) {
+    bool s1_valid = sample_history_is_valid(s1);
+    bool s2_valid = sample_history_is_valid(s2);
+    if (!s1_valid && !s2_valid) {
         return INVALID_HISTORY;
     }
+    a = clamp(a, 0.0f, 1.0f);
+
+    bool s1_lighting_valid = sample_history_lighting_is_valid(s1);
+    bool s2_lighting_valid = sample_history_lighting_is_valid(s2);
+    bool s1_external_valid = sample_history_external_is_valid(s1);
+    bool s2_external_valid = sample_history_external_is_valid(s2);
+
+    vec4 lighting;
+    if (s1_lighting_valid && s2_lighting_valid)
+        lighting = mix(s1.lighting, s2.lighting, a);
+    else if (s1_lighting_valid)
+        lighting = s1.lighting;
+    else if (s2_lighting_valid)
+        lighting = s2.lighting;
+    else
+        lighting = vec4(0.0f);
+
+    vec4 external_lighting;
+    if (s1_external_valid && s2_external_valid)
+        external_lighting = mix(s1.external_lighting, s2.external_lighting, a);
+    else if (s1_external_valid)
+        external_lighting = s1.external_lighting;
+    else if (s2_external_valid)
+        external_lighting = s2.external_lighting;
+    else
+        external_lighting = vec4(0.0f);
+
+    vec4 variance;
+    if (s1_valid && s2_valid)
+        variance = mix(s1.variance, s2.variance, a);
+    else if (s1_valid)
+        variance = s1.variance;
+    else
+        variance = s2.variance;
 
     return SampleHistory(
-        mix(s1.lighting, s2.lighting, a),
-        mix(s1.external_lighting, s2.external_lighting, a),
-        mix(s1.variance, s2.variance, a)
+        lighting,
+        external_lighting,
+        variance
     );
 }
 
@@ -426,11 +500,11 @@ SampleHistory sample_history_reproject_single(
     )) return INVALID_HISTORY;
 
     vec4 lighting = texelFetch(prev_restir_lighting, ivec2(texel), 0);
-    if (any(isnan(lighting)) || any(isinf(lighting))) return INVALID_HISTORY;
+    if (!sample_history_value_is_numeric(lighting)) return INVALID_HISTORY;
 
 #if defined PH_ENABLE_BLOCKLIGHT
     vec4 external_lighting = texelFetch(prev_restir_external_lighting, ivec2(texel), 0);
-    if (any(isnan(external_lighting)) || any(isinf(external_lighting))) return INVALID_HISTORY;
+    if (!sample_history_value_is_numeric(external_lighting)) return INVALID_HISTORY;
 #else
     vec4 external_lighting = vec4(0.0f, 0.0f, 0.0f, lighting.a);
 #endif
@@ -468,7 +542,7 @@ SampleHistory sample_history_reproject_mixed(
     );
 
     if (!sample_history_is_valid(result))
-        return SampleHistory(vec4(0.0f), vec4(0.0f), vec4(0.0f));
+        return INVALID_HISTORY;
 
     return result;
 }
