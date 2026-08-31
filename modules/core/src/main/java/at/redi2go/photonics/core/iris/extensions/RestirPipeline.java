@@ -72,6 +72,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI state v147: current r3 evaluation and finite-batch state are captured before temporal/spatial reuse; r7 commits only complete current GI frames, preserves presentation-only history epochs, and uses stream-aware positive-count history validity"
         );
         Photonics.LOGGER.info(
+                "Photonics GI publication v148: settled requires zero pending world uploads; r3 state carries explicit publication bits through a post-reuse r7 capture, and GI temporal/spatial reuse is fenced while the voxel layout is unsettled"
+        );
+        Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         Photonics.LOGGER.info(
@@ -263,12 +266,22 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         ITextureFormat.rgba16f(),
                         CREATE_SAMPLER
                 )
+                .addAttachment(
+                        "restir_gi_final_state",
+                        ITextureFormat.rgba16f(),
+                        CREATE_SAMPLER
+                )
                 .build(this::registerComponent)
                 : null;
         var giCurrentStatePassFramebuffer = giCurrentStateFramebuffer == null
                 ? null
                 : giCurrentStateFramebuffer.withDrawBuffers(
                         "restir_gi_current_state"
+                );
+        var giFinalStatePassFramebuffer = giCurrentStateFramebuffer == null
+                ? null
+                : giCurrentStateFramebuffer.withDrawBuffers(
+                        "restir_gi_final_state"
                 );
         var reusedReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
                 "restir_direct_reservoirs0",
@@ -351,6 +364,14 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .debugGroup("restir diffuse")
                 .withFramebuffer(diffuseFramebuffer)
                 .deferredPass("diffuse", "/photonics/rendering/restir/passes/r6_diffuse.fsh", null, this::isRestirEnabled)
+                .when(this::isRestirGiEnabled, b0 -> b0
+                        .debugGroup("restir gi publication state")
+                        .withFramebuffer(giFinalStatePassFramebuffer)
+                        .deferredPass(
+                                "capture post-reuse GI publication state",
+                                "/photonics/rendering/restir/passes/r7_gi_final_state.fsh",
+                                null
+                        ))
                 .when(this::isGiValidityChannelsDiagnosticEnabled, b0 -> b0
                         .debugGroup("restir GI validity current")
                         .withFramebuffer(giValidityCurrentFramebuffer)
@@ -520,9 +541,17 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         ITextureFormat.rgba16f(),
                         CREATE_SAMPLER
                 )
+                .addAttachment(
+                        "restir_gi_final_state",
+                        ITextureFormat.rgba16f(),
+                        CREATE_SAMPLER
+                )
                 .build(this::registerComponent);
         var giCurrentStatePassFramebuffer = giCurrentStateFramebuffer.withDrawBuffers(
                 "restir_gi_current_state"
+        );
+        var giFinalStatePassFramebuffer = giCurrentStateFramebuffer.withDrawBuffers(
+                "restir_gi_final_state"
         );
         var giReservoirFramebuffer = giFramebuffer.withDrawBuffers(
                 "restir_gi_indirect_reservoirs0",
@@ -589,6 +618,13 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .deferredPass(
                         "diffuse",
                         "/photonics/rendering/restir/passes/r6_diffuse_gi.fsh",
+                        null
+                )
+                .debugGroup("restir gi publication state")
+                .withFramebuffer(giFinalStatePassFramebuffer)
+                .deferredPass(
+                        "capture post-reuse GI publication state",
+                        "/photonics/rendering/restir/passes/r7_gi_final_state.fsh",
                         null
                 )
                 .debugGroup("restir gi accumulation")

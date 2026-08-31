@@ -49,23 +49,37 @@ void main() {
 
     bool combined_frame_complete = false;
 #if defined PH_ENABLE_RESTIR_GI
-    vec4 current_gi_state = texelFetch(
-        restir_gi_current_state,
+    vec4 final_gi_state = texelFetch(
+        restir_gi_final_state,
         frag_tex_coord,
         0
     );
-    bool current_gi_state_finite = !any(isnan(current_gi_state))
-        && !any(isinf(current_gi_state));
-    bool current_gi_evaluated = current_gi_state_finite
-        && current_gi_state.r >= 0.5f;
-    bool current_gi_finite = current_gi_state_finite
-        && current_gi_state.g >= 0.5f;
+    bool final_gi_state_finite = !any(isnan(final_gi_state))
+        && !any(isinf(final_gi_state));
+    int final_gi_state_bits = final_gi_state_finite
+        ? int(max(final_gi_state.a, 0.0f) + 0.5f)
+        : 0;
+    bool current_gi_evaluated = final_gi_state_finite
+        && final_gi_state.r >= 0.5f
+        && (final_gi_state_bits & PH_RESTIR_GI_STATE_EVALUATED) != 0;
+    bool current_gi_finite = final_gi_state_finite
+        && final_gi_state.g >= 0.5f
+        && (final_gi_state_bits & PH_RESTIR_GI_STATE_CURRENT_FINITE) != 0;
+    bool current_gi_published =
+        (final_gi_state_bits & PH_RESTIR_GI_STATE_PUBLISHED) != 0;
+    bool final_gi_finite =
+        (final_gi_state_bits & PH_RESTIR_GI_STATE_FINAL_FINITE) != 0;
     // A finite zero-radiance trace is still a complete current GI sample.
     // Positive radiance is diagnostic information, not a validity predicate.
     // r6 always writes the current direct contribution for an in-world
-    // fragment. In combined mode the frame is complete only when r3 also
-    // produced a finite current GI batch, including a zero-radiance batch.
-    combined_frame_complete = current_gi_evaluated && current_gi_finite;
+    // fragment. In combined mode promotion is allowed only after r3 produced
+    // a finite batch, the compiler published a settled tree, and r4/r5 left a
+    // finite post-reuse batch for this exact pixel. This prevents a valid but
+    // stale/partial-tree reservoir from entering accumulated history.
+    combined_frame_complete = current_gi_evaluated
+        && current_gi_finite
+        && current_gi_published
+        && final_gi_finite;
 #endif
 #if !defined PH_ENABLE_RESTIR_GI
     // Without GI, r6 is the authoritative current direct-light evaluation.
@@ -89,7 +103,7 @@ void main() {
         bool can_recover_history = false;
         ivec2 previous_texel;
         if (sample_history_reproject_nearest_texel(previous_texel)) {
-            if (ph_world_ready != 0) {
+            if (ph_world_ready != 0 && ph_world_settled != 0) {
                 IndirectReservoir previous_indirect = indirect_reservoir_empty();
                 can_recover_history =
                     indirect_reservoir_load_previous(
@@ -127,11 +141,12 @@ void main() {
 #endif
 
     // r6 uses alpha=1 as the per-frame sample-count seed. That alpha is not
-    // validity by itself: the explicit r3 state above decides whether the GI
-    // trace completed against a usable tree. Combining r6 output while that
-    // state is missing would average an upload-time zero into valid history
-    // and make the dark patch persist. Keep previous history untouched until
-    // a current transport sample or a geometrically recovered sample exists.
+    // validity by itself: the explicit post-reuse state above decides whether
+    // the GI trace completed against a published tree. Combining r6 output
+    // while that state is missing would average an upload-time zero into valid
+    // history and make the dark patch persist. Keep previous history untouched
+    // until a current transport sample or a geometrically recovered sample
+    // exists.
     if (combined_frame_complete) {
         sample_history_combine_lighting(accumulator, smple);
         ph_restir_sanitize_history(accumulator);

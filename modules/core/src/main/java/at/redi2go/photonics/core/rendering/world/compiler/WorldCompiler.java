@@ -405,7 +405,10 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     && lastObservedCompilationRevision > 0
                     && now - lastCompilationChangeNanos >= SETTLED_DIAGNOSTIC_DELAY_NANOS) {
                 settledDiagnosticLogged = true;
-                setWorldSettled(worldReady);
+                boolean worldPublicationReady = worldReady
+                        && mostRecentPendingBuilds == 0
+                        && mostRecentPendingUnloads == 0;
+                setWorldSettled(worldPublicationReady);
                 logWorldTracingDiagnostic(true, depth, worldReady, blockBoundsFallback);
             }
             mostRecentWorldReady = worldReady;

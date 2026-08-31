@@ -30,12 +30,21 @@ void main() {
     bool finite = loaded && indirect_reservoir_has_batch(current);
     bool positive = finite && indirect_reservoir_has_usable_sample(current);
 
-    // R=evaluated, G=finite result, B=positive contribution, A=state code:
-    // 0 unavailable, 1 evaluated/finite, 2 evaluated/non-finite.
+    int state = 0;
+    if (gi_evaluated) state |= PH_RESTIR_GI_STATE_EVALUATED;
+    if (finite) state |= PH_RESTIR_GI_STATE_CURRENT_FINITE;
+    // A non-empty tree is not enough to publish GI. The compiler exposes
+    // settled only after the current layout has quiesced and all queued work
+    // has been uploaded.
+    if (gi_evaluated && finite && ph_world_settled != 0)
+        state |= PH_RESTIR_GI_STATE_PUBLISHED;
+
+    // R=evaluated, G=finite current result, B=positive contribution, A=state
+    // bits. The final-state pass adds post-reuse reservoir bits later.
     gi_current_state_out = vec4(
-        1.0f,
+        gi_evaluated ? 1.0f : 0.0f,
         finite ? 1.0f : 0.0f,
         positive ? 1.0f : 0.0f,
-        finite ? 1.0f : 2.0f
+        float(state)
     );
 }

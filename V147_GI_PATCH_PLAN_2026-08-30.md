@@ -274,6 +274,74 @@ camera-edge black areas, stationary accumulation darkening, or a production
 green flash. A brief local noisy transition after one block edit is acceptable
 provided it recovers to stable lighting without a full pipeline reset.
 
+## v148 Implementation Status
+
+The v148 working-tree patch applies the publication fence proposed by the
+reviews without changing the GI sampler, normal, or RNG policy:
+
+- `WorldCompiler.onFrameBegin()` now asserts both `pendingBuilds == 0` and
+  `pendingUnloads == 0` before publishing `ph_world_settled=1`. A non-empty
+  tree can still report `ready=1` while it is being assembled; that is now
+  explicitly not a publishable GI snapshot.
+- `r3_gi_current_state.fsh` writes an independent state token. Its alpha bits
+  are `1=evaluated`, `2=current finite batch`, and `4=settled publication`.
+  These bits are independent of radiance, so a valid zero-radiance trace is
+  still distinguishable from a missing trace.
+- A new post-r4/r5/r6 `r7_gi_final_state.fsh` pass adds bits `8=final finite
+  batch` and `16=final positive contribution`. `r7_accumulation_impl.glsl`
+  consumes this post-reuse token rather than trusting an earlier reservoir
+  or a positive-luminance test.
+- GI temporal path validation and GI spatial reuse are disabled while the
+  world layout is unsettled. Presentation history can still be retained, but
+  it cannot be promoted into the current scene epoch until a settled current
+  evaluation and a finite post-reuse reservoir exist.
+- The final private validity capture reads the post-reuse token while keeping
+  direct-evaluation evidence from the existing current diagnostic pass.
+
+This is deliberately conservative. During the short publication window a
+newly exposed pixel may hold its previous history or remain dark until a
+settled batch is available; existing resident geometry must not be globally
+replaced by a partial-tree result. The patch is not expected to remove genuine
+unlit-face darkness, stochastic grain, or every local edit transition by
+itself. It must remove persistent accumulation of partial-tree results and
+must not create a full-view blackout.
+
+The tracked Photonics shader sources pass a directive-balance check. The
+repeated `#endif without #if` messages are already present in v146 logs and
+remain a separate shader-pack/preprocessor investigation; no matching source
+imbalance was found in the 88 tracked Photonics shader files.
+
+The two changed Java classes compile with `javac --release 17` using the
+cached project classes and dependencies. Gradle reaches buildSrc with the
+local Java 21 toolchain, but Fabric Loom currently fails before project
+compilation because the Minecraft metadata download is unavailable through
+the configured certificate/network path.
+
+## v148 Test Expectations
+
+For the first production run, use no diagnostic flags. Wait for a log record
+with `settled=true` and zero pending builds/unloads before the wall test. On a
+block edit or streamed layout revision, expect `ready=true, settled=false`
+for the publication window, followed by one settled record after the queue is
+empty. The visual output may briefly hold or locally re-evaluate, but it must
+recover without a pipeline reset, expanding black formations, monotonic
+darkening while stationary, or a green production flash.
+
+For the second run, add:
+
+```text
+-Dphotonics.restirGiValidityChannelsDiagnostic=true
+```
+
+At a bad frame, inspect the final private token in the diagnostic log/readback
+when available. A current frame is promotable only when its state contains
+bits `1+2+4+8`; bit `16` is informative and must not be required for a
+legitimate zero-radiance result. If the token is promotable while the image
+is still black, the next investigation belongs in r7/r8/r9 attachment and
+composite binding rather than world invalidation. If it never reaches bit `4`
+or `8` after pending work reaches zero, the publication/upload ordering still
+needs instrumentation.
+
 ## Implementation Status
 
 The v147 source patch is implemented in the working tree:
