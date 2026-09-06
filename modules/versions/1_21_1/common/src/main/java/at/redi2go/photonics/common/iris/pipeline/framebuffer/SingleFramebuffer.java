@@ -66,9 +66,31 @@ public class SingleFramebuffer extends GlFramebuffer implements InternalIrisFram
     }
 
     private void setDrawBuffers(String[] attachmentNames) {
-        Set<String> selectedAttachments = attachmentNames == null
-                ? null
-                : new HashSet<>(Arrays.asList(attachmentNames));
+        Set<String> selectedAttachments = null;
+        if (attachmentNames != null) {
+            if (attachmentNames.length == 0) {
+                throw new IllegalArgumentException(
+                        "Photonics framebuffer " + diagnosticRole
+                                + " must select at least one draw attachment"
+                );
+            }
+
+            selectedAttachments = new HashSet<>(Arrays.asList(attachmentNames));
+            if (selectedAttachments.size() != attachmentNames.length) {
+                throw new IllegalArgumentException(
+                        "Photonics framebuffer " + diagnosticRole
+                                + " draw attachment list contains duplicates"
+                );
+            }
+            for (String attachmentName : attachmentNames) {
+                if (attachmentName == null || attachment(attachmentName) == null) {
+                    throw new IllegalArgumentException(
+                            "Unknown draw attachment '" + attachmentName
+                                    + "' for Photonics framebuffer " + diagnosticRole
+                    );
+                }
+            }
+        }
         int[] drawBuffers = new int[attachments.size()];
         for (int i = 0; i < attachments.size(); i++) {
             addColorAttachment(i, ((IGlTexture) attachments.get(i).texture()).handle());

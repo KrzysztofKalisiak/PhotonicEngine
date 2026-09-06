@@ -75,6 +75,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI publication v148: settled requires zero pending world uploads; r3 state carries explicit publication bits through a post-reuse r7 capture, and GI temporal/spatial reuse is fenced while the voxel layout is unsettled"
         );
         Photonics.LOGGER.info(
+                "Photonics GI publication v149: current and final state captures use dedicated one-attachment framebuffers, and settled diagnostics report the actual publication predicate"
+        );
+        Photonics.LOGGER.info(
+                "Photonics GI routing v150: combined block-light/GI attachment slots, split source-history diagnostics, unsettled path recovery, and denoiser validity gates are aligned"
+        );
+        Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         Photonics.LOGGER.info(
@@ -248,8 +254,12 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_direct_state", ITextureFormat.rg32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
                 .addAttachment("restir_indirect_reservoirs0", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .addAttachment("restir_indirect_reservoirs1", ITextureFormat.rgb32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
-                .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
+                // Keep the physical attachment slots aligned with the output
+                // locations in restir.glsl when block lighting and GI are
+                // enabled together: external lighting is slot 6 and the GI
+                // history epoch is slot 7.
                 .addAttachment("restir_external_lighting", ITextureFormat.rgba32f(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isBlockLightEnabled)
+                .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER, this::isRestirGiEnabled)
                 .build(this::registerComponent);
 
         var directReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
@@ -259,6 +269,10 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "restir_indirect_reservoirs0",
                 "restir_indirect_reservoirs1"
         );
+        // Keep each state capture on a dedicated one-attachment framebuffer.
+        // The shaders intentionally write at location 0; sharing a framebuffer
+        // would preserve the final state's physical attachment index and can
+        // silently route that output to GL_NONE.
         var giCurrentStateFramebuffer = isRestirGiEnabled()
                 ? irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment(
@@ -266,6 +280,10 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                         ITextureFormat.rgba16f(),
                         CREATE_SAMPLER
                 )
+                .build(this::registerComponent)
+                : null;
+        var giFinalStateFramebuffer = isRestirGiEnabled()
+                ? irisFactory.newFramebuffer(properties.getRenderScale())
                 .addAttachment(
                         "restir_gi_final_state",
                         ITextureFormat.rgba16f(),
@@ -278,9 +296,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 : giCurrentStateFramebuffer.withDrawBuffers(
                         "restir_gi_current_state"
                 );
-        var giFinalStatePassFramebuffer = giCurrentStateFramebuffer == null
+        var giFinalStatePassFramebuffer = giFinalStateFramebuffer == null
                 ? null
-                : giCurrentStateFramebuffer.withDrawBuffers(
+                : giFinalStateFramebuffer.withDrawBuffers(
                         "restir_gi_final_state"
                 );
         var reusedReservoirFramebuffer = restirFramebuffer.withDrawBuffers(
@@ -535,12 +553,17 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 .addAttachment("restir_gi_indirect_reservoirs1", ITextureFormat.rgb32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .addAttachment("restir_gi_history_epoch", ITextureFormat.r32ui(), FLIP | CREATE_SAMPLER | CREATE_PREV_SAMPLER)
                 .build(this::registerComponent);
+        // Keep each state capture on a dedicated one-attachment framebuffer.
+        // This guarantees the location-0 shader output maps to the intended
+        // state texture in both current and final capture passes.
         var giCurrentStateFramebuffer = irisFactory.newFramebuffer(properties.getGiRenderScale())
                 .addAttachment(
                         "restir_gi_current_state",
                         ITextureFormat.rgba16f(),
                         CREATE_SAMPLER
                 )
+                .build(this::registerComponent);
+        var giFinalStateFramebuffer = irisFactory.newFramebuffer(properties.getGiRenderScale())
                 .addAttachment(
                         "restir_gi_final_state",
                         ITextureFormat.rgba16f(),
@@ -550,7 +573,7 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
         var giCurrentStatePassFramebuffer = giCurrentStateFramebuffer.withDrawBuffers(
                 "restir_gi_current_state"
         );
-        var giFinalStatePassFramebuffer = giCurrentStateFramebuffer.withDrawBuffers(
+        var giFinalStatePassFramebuffer = giFinalStateFramebuffer.withDrawBuffers(
                 "restir_gi_final_state"
         );
         var giReservoirFramebuffer = giFramebuffer.withDrawBuffers(

@@ -84,21 +84,22 @@ public class WorldCompiler implements Runnable, RenderingComponent {
     private boolean mostRecentBlockBoundsFallback = false;
 
     private long compilationRevision = 0;
-    private long mostRecentCompilationRevision = 0;
-    private long mostRecentSceneRevision = 0;
-    private SectionManager.SceneChangeRegion mostRecentSceneChangeRegion =
+    private volatile long mostRecentCompilationRevision = 0;
+    private volatile long mostRecentSceneRevision = 0;
+    private volatile SectionManager.SceneChangeRegion mostRecentSceneChangeRegion =
             SectionManager.SceneChangeRegion.empty();
     private long lastObservedCompilationRevision = -1;
     private long lastCompilationChangeNanos = 0;
     private long nextActiveDiagnosticNanos = 0;
     private boolean settledDiagnosticLogged = false;
+    private boolean lastPublicationWorkPending = false;
 
     private int mostRecentCompiledSections = 0;
     private int mostRecentTrackedSections = 0;
     private int mostRecentBuiltBatch = 0;
     private int mostRecentUnloadedBatch = 0;
-    private int mostRecentPendingBuilds = 0;
-    private int mostRecentPendingUnloads = 0;
+    private volatile int mostRecentPendingBuilds = 0;
+    private volatile int mostRecentPendingUnloads = 0;
     private double mostRecentCompilationMillis = 0.0;
     private String mostRecentLayoutReason = "none";
 
@@ -392,6 +393,25 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     && mostRecentMaxBounds.z > mostRecentMinBounds.z;
 
             long now = System.nanoTime();
+            // The compiler thread's counters are useful diagnostics, but they
+            // are only a snapshot taken before upload. Re-read the live queue
+            // and scene generation here so a newly queued Sable/Veil update
+            // cannot be presented as a settled GI world for one or more frames.
+            int livePendingBuilds = taskQueue.pendingCount();
+            int livePendingUnloads = taskQueue.pendingUnloadCount();
+            long liveSceneRevision = sectionManager.sceneRevision();
+            mostRecentPendingBuilds = livePendingBuilds;
+            mostRecentPendingUnloads = livePendingUnloads;
+            boolean publicationWorkPending = livePendingBuilds > 0
+                    || livePendingUnloads > 0
+                    || liveSceneRevision > mostRecentSceneRevision;
+            if (publicationWorkPending && !lastPublicationWorkPending) {
+                lastCompilationChangeNanos = now;
+                settledDiagnosticLogged = false;
+                setWorldSettled(false);
+            }
+            lastPublicationWorkPending = publicationWorkPending;
+
             if (mostRecentCompilationRevision != lastObservedCompilationRevision) {
                 lastObservedCompilationRevision = mostRecentCompilationRevision;
                 lastCompilationChangeNanos = now;
@@ -401,18 +421,28 @@ public class WorldCompiler implements Runnable, RenderingComponent {
                     nextActiveDiagnosticNanos = now + ACTIVE_DIAGNOSTIC_INTERVAL_NANOS;
                     logWorldTracingDiagnostic(false, depth, worldReady, blockBoundsFallback);
                 }
+            } else if (publicationWorkPending) {
+                setWorldSettled(false);
             } else if (!settledDiagnosticLogged
                     && lastObservedCompilationRevision > 0
                     && now - lastCompilationChangeNanos >= SETTLED_DIAGNOSTIC_DELAY_NANOS) {
-                settledDiagnosticLogged = true;
                 boolean worldPublicationReady = worldReady
-                        && mostRecentPendingBuilds == 0
-                        && mostRecentPendingUnloads == 0;
-                setWorldSettled(worldPublicationReady);
-                logWorldTracingDiagnostic(true, depth, worldReady, blockBoundsFallback);
+                        && livePendingBuilds == 0
+                        && livePendingUnloads == 0
+                        && liveSceneRevision <= mostRecentSceneRevision;
+                if (worldPublicationReady) {
+                    settledDiagnosticLogged = true;
+                    setWorldSettled(true);
+                    logWorldTracingDiagnostic(
+                            true,
+                            depth,
+                            worldReady,
+                            blockBoundsFallback
+                    );
+                }
             }
             mostRecentWorldReady = worldReady;
-            if (!worldReady)
+            if (!worldReady || publicationWorkPending)
                 setWorldSettled(false);
             mostRecentBlockBoundsFallback = blockBoundsFallback;
 

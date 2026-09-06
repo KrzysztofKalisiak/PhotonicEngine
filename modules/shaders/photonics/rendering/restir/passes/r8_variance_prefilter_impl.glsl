@@ -146,6 +146,11 @@ void main() {
 
     for (int i = 0; i < 9; i++) {
         ivec2 p = clamp(frag_tex_coord + offset[i], ivec2(0), max_texel);
+        // The variance texture is paired with r7's validity marker. Do not
+        // let an unresolved streaming/retry pixel contribute a stale moment
+        // to an otherwise valid denoiser neighborhood.
+        if (!ph_restir_accumulation_is_valid(p))
+            continue;
         if (!ph_matches_denoise_receiver(
                 p,
                 center_has_direct_sample,
