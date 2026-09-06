@@ -1,2 +1,3 @@
 Manifest-Version: 1.0
+Class-Path: semver4j-3.1.0.jar fastutil-concurrent-wrapper-0.2.3.jar
 

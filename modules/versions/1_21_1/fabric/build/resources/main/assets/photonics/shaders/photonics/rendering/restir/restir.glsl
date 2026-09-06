@@ -25,7 +25,8 @@
 
 #if defined PH_RESTIR_SOURCE_HISTORY_DIAGNOSTIC
 #if defined PH_ENABLE_BLOCKLIGHT
-#define RESTIR_SOURCE_HISTORY_OUT 5
+// In split direct mode, restir_local_lighting is the optional physical slot 6.
+#define RESTIR_SOURCE_HISTORY_OUT 6
 #else
 #define RESTIR_SOURCE_HISTORY_OUT 4
 #endif
@@ -127,18 +128,6 @@ bool ph_restir_scene_change_affects_receiver(vec3 receiver_rt_pos) {
     // occur while the tree upload and the uniform snapshot cross a frame
     // boundary; do not turn that bookkeeping race into a full-screen black
     // reset when the published bounds are valid.
-    return ph_restir_scene_change_bounds_affect_receiver(receiver_rt_pos);
-}
-
-bool ph_restir_scene_change_affects_receiver_for_recovery(vec3 receiver_rt_pos) {
-    // This path is used only when the current sample has no radiance and the
-    // candidate history has already passed surface and sublevel validation.
-    // During asynchronous tree publication, the scene revision and bounds can
-    // be observed one frame apart. Use the last valid bounds for this narrowly
-    // scoped recovery instead of turning every receiver black globally.
-    if (ph_scene_revision <= 0 || ph_scene_change_revision <= 0)
-        return false;
-
     return ph_restir_scene_change_bounds_affect_receiver(receiver_rt_pos);
 }
 

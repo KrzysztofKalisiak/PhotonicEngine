@@ -8,7 +8,8 @@
 
 // This pass reads the current r3 state and the post-reuse reservoir, then
 // writes only the standalone publication token. It must not expose its target
-// as a sampler through the shared include.
+// as a sampler through the shared include. The target is a dedicated
+// one-attachment framebuffer, so location 0 is intentional.
 #define PH_RESTIR_GI_FINAL_STATE_CAPTURE_PASS
 
 #include "/photonics/rendering/frag/common.glsl"
