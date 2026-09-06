@@ -6,10 +6,10 @@ This checkout is a fork of Photonics being taken back to Minecraft 1.21.1 and ex
 
 - Repository: `KrzysztofKalisiak/PhotonicEngine`
 - Branch: `multi-version`
-- Committed baseline: `a1ffa850` (`v148f`), parent `bf4fb7db` (`v148`)
+- Pulled baseline: `d43f58f9` (`v149f`), parent `87defba4` (`Fix ReSTIR state routing and publication validity`)
 - Current target: Minecraft 1.21.1, Fabric source/runtime
 - Linux test pack: Minecraft 1.21.1 on NeoForge, using Sinytra Connector to load the Fabric Photonics jar
-- Current worktree: the v149-era candidate fix is preserved and has now been extended with the v150 GI routing/recovery guards described below
+- Current worktree: v151 streaming-continuity changes are uncommitted and need a Linux build/test
 
 The project is not yet upstream-equivalent, not yet multi-version, and not yet full Sable dynamic-geometry GI. It is a substantial 1.21.1 experimental renderer integration with partial moving-emitter and same-sublevel direct-visibility support.
 
@@ -29,7 +29,32 @@ The v149 candidate does three things:
 2. Clarifies the output-location contract in the final-state shader.
 3. Makes the world diagnostic use the actual `worldPublicationReady` predicate instead of a hard-coded `true` value.
 
-This patch has no runtime evidence yet. Do not call it v149-tested until it is built on Linux and run through the controlled test matrix.
+The pulled v149 runtime has now been reviewed against its recording and logs. The v151 shader change below has no runtime evidence yet; do not call it v151-tested until it is built on Linux and run through the controlled test matrix.
+
+## v149 regression found and v151 fix — 2026-09-06
+
+The pulled v149 recording is genuinely broken. At video times 6.3–11.4 s,
+15.9–16.6 s, 19.3–20.4 s, 24.5–25.2 s, 29.7–31.1 s, and 43.3–45.2 s,
+large black regions or wedges appear. Each interval matches a `section-unload`
+or streaming layout revision where `ready=true` but `settled=false` in
+`logs/v149/latest.log`. The loaded Connector-mapped jar contains the same
+shader hashes as the pulled source, so this is not a stale-package problem.
+
+The immediate cause was in combined-GI r7 accumulation: it required a settled
+GI publication before combining current lighting, and then attempted to
+validate fallback history against the partially unloaded voxel tree. That left
+otherwise valid receiver pixels with zero lighting during every chunk-streaming
+burst. v151 now validates stored paths only against a settled tree; while the
+tree is transient, it permits surface-matched history only for streaming-only
+changes or receivers outside a current, known scene-edit region. Changed
+regions and uncertain scene metadata still fail closed.
+
+The same run also reports 30 `#endif without #if` preprocessor errors and very
+high direct-reservoir visibility rejection. Those are tracked separately: the
+preprocessor errors originate during the native `photon-main (1).zip` pipeline
+creation, while the recording uses a native Photonics pack and does not expose
+the offending external shader source in this repository. They must be resolved
+with a captured preprocessed shader before changing the BSL patch DSL.
 
 ## Current bug-fix pass — 2026-09-06
 

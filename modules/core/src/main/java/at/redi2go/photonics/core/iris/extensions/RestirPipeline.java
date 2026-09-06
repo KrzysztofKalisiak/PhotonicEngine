@@ -81,6 +81,9 @@ public class RestirPipeline extends AbstractPhotonicsExtension {
                 "Photonics GI routing v150: combined block-light/GI attachment slots, split source-history diagnostics, unsettled path recovery, and denoiser validity gates are aligned"
         );
         Photonics.LOGGER.info(
+                "Photonics GI streaming continuity v151: do not validate radiance history against a partially unloaded voxel tree; presentation recovery remains regional and scene-edit guarded until publication settles"
+        );
+        Photonics.LOGGER.info(
                 "Photonics direct startup v100: unbiased logarithmic camera-rank strata for large light lists with exact compact-list prefix proposals"
         );
         Photonics.LOGGER.info(

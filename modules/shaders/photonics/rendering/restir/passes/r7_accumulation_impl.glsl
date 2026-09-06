@@ -91,19 +91,20 @@ void main() {
 
     // A valid surface can briefly have no current GI proposal while the voxel
     // layout is uploading or while a newly exposed camera region is filling.
-    // Recover one previous sample only after its stored GI path has been
-    // validated against the current tree. If the tree is unavailable, leave
-    // the pixel unresolved rather than displaying an unvalidated geometric
-    // formation. This is presentation continuity only: the incomplete
-    // current-evaluation state keeps recovered history from being promoted to
-    // the current scene epoch until fresh transport arrives.
+    // Recover one previous sample after its stored GI path has been validated
+    // against a settled tree. During layout-only streaming, the current tree
+    // is transient, so use the surface and regional scene guards instead of
+    // validating against incomplete geometry. This is presentation continuity
+    // only: the incomplete current-evaluation state keeps recovered history
+    // from being promoted to the current scene epoch until fresh transport
+    // arrives.
 #if defined PH_ENABLE_RESTIR_GI
     if (!has_reprojected_history
             && !combined_frame_complete) {
         bool can_recover_history = false;
         ivec2 previous_texel;
         if (sample_history_reproject_nearest_texel(previous_texel)) {
-            if (ph_world_ready != 0) {
+            if (ph_world_ready != 0 && ph_world_settled != 0) {
                 IndirectReservoir previous_indirect = indirect_reservoir_empty();
                 can_recover_history =
                     indirect_reservoir_load_previous(
@@ -115,6 +116,15 @@ void main() {
                         previous_indirect,
                         frag_rt_pos
                     ) == indirect_path_validation_valid;
+            } else {
+                // The current tree is not complete, so path-validation would
+                // inspect a transient representation with unloaded sections
+                // and reject otherwise valid history. Content edits still
+                // fail closed through the regional bounds guard.
+                can_recover_history =
+                    ph_restir_scene_change_allows_unsettled_recovery(
+                        frag_rt_pos
+                    );
             }
         }
 

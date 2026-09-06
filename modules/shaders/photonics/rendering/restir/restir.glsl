@@ -131,6 +131,27 @@ bool ph_restir_scene_change_affects_receiver(vec3 receiver_rt_pos) {
     return ph_restir_scene_change_bounds_affect_receiver(receiver_rt_pos);
 }
 
+bool ph_restir_scene_change_allows_unsettled_recovery(
+        vec3 receiver_rt_pos
+) {
+    // Section streaming changes the published voxel layout without changing
+    // scene content. During that short publication window, a surface-matched
+    // previous radiance sample is safer to display than turning the receiver
+    // black while the current tree is incomplete.
+    if (ph_scene_revision <= 0 && ph_scene_change_revision <= 0)
+        return true;
+
+    // If a newer content revision has not reached the compiler yet, the last
+    // bounds snapshot cannot prove that a receiver is unaffected.
+    if (ph_scene_revision <= 0
+            || ph_scene_change_revision <= 0
+            || ph_scene_change_revision != ph_scene_revision
+            || !ph_restir_scene_change_bounds_are_valid())
+        return false;
+
+    return !ph_restir_scene_change_bounds_affect_receiver(receiver_rt_pos);
+}
+
 bool ph_restir_gi_history_epoch_matches(
         ivec2 texel,
         bool allow_scene_revision_mismatch
